@@ -230,11 +230,11 @@ cat <<EOF
 generate-viewer: wrote $OUTDIR/ and $BINDIR/$SLUG
 
 CMake args for the native Porthole viewer:
-  cmake -B build-native-$SLUG -S . \\
+  shipyard-cmake -B build-native-$SLUG -S . \\
     -DPORTHOLE_APP_NAME="$NAME" \\
     -DPORTHOLE_APP_SLUG="$SLUG" \\
     -DPORTHOLE_ICON_CONTAINER="$CONTAINER" \\
 $MENU_LINE    -DPORTHOLE_ICON_GLOB="$ICON_GLOB"
-  cmake --build build-native-$SLUG --target Porthole
+  shipyard-cmake --build build-native-$SLUG --target Porthole
 # (bundle id = dev.modernmavericks.porthole.<slug>, from PORTHOLE_APP_SLUG; display name is PORTHOLE_APP_NAME.)
 EOF

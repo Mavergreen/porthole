@@ -8,9 +8,9 @@
 set -eu
 OUTDIR="${1:?usage: fetch-s6.sh <out-bin-dir>}"
 REPO=$(cd "$(dirname "$0")/.." && pwd)
-SH="$(cat "$HOME/.cmake/packages/MavericksShipyard/"* 2>/dev/null | head -1)/scripts"
-SDK="$(sh "$SH/fetch_sdk.sh" 2>/dev/null || true)"
-[ -d "$SDK" ] || { echo "fetch-s6: no 10.9 SDK from shipyard (SH=$SH)" >&2; exit 1; }
+. "$REPO/build/msc.sh"
+SDK="$(sh "$SHIPYARD/fetch_sdk.sh" 2>/dev/null || true)"
+[ -d "$SDK" ] || { echo "fetch-s6: no 10.9 SDK from shipyard (SHIPYARD=$SHIPYARD)" >&2; exit 1; }
 
 CC="clang -arch x86_64 -isysroot $SDK -mmacosx-version-min=10.9"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/s6-build.XXXXXX"); trap 'rm -rf "$WORK"' EXIT

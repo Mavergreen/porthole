@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
-# Guard: porthole builds as its OWN top-level project. `cmake -S <root> -B <tmp>` must
-# configure with no product repo and no container -- the regression guard against
+# Guard: porthole builds as its OWN top-level project. `shipyard-cmake -S <root> -B <tmp>`
+# must configure with no product repo and no container -- the regression guard against
 # re-coupling this root to a parent's project()/find_package(MavericksShipyard).
 load test_helper
 
@@ -15,6 +15,6 @@ teardown() {
 }
 
 @test "porthole configures as a standalone top-level project" {
-  run cmake -S "$REPO_ROOT" -B "$BUILD_DIR"
-  [ "$status" -eq 0 ] || { echo "cmake configure failed (status $status):"; echo "$output"; return 1; }
+  run shipyard-cmake -S "$REPO_ROOT" -B "$BUILD_DIR"
+  [ "$status" -eq 0 ] || { echo "shipyard-cmake configure failed (status $status):"; echo "$output"; return 1; }
 }
