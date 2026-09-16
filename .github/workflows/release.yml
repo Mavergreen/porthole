@@ -87,10 +87,10 @@ jobs:
       - name: Build Porthole.app + the Sparkle updater (x86_64 / min-10.9)
         run: |
           set -eu
-          cmake -S . -B _build -DPORTHOLE_BUILD_UPDATER=ON
-          cmake --build _build --target Porthole
-          cmake --build _build --target PortholeUpdater
-          cmake --build _build --target transport   # cross-build skalibs+s6 -> _build/engine-bin
+          shipyard-cmake -S . -B _build -DPORTHOLE_BUILD_UPDATER=ON
+          shipyard-cmake --build _build --target Porthole
+          shipyard-cmake --build _build --target PortholeUpdater
+          shipyard-cmake --build _build --target transport   # cross-build skalibs+s6 -> _build/engine-bin
 
       - name: Package the .pkg (Porthole.app + engine CLI + updater + LaunchAgent)
         run: |

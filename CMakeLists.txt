@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 # Porthole -- the app-agnostic viewer-generator ENGINE, built as its own top-level product:
-# `cmake -S . -B build` produces Porthole.app with no product repo and no container. Per-app
+# `shipyard-cmake -S . -B build` produces Porthole.app with no product repo and no container. Per-app
 # name/icon are resolved at RUNTIME by `porthole materialize`, never baked here. Product repos
 # historically add_subdirectory(<porthole>/viewer) directly; this root is what porthole's OWN
 # build + CI use.
@@ -33,9 +33,10 @@ set(PORTHOLE_APP_SLUG "porthole" CACHE STRING "App identity slug")
 # (its own follow-up; tracked in the Porthole-as-product spec).
 set(MAVERICKS_ALLOW_GENERIC_ICON ON)
 
-# Shared mavericks-* build conventions (github.com/ModernMavericks/shipyard): installed
-# once via `cmake --install` (self-registers in the user package registry), or the @v1 action
-# in CI. Found with no CMAKE_PREFIX_PATH.
+# Shared mavericks-* build conventions (github.com/ModernMavericks/shipyard): installed by the
+# shipyard .pkg, which also puts shipyard-cmake on PATH. That is the only cmake this resolves
+# under -- it looks in its own prefix -- so configure with shipyard-cmake and pass no
+# CMAKE_PREFIX_PATH.
 find_package(MavericksShipyard REQUIRED)
 set(MAVERICKS_REQUIRE_LANGS OBJC)
 include(Mavericks)
@@ -89,7 +90,7 @@ endif()
 
 # Cross-build the skarnet viewer transport (skalibs -> s6, static, no execline) as x86_64/10.9
 # binaries staged in the build tree; build_pkg.sh installs them into the engine. Kept out of the
-# default build so `cmake --build` stays fast/hermetic; the pkg target depends on it.
+# default build so `shipyard-cmake --build` stays fast/hermetic; the pkg target depends on it.
 set(PORTHOLE_TRANSPORT_DIR "${CMAKE_BINARY_DIR}/engine-bin")
 set(PORTHOLE_TRANSPORT_STAMP "${PORTHOLE_TRANSPORT_DIR}/s6-ipcserver")
 add_custom_command(
@@ -98,10 +99,11 @@ add_custom_command(
   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/SKALIBS_REF" "${CMAKE_CURRENT_SOURCE_DIR}/S6_REF"
           "${CMAKE_CURRENT_SOURCE_DIR}/build/fetch-s6.sh"
           "${CMAKE_CURRENT_SOURCE_DIR}/build/check-transport.sh"
+          "${CMAKE_CURRENT_SOURCE_DIR}/build/msc.sh"
   COMMENT "Cross-building s6-ipcserver transport (x86_64/10.9)")
 add_custom_target(transport DEPENDS "${PORTHOLE_TRANSPORT_STAMP}")
 
-# `cmake --build . --target pkg` builds the Porthole installer from the freshly built
+# `shipyard-cmake --build . --target pkg` builds the Porthole installer from the freshly built
 # Porthole.app (the shared viewer engine), with the engine CLI + templates staged inside it.
 add_custom_target(pkg
   COMMAND ${CMAKE_COMMAND} -E env "PORTHOLE_TRANSPORT_DIR=${PORTHOLE_TRANSPORT_DIR}"

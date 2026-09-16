@@ -16,8 +16,8 @@ die() { echo "check-transport: $*" >&2; exit 1; }
 
 GUARD="${PORTHOLE_COMPAT_GUARD:-}"
 if [ -z "$GUARD" ]; then
-  SH="${SHIPYARD_SCRIPTS:-$(cat "$HOME/.cmake/packages/MavericksShipyard/"* 2>/dev/null | head -1)/scripts}"
-  GUARD="$SH/assert_binary_compatible.sh"
+  . "$(dirname "$0")/msc.sh"
+  GUARD="$SHIPYARD/assert_binary_compatible.sh"
 fi
 [ -f "$GUARD" ] || die "no compat guard to run ($GUARD) -- refusing to pass what was not measured"
 sh "$GUARD" "$BIN/s6-ipcserver" "$BIN/s6-ipcserver-socketbinder" "$BIN/s6-ipcserverd" \

@@ -11,15 +11,6 @@ APP_IN="${3:-}"
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 
-# Locate the shipyard scripts dir (only needed when staging the Sparkle updater):
-# $SHIPYARD_SCRIPTS (CI) -> the CMake user package registry -> a sibling checkout.
-resolve_msc() {
-  _m="${SHIPYARD_SCRIPTS:-}"
-  [ -d "$_m" ] || _m="$(cat "$HOME/.cmake/packages/MavericksShipyard/"* 2>/dev/null | head -1)/scripts"
-  [ -d "$_m" ] || _m="$REPO/../mavericks-shipyard/scripts"
-  [ -d "$_m" ] && printf '%s' "$_m"
-}
-
 # Locate the built Porthole.app (arg wins; else a conventional build dir).
 if [ -z "$APP_IN" ]; then
   for d in "$REPO/_build/viewer/Porthole.app" "$REPO/build-native/viewer/Porthole.app"; do
@@ -80,9 +71,10 @@ chmod 755 "$ROOT/usr/local/bin/porthole"
 SCRIPTS_ARG=""
 if [ -n "${UPD_APP:-}" ]; then
   [ -d "$UPD_APP" ] || { echo "build_pkg: UPD_APP set but no updater .app at $UPD_APP" >&2; exit 1; }
-  SHIPYARD="$(resolve_msc || true)"
-  [ -n "$SHIPYARD" ] && [ -f "$SHIPYARD/stage_updater.sh" ] \
-    || { echo "build_pkg: UPD_APP set but shipyard stage_updater.sh not found (set SHIPYARD_SCRIPTS)" >&2; exit 1; }
+  # Sourced HERE, not at the top: a dev build without UPD_APP packages with no shipyard at all.
+  . "$REPO/build/msc.sh"
+  [ -f "$SHIPYARD/stage_updater.sh" ] \
+    || { echo "build_pkg: UPD_APP set but no stage_updater.sh in $SHIPYARD" >&2; exit 1; }
   SCRIPTSDIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-scripts.XXXXXX")
   sh "$SHIPYARD/stage_updater.sh" \
     --stage "$ROOT" \
