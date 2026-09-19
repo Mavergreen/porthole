@@ -8,7 +8,7 @@
 # Both third-party inputs are pinned where Renovate can see them: this FROM (the built-in dockerfile
 # manager -- digest AND a numeric tag, so the next Debian major is proposed and not just a digest
 # refresh) and XPRA_VERSION at the repo root (a custom manager on the deb datasource).
-FROM debian:13-slim@sha256:e27e3dbef3b2064bed82f2fef343c0d02a4b8d5675e5b2c511883442e001630d
+FROM debian:13-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a
 
 # The xpra pin, passed from XPRA_VERSION by build/build-base-image.sh. Deliberately no default:
 # an unpinned xpra is not a base image we would ship, so the build must fail rather than float.
