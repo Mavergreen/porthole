@@ -35,7 +35,17 @@ jobs:
     runs-on: ubuntu-latest   # native x86_64 Docker; the shipped base is the amd64 image
     steps:
       - uses: actions/checkout@v7
+
+      - name: Install mavericks-shipyard
+        uses: ModernMavericks/shipyard/.github/actions/install@v1
+
+      - name: Record the pre-build tree
+        run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record
+
       # The same script the release job runs -- it assembles the context, passes the XPRA_VERSION
       # pin as a build arg, and asserts the built image really carries that xpra.
       - name: Build the shared base (no push)
         run: sh build/build-base-image.sh porthole-base:ci
+
+      - name: The build must not have written into the source tree
+        run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
