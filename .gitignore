@@ -1,9 +1,7 @@
 docs/
-# CMake output dirs.
-/_build/
+# CMake output dirs. build_pkg.sh also falls back to build-*/ (a pre-MAVERICKS_BUILD_ROOT dev layout).
 build-*/
 *.pkg
-/dist/
 .*.swp
 .tmp-claude/
 ._*
@@ -11,4 +9,7 @@ build-*/
 
 # VERSION is a build product (<date>.N), stamped by release.yml -- never committed. UPSTREAM_VERSION (the date) is.
 /VERSION
-/dist/
+
+# Default build root is $MAVERICKS_BUILD_ROOT (outside the tree); _build/ and dist/ are only the
+# deliberate-in-tree escape hatch (MAVERICKS_BUILD_ROOT="$PWD" shipyard-cmake ...).
+/porthole-cross/

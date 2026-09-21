@@ -57,6 +57,11 @@ jobs:
       - name: Record the pre-build tree
         run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record
 
+      - name: Build out of tree
+        run: |
+          echo "MAVERICKS_BUILD_ROOT=$RUNNER_TEMP/mm-build" >> "$GITHUB_ENV"
+          echo "PH_BUILD=$RUNNER_TEMP/mm-build/porthole-cross" >> "$GITHUB_ENV"
+
       - name: Version (YYYYMMDD.N) + publish decision
         id: ver
         run: |
@@ -90,19 +95,19 @@ jobs:
       - name: Build Porthole.app + the Sparkle updater (x86_64 / min-10.9)
         run: |
           set -eu
-          shipyard-cmake -S . -B _build -DPORTHOLE_BUILD_UPDATER=ON
-          shipyard-cmake --build _build --target Porthole
-          shipyard-cmake --build _build --target PortholeUpdater
-          shipyard-cmake --build _build --target transport   # cross-build skalibs+s6 -> _build/engine-bin
+          shipyard-cmake -S . -B "$PH_BUILD/_build" -DPORTHOLE_BUILD_UPDATER=ON
+          shipyard-cmake --build "$PH_BUILD/_build" --target Porthole
+          shipyard-cmake --build "$PH_BUILD/_build" --target PortholeUpdater
+          shipyard-cmake --build "$PH_BUILD/_build" --target transport   # cross-build skalibs+s6 -> _build/engine-bin
 
       - name: Package the .pkg (Porthole.app + engine CLI + updater + LaunchAgent)
         run: |
           set -eu
-          UPD_APP="$PWD/_build/PortholeUpdater.app" \
-          PORTHOLE_TRANSPORT_DIR="$PWD/_build/engine-bin" \
+          UPD_APP="$PH_BUILD/_build/PortholeUpdater.app" \
+          PORTHOLE_TRANSPORT_DIR="$PH_BUILD/_build/engine-bin" \
             sh packaging/macos/build_pkg.sh "${{ steps.ver.outputs.ver }}" \
-               "dist/porthole-${{ steps.ver.outputs.ver }}.pkg" \
-               "$PWD/_build/viewer/Porthole.app"
+               "$PH_BUILD/dist/porthole-${{ steps.ver.outputs.ver }}.pkg" \
+               "$PH_BUILD/_build/viewer/Porthole.app"
 
       # Generate the single notes file ONCE, before it has two consumers: the appcast's <description>
       # (next step) and the release body, which travels IN the artifact because publish-release.yml
@@ -115,7 +120,7 @@ jobs:
           VER="${{ steps.ver.outputs.ver }}"
           sh "$SHIPYARD_SCRIPTS/release-notes.sh" \
             --tag "$VER" --version "$VER" \
-            --product Porthole --min-os 10.9 --out dist/RELEASE_NOTES.md
+            --product Porthole --min-os 10.9 --out "$PH_BUILD/dist/RELEASE_NOTES.md"
 
       - name: EdDSA-sign the .pkg + generate the Sparkle appcast
         if: steps.ver.outputs.publish == 'yes'
@@ -127,13 +132,13 @@ jobs:
           # printenv, not [ -n "$SPARKLE_PRIVATE_KEY" ]: the shell never expands the key, so no trace can print it
           printenv SPARKLE_PRIVATE_KEY | grep -q . || { echo "::error::SPARKLE_PRIVATE_KEY secret not set"; exit 1; }
           VER="${{ steps.ver.outputs.ver }}"
-          PKG="$(ls dist/porthole-*.pkg | head -1)"
+          PKG="$(ls "$PH_BUILD"/dist/porthole-*.pkg | head -1)"
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/$VER"
           sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" \
             --channel-title "Porthole" --version "$VER" \
-            --pkg-url "$base/$(basename "$PKG")" --notes-file dist/RELEASE_NOTES.md \
-            --pkg "$PKG" --min-os 10.9 > dist/appcast.xml
-          echo "=== appcast.xml ==="; cat dist/appcast.xml
+            --pkg-url "$base/$(basename "$PKG")" --notes-file "$PH_BUILD/dist/RELEASE_NOTES.md" \
+            --pkg "$PKG" --min-os 10.9 > "$PH_BUILD/dist/appcast.xml"
+          echo "=== appcast.xml ==="; cat "$PH_BUILD/dist/appcast.xml"
 
       - name: The build must not have written into the source tree
         run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
@@ -141,7 +146,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: porthole
-          path: dist/*
+          path: ${{ env.PH_BUILD }}/dist/*
 
   # All-or-nothing publish: the ONLY writer to Releases, gated on the build. The shared workflow
   # regenerates SHA256SUMS, uses RELEASE_NOTES.md from the artifact as the body (failing if missing

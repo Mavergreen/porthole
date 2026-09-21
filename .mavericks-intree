@@ -1,0 +1,1 @@
+VERSION    # release.yml's "Version (YYYYMMDD.N) + publish decision" step stamps the resolved version here and reads it back (this repo is its own upstream, so it derives it inline rather than via shipyard's resolve-version.sh)
