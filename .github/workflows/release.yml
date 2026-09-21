@@ -54,6 +54,9 @@ jobs:
       - name: Install mavericks-shipyard
         uses: ModernMavericks/shipyard/.github/actions/install@v1
 
+      - name: Record the pre-build tree
+        run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record
+
       - name: Version (YYYYMMDD.N) + publish decision
         id: ver
         run: |
@@ -131,6 +134,9 @@ jobs:
             --pkg-url "$base/$(basename "$PKG")" --notes-file dist/RELEASE_NOTES.md \
             --pkg "$PKG" --min-os 10.9 > dist/appcast.xml
           echo "=== appcast.xml ==="; cat dist/appcast.xml
+
+      - name: The build must not have written into the source tree
+        run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
 
       - uses: actions/upload-artifact@v7
         with:
