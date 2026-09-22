@@ -59,3 +59,7 @@ check would agree with itself, and a protocol break would surface only as "the a
 The client currently advertises `6.5.1` while the image pins `6.5.2`. That is known and left alone:
 it demonstrably works, and changing what the client claims to be is a live handshake change with no
 test to catch a regression.
+
+## Conformance deviations
+
+- scheme: Porthole is its own upstream (original code, no one else's release to repackage), so it versions itself by date as YYYYMMDD.N with no -mavericks.N axis

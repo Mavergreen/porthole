@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # build_pkg.sh stages the Porthole.app engine + the engine CLI/templates + the CLI wrapper
-# into a productbuild .pkg with a 10.9 floor. Uses a fake minimal Porthole.app so the test
+# into a productbuild .pkg with a 10.9.5 floor. Uses a fake minimal Porthole.app so the test
 # needs no compiled viewer (real pkgbuild/productbuild, which macOS provides).
 
 setup() {
@@ -25,10 +25,10 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   echo "$files" | grep -q 'usr/local/bin/porthole'
 }
 
-@test "the pkg declares a 10.9 minimum" {
+@test "the pkg declares a 10.9.5 minimum" {
   sh "$ENGINE/packaging/macos/build_pkg.sh" 9.9.9 "$WORK/out.pkg" "$FAKEAPP" >/dev/null
   d="$WORK/expand"; pkgutil --expand "$WORK/out.pkg" "$d"
-  grep -q 'os-version min="10.9"' "$d/Distribution"
+  grep -q 'os-version min="10.9.5"' "$d/Distribution"
 }
 
 @test "build_pkg stages engine/bin/s6-ipcserver when transport binaries are provided" {

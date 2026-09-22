@@ -120,7 +120,7 @@ jobs:
           VER="${{ steps.ver.outputs.ver }}"
           sh "$SHIPYARD_SCRIPTS/release-notes.sh" \
             --tag "$VER" --version "$VER" \
-            --product Porthole --min-os 10.9 --out "$PH_BUILD/dist/RELEASE_NOTES.md"
+            --product Porthole --min-os 10.9.5 --out "$PH_BUILD/dist/RELEASE_NOTES.md"
 
       - name: EdDSA-sign the .pkg + generate the Sparkle appcast
         if: steps.ver.outputs.publish == 'yes'
@@ -137,8 +137,17 @@ jobs:
           sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" \
             --channel-title "Porthole" --version "$VER" \
             --pkg-url "$base/$(basename "$PKG")" --notes-file "$PH_BUILD/dist/RELEASE_NOTES.md" \
-            --pkg "$PKG" --min-os 10.9 > "$PH_BUILD/dist/appcast.xml"
+            --pkg "$PKG" --min-os 10.9.5 > "$PH_BUILD/dist/appcast.xml"
           echo "=== appcast.xml ==="; cat "$PH_BUILD/dist/appcast.xml"
+
+      # Conformance: does the pkg we are about to publish carry the family's identity, install paths,
+      # floor and version scheme (INGREDIENTS.md "Conformance deviations" excuses the rest)?
+      # Gated like the signing step and run after it: the checker cross-validates appcast<->pkg.
+      - name: Artifact conformance
+        if: steps.ver.outputs.publish == 'yes'
+        run: |
+          sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" "$PH_BUILD/dist" "${{ steps.ver.outputs.ver }}" \
+            | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"
 
       - name: The build must not have written into the source tree
         run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
