@@ -87,8 +87,8 @@ BUNDLEID="dev.modernmavericks.porthole.$SLUG"
 # :latest for a dev checkout. PORTHOLE_BASE_REF overrides entirely (e.g. a locally-built base).
 BASE_TAG=latest
 [ -f "$ENGINE/VERSION" ] && BASE_TAG=$(tr -d '[:space:]' < "$ENGINE/VERSION")
-# Docker image refs MUST be lowercase (the org is ModernMavericks; the image path is not).
-BASE_REF="${PORTHOLE_BASE_REF:-ghcr.io/modernmavericks/porthole-base:$BASE_TAG}"
+# Docker image refs MUST be lowercase (the org is Mavergreen; the image path is not).
+BASE_REF="${PORTHOLE_BASE_REF:-ghcr.io/mavergreen/porthole-base:$BASE_TAG}"
 CHILD="$SLUG-child.sh"
 STARTGUI="start-$SLUG-gui.sh"
 # The xpra major.minor the launcher's compat nudge expects. This is what the VIEWER SPEAKS -- the

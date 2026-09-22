@@ -51,7 +51,7 @@ preflight_host() {
   [ -n "${DOCKER_HOST:-}" ] && return 0
   [ -n "${DOCKER_CONTEXT:-}" ] && return 0
   command -v docker-machine-ctl >/dev/null 2>&1 \
-    || die "Mavericks Container Tools not found -- install it (it provides the Docker VM this app runs in): https://github.com/ModernMavericks/container-tools"
+    || die "Mavericks Container Tools not found -- install it (it provides the Docker VM this app runs in): https://github.com/Mavergreen/container-tools"
   _w=$(docker-machine-ctl status 2>/dev/null)
   case $_w in
     running) return 0 ;;

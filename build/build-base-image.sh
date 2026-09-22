@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build the shared Porthole BASE image (ghcr.io/modernmavericks/porthole-base).
+# Build the shared Porthole BASE image (ghcr.io/mavergreen/porthole-base).
 #
 # The ONE place the base build context is assembled and the xpra pin is read, so the CI job that
 # PROVES a pin bump (.github/workflows/base-image.yml, on any PR touching base/**) and the release

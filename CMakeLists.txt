@@ -33,7 +33,7 @@ set(PORTHOLE_APP_SLUG "porthole" CACHE STRING "App identity slug")
 # (its own follow-up; tracked in the Porthole-as-product spec).
 set(MAVERICKS_ALLOW_GENERIC_ICON ON)
 
-# Shared mavericks-* build conventions (github.com/ModernMavericks/shipyard): installed by the
+# Shared mavericks-* build conventions (github.com/Mavergreen/shipyard): installed by the
 # shipyard .pkg, which also puts shipyard-cmake on PATH. That is the only cmake this resolves
 # under -- it looks in its own prefix -- so configure with shipyard-cmake and pass no
 # CMAKE_PREFIX_PATH.
@@ -77,7 +77,7 @@ if(PORTHOLE_BUILD_UPDATER)
     NAME PortholeUpdater
     PRODUCT_NAME "Porthole"
     BUNDLE_ID dev.modernmavericks.PortholeUpdater
-    FEED_URL "https://github.com/ModernMavericks/porthole/releases/download/feed-porthole/appcast.xml"
+    FEED_URL "https://github.com/Mavergreen/porthole/releases/download/feed-porthole/appcast.xml"
     ICON "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/Porthole.icns"
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "PortholeUpdater"

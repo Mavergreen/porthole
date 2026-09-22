@@ -54,7 +54,7 @@ install -m 0755 "$REPO/viewer/cmake/extract-app-icns.sh" "$ENGDIR/viewer/cmake/e
 install -m 0644 "$REPO/packaging/macos/penguin.icns"     "$ENGDIR/penguin.icns"   # default app icon
 cp -R "$REPO/templates/." "$ENGDIR/templates/"
 # Stamp the release version into the engine so `porthole materialize` pins the per-app recipe's
-# FROM to ghcr.io/modernmavericks/porthole-base:<this version> (a dev checkout has none -> :latest).
+# FROM to ghcr.io/mavergreen/porthole-base:<this version> (a dev checkout has none -> :latest).
 printf '%s\n' "$VERSION" > "$ENGDIR/VERSION"
 
 # Convenience CLI wrapper. Deliberately a tiny exec shim, NOT a symlink: the real porthole

@@ -10,7 +10,7 @@ version.
 | Ingredient | Pinned in | Renovate | On a change |
 |---|---|---|---|
 | Porthole itself (its own upstream) | `UPSTREAM_VERSION` (a date) | n/a — we bump the date by hand | dispatch `release.yml` → publishes `YYYYMMDD.N` |
-| MacOSX10.9 SDK + Sparkle framework | `ModernMavericks/shipyard@v1` (install action + `mavericks_fetch_sparkle`) | github-actions manager tracks the `@v1` tag | `@v1` is a moving tag; cut a new dated release when it matters |
+| MacOSX10.9 SDK + Sparkle framework | `Mavergreen/shipyard@v1` (install action + `mavericks_fetch_sparkle`) | github-actions manager tracks the `@v1` tag | `@v1` is a moving tag; cut a new dated release when it matters |
 | skalibs (static, into the transport) | `SKALIBS_REF` — commit + `# vA.B.C.D` tag | regex manager, grouped with s6 as `skarnet`; ship-if-green | one PR bumps both; the build cross-compiles them and `build/check-transport.sh` must pass (10.9 compat guard + the real `s6-ipcserver -a 0600` relaying a connection) |
 | s6 (`s6-ipcserver{,-socketbinder,d}` in `engine/bin`) | `S6_REF` — commit + `# vA.B.C.D` tag | same group as skalibs | as above; the transport is what every materialized app's launcher and the `op` ssh-agent bridge run |
 | Debian base of the shared container image | `base/Dockerfile` — `FROM debian:<N>-slim@sha256:…` | built-in dockerfile manager (digest **and** the numeric tag, so the next Debian major is proposed, not only a digest refresh); ship-if-green | `base-image.yml` rebuilds the image on the PR; merging it means the next release's base is built on that Debian |
@@ -22,7 +22,7 @@ private half is the `SPARKLE_PRIVATE_KEY` CI secret.
 
 ## Upstream release notes
 
-No upstream release notes: porthole is its own upstream -- original ModernMavericks code, versioned
+No upstream release notes: porthole is its own upstream -- original Mavergreen code, versioned
 `YYYYMMDD.N` with no `-mavericks` axis -- so there are no someone-else's notes for a release to link.
 
 ## The xpra pin

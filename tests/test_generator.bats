@@ -5,7 +5,7 @@
   [ -x bin/generate-viewer ] || skip "generator not built yet"
   # Examples embed the base ref as :latest (version-independent illustrations). Pin it, else CI --
   # where the build step has written a dated VERSION -- would render FROM …base:<version> and diff.
-  PORTHOLE_BASE_REF=ghcr.io/modernmavericks/porthole-base:latest ./bin/generate-viewer examples/thunderbird.conf >/dev/null
+  PORTHOLE_BASE_REF=ghcr.io/mavergreen/porthole-base:latest ./bin/generate-viewer examples/thunderbird.conf >/dev/null
   run git diff --exit-code -- examples/thunderbird/ examples/bin/thunderbird examples/thunderbird.container
   [ "$status" -eq 0 ]
 }
@@ -47,7 +47,7 @@
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
   # :latest override so running with a dated VERSION present doesn't rewrite the committed examples.
-  out="$(PORTHOLE_BASE_REF=ghcr.io/modernmavericks/porthole-base:latest ./bin/generate-viewer examples/thunderbird.conf)"
+  out="$(PORTHOLE_BASE_REF=ghcr.io/mavergreen/porthole-base:latest ./bin/generate-viewer examples/thunderbird.conf)"
   [[ "$out" == *'-DPORTHOLE_APP_NAME="Linux Thunderbird"'* ]] || return 1
   [[ "$out" == *'-DPORTHOLE_APP_SLUG="thunderbird"'* ]] || return 1
   grep -q 'Linux Thunderbird' examples/bin/thunderbird || return 1

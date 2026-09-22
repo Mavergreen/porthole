@@ -52,7 +52,7 @@ jobs:
           fetch-depth: 0   # the .N counter reads existing <date>.* tags
 
       - name: Install mavericks-shipyard
-        uses: ModernMavericks/shipyard/.github/actions/install@v1
+        uses: Mavergreen/shipyard/.github/actions/install@v1
 
       - name: Record the pre-build tree
         run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record
@@ -175,7 +175,7 @@ jobs:
       - name: Build + push the shared base
         run: |
           set -eu
-          IMG=ghcr.io/modernmavericks/porthole-base
+          IMG=ghcr.io/mavergreen/porthole-base
           VER="${{ needs.build.outputs.ver }}"
           # One script assembles the context and reads the XPRA_VERSION pin, so this job and the
           # PR-time base-image.yml build byte-identical instructions.
@@ -193,7 +193,7 @@ jobs:
     permissions:
       actions: read     # this run's job logs
       contents: read
-    uses: ModernMavericks/shipyard/.github/workflows/scan-for-key.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1
     with:
       artifact: porthole
     secrets:
@@ -204,7 +204,7 @@ jobs:
     if: needs.build.outputs.publish == 'yes'
     permissions:
       contents: write
-    uses: ModernMavericks/shipyard/.github/workflows/publish-release.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
     with:
       version: ${{ needs.build.outputs.ver }}
       artifact: porthole
