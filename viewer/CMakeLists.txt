@@ -77,7 +77,7 @@ endif()
 set_target_properties(Porthole PROPERTIES
   OUTPUT_NAME Porthole
   MACOSX_BUNDLE_BUNDLE_NAME "${PORTHOLE_APP_NAME}"
-  MACOSX_BUNDLE_GUI_IDENTIFIER "dev.modernmavericks.porthole.${PORTHOLE_APP_SLUG}"
+  MACOSX_BUNDLE_GUI_IDENTIFIER "dev.mavergreen.porthole.${PORTHOLE_APP_SLUG}"
   MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Info.plist.in)
 
 # Forced icon decision (shipyard mavericks_require_icon). It wires the extracted

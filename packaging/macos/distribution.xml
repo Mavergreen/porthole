@@ -7,7 +7,7 @@
     </volume-check>
     <choices-outline><line choice="default"/></choices-outline>
     <choice id="default" title="Porthole">
-        <pkg-ref id="dev.modernmavericks.porthole"/>
+        <pkg-ref id="dev.mavergreen.porthole"/>
     </choice>
-    <pkg-ref id="dev.modernmavericks.porthole" version="0">porthole-component.pkg</pkg-ref>
+    <pkg-ref id="dev.mavergreen.porthole" version="0">porthole-component.pkg</pkg-ref>
 </installer-gui-script>

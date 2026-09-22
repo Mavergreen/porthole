@@ -48,3 +48,37 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
       || { echo "missing engine/bin/$_b in payload"; return 1; }
   done
 }
+
+# ONE-TIME MIGRATION off the ModernMavericks identity (flag day 2026-09-22).
+# DELETABLE with packaging/macos/scripts/preinstall's block (see shipyard SKILL.md "Consolidation backlog").
+fake_pkgutil() {
+  mkdir -p "$WORK/stubs"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s"\nexit %s\n' "$WORK/pkgutil.log" "${1:-0}" > "$WORK/stubs/pkgutil"
+  chmod 755 "$WORK/stubs/pkgutil"
+}
+
+@test "the pkg carries the flag-day preinstall" {
+  sh "$ENGINE/packaging/macos/build_pkg.sh" 9.9.9 "$WORK/out.pkg" "$FAKEAPP" >/dev/null
+  d="$WORK/expand"; pkgutil --expand "$WORK/out.pkg" "$d"
+  cmp "$ENGINE/packaging/macos/scripts/preinstall" "$d/porthole-component.pkg/Scripts/preinstall" \
+    || { echo "the component pkg does not ship scripts/preinstall, so the old receipt is never forgotten"; return 1; }
+}
+
+@test "preinstall forgets the pre-flag-day receipt on the TARGET volume" {
+  fake_pkgutil 0
+  mkdir -p "$WORK/vol"
+  PATH="$WORK/stubs:$PATH" run sh "$ENGINE/packaging/macos/scripts/preinstall" pkg "$WORK/vol" "$WORK/vol" "$WORK/vol"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -qx -- "--volume $WORK/vol --forget dev.modernmavericks.porthole" "$WORK/pkgutil.log" \
+    || { echo "old receipt not forgotten on the target volume; pkgutil saw: $(cat "$WORK/pkgutil.log" 2>/dev/null)"; return 1; }
+}
+
+@test "preinstall touches nothing without a target volume, and never fails the install" {
+  fake_pkgutil 1
+  PATH="$WORK/stubs:$PATH" run sh "$ENGINE/packaging/macos/scripts/preinstall"
+  [ "$status" -eq 0 ] || return 1
+  [ ! -f "$WORK/pkgutil.log" ] || { echo "forgot a receipt with no target volume: $(cat "$WORK/pkgutil.log")"; return 1; }
+  mkdir -p "$WORK/vol"
+  PATH="$WORK/stubs:$PATH" run sh "$ENGINE/packaging/macos/scripts/preinstall" pkg "$WORK/vol" "$WORK/vol" "$WORK/vol"
+  [ "$status" -eq 0 ] || { echo "a failing pkgutil failed the install"; return 1; }
+}

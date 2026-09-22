@@ -68,29 +68,27 @@ chmod 755 "$ROOT/usr/local/bin/porthole"
 # Optional Sparkle updater: when UPD_APP names a built PortholeUpdater.app, stage it + its
 # daily-check LaunchAgent + the load-on-install postinstall via the shared helper (release-time;
 # the release workflow sets UPD_APP). Absent -> the pkg ships without auto-update.
-SCRIPTS_ARG=""
+SCRIPTSDIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-scripts.XXXXXX")
+install -m 0755 "$HERE/scripts/preinstall" "$SCRIPTSDIR/preinstall"
 if [ -n "${UPD_APP:-}" ]; then
   [ -d "$UPD_APP" ] || { echo "build_pkg: UPD_APP set but no updater .app at $UPD_APP" >&2; exit 1; }
   # Sourced HERE, not at the top: a dev build without UPD_APP packages with no shipyard at all.
   . "$REPO/build/msc.sh"
   [ -f "$SHIPYARD/stage_updater.sh" ] \
     || { echo "build_pkg: UPD_APP set but no stage_updater.sh in $SHIPYARD" >&2; exit 1; }
-  SCRIPTSDIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-scripts.XXXXXX")
   sh "$SHIPYARD/stage_updater.sh" \
     --stage "$ROOT" \
     --app "$UPD_APP" \
-    --app-dir "/Library/Application Support/ModernMavericks" \
-    --agent-label "dev.modernmavericks.porthole-updatecheck" \
+    --app-dir "/Library/Application Support/Mavergreen" \
+    --agent-label "dev.mavergreen.porthole-updatecheck" \
     --scripts-out "$SCRIPTSDIR"
-  SCRIPTS_ARG="--scripts $SCRIPTSDIR"
 fi
 
 COMPONENT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-pkg.XXXXXX")
-# shellcheck disable=SC2086  # SCRIPTS_ARG is a deliberate optional --scripts <dir> pair
 pkgbuild --root "$ROOT" \
-    --identifier dev.modernmavericks.porthole \
+    --identifier dev.mavergreen.porthole \
     --version "$VERSION" \
-    $SCRIPTS_ARG \
+    --scripts "$SCRIPTSDIR" \
     --install-location / \
     "$COMPONENT_DIR/porthole-component.pkg"
 

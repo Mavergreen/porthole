@@ -35,7 +35,7 @@ teardown() {
   "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
   P="$APPS/Linux Thunderbird.app/Contents/Info.plist"
   [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$P")" = "Linux Thunderbird" ]
-  [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$P")" = "dev.modernmavericks.porthole.thunderbird" ]
+  [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$P")" = "dev.mavergreen.porthole.thunderbird" ]
 }
 
 @test "the app carries its OWN engine binary + recovery watcher and execs it in place" {

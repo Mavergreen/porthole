@@ -77,7 +77,7 @@ CONTAINER="$SLUG-gui"
 VOLUME="$SLUG-gui-data"
 APPCONFIG="${DATADIR#/home/$USER/}"          # e.g. .config/Signal
 DATADIR_PARENT=$(dirname "$DATADIR")         # e.g. /home/signal/.config
-BUNDLEID="dev.modernmavericks.porthole.$SLUG"
+BUNDLEID="dev.mavergreen.porthole.$SLUG"
 # PTRACE=yes is sugar for the SYS_PTRACE capability: it must be --cap-add'd on the container
 # (the entrypoint then raises it ambient for the browser-support peer check). CAPS= may name any
 # additional caps generically; PTRACE folds into it so future CLI-helper apps just declare caps.
@@ -236,5 +236,5 @@ CMake args for the native Porthole viewer:
     -DPORTHOLE_ICON_CONTAINER="$CONTAINER" \\
 $MENU_LINE    -DPORTHOLE_ICON_GLOB="$ICON_GLOB"
   shipyard-cmake --build build-native-$SLUG --target Porthole
-# (bundle id = dev.modernmavericks.porthole.<slug>, from PORTHOLE_APP_SLUG; display name is PORTHOLE_APP_NAME.)
+# (bundle id = dev.mavergreen.porthole.<slug>, from PORTHOLE_APP_SLUG; display name is PORTHOLE_APP_NAME.)
 EOF

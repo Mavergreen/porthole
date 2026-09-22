@@ -401,7 +401,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     return n.length ? n : @"1Password";
 }
 // The app IDENTITY slug (e.g. "1password"): the last component of the bundle id
-// (dev.modernmavericks.porthole.<slug>). Per-app behavior + the menu socket key off THIS,
+// (dev.mavergreen.porthole.<slug>). Per-app behavior + the menu socket key off THIS,
 // so a display name like "Linux 1Password" doesn't change identity or routing.
 - (NSString *)appSlug {
     NSString *last = [[[[NSBundle mainBundle] bundleIdentifier]

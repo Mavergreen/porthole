@@ -151,7 +151,7 @@ SLUG=$(basename "$CONF" .conf)
 : "${APP:=$NAME}"
 NAME="${NAME:-Linux $APP}"
 [ -n "$NAME" ] && [ "$NAME" != "Linux " ] || { echo "porthole materialize: $CONF sets no APP/NAME" >&2; exit 1; }
-BUNDLEID="dev.modernmavericks.porthole.$SLUG"
+BUNDLEID="dev.mavergreen.porthole.$SLUG"
 
 # 1) Render the preset (container recipe + launcher) via the generator into a staging dir.
 STAGE=$(mktemp -d "${TMPDIR:-/tmp}/porthole-materialize.XXXXXX")
