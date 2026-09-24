@@ -5,7 +5,7 @@ FROM @BASE_REF@
 # menu daemon, the Mac-font alias) is already in the pre-built shared base @BASE_REF@.
 #@IF APT_KEY_URL
 RUN curl -sS @APT_KEY_URL@ \
-       | gpg --dearmor -o /usr/share/keyrings/@SLUG@-desktop-keyring.gpg \
+       | gpg --dearmor -o @APT_KEYRING@ \
     && echo '@APT_REPO@' \
        > /etc/apt/sources.list.d/@APT_LIST@.list
 #@ENDIF

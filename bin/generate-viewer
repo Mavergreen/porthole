@@ -39,6 +39,16 @@ UPDATE= PACKAGING= CAPS= EXTRA_VOLUMES=
 . "$CONF"
 SLUG=$(basename "$CONF" .conf)   # the conf's basename is authoritative (a manifest SLUG= is ignored)
 : "${APT_LIST:=$SLUG}"   # basename of /etc/apt/sources.list.d/<APT_LIST>.list
+# A vendor repo's key goes exactly where its APT_REPO line tells apt to look (signed-by=), so the
+# conf is the one place that path is written.
+APT_KEYRING=
+if [ -n "$APT_KEY_URL" ]; then
+  APT_KEYRING=$(printf '%s\n' "$APT_REPO" | sed -n 's/.*signed-by=\([^] ]*\).*/\1/p')
+  [ -n "$APT_KEYRING" ] || {
+    echo "generate-viewer: $SLUG: APT_REPO must name its keyring with [signed-by=/usr/share/keyrings/<name>.gpg]" >&2
+    exit 2
+  }
+fi
 # Display name defaults to "Linux <App>" (honest + trademark-safe); an explicit NAME wins.
 : "${APP:=$NAME}"                 # back-compat: old defs set only NAME
 NAME="${NAME:-Linux $APP}"
@@ -136,7 +146,7 @@ if [ "$LIFECYCLE" = ondemand ]; then LIFECYCLE_ONDEMAND=1; else LIFECYCLE_ONDEMA
 if [ "$EXTRA_PKGS" ]; then EXTRA_PKGS_SP=" $EXTRA_PKGS"; else EXTRA_PKGS_SP=; fi
 if [ "$USER_GROUP" ]; then USER_GROUP_ARG=" -g $USER_GROUP"; else USER_GROUP_ARG=; fi
 
-export APP NAME SLUG PORT BASE_IMAGE BASE_REF APT_KEY_URL APT_REPO APT_PKGS EXTRA_PKGS \
+export APP NAME SLUG PORT BASE_IMAGE BASE_REF APT_KEY_URL APT_REPO APT_KEYRING APT_PKGS EXTRA_PKGS \
   APP_BIN APP_FLAGS USER USER_GROUP DATADIR ICON_GLOB LIFECYCLE \
   AUDIO NOAUDIO PRINTING PTRACE DARK_THEME OPEN_URL FILE_TRANSFER NOTIFICATIONS \
   EXTRA_SETUP ENCODINGS HOME IMAGE CONTAINER VOLUME APPCONFIG DATADIR_PARENT \

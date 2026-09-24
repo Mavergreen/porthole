@@ -161,3 +161,35 @@
   # base is ours/OSS only -- no vendor app or vendor apt repo baked in (that's the whole point)
   ! grep -qiE 'signal|1password|helium|thunderbird|clion|jetbrains' "$df" || return 1
 }
+
+# The key is written where APT_REPO's signed-by says apt will look for it, whatever the slug is.
+# (Linux Signal Desktop, 2026-09-24: slug signal-desktop -> the key went to
+# signal-desktop-desktop-keyring.gpg, apt read signal-desktop-keyring.gpg, and the build failed.)
+@test "generate-viewer writes the apt key to APT_REPO's signed-by path" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  d="$(mktemp -d -t porthole)"
+  cat > "$d/vendor-app.conf" <<'CONF'
+APP=Demo
+APT_KEY_URL=https://example.com/key.asc
+APT_REPO='deb [arch=amd64 signed-by=/usr/share/keyrings/somebody-keyring.gpg] https://example.com/apt stable main'
+APT_PKGS=demo
+UPDATE=float
+LIFECYCLE=ondemand
+CONF
+  run ./bin/generate-viewer "$d/vendor-app.conf" --out "$d"
+  df="$d/vendor-app/Dockerfile"; out="$output"
+  grep -q 'gpg --dearmor -o /usr/share/keyrings/somebody-keyring.gpg' "$df"; ok=$?
+  rm -rf "$d"
+  [ "$status" -eq 0 ] || { echo "$out"; return 1; }
+  [ "$ok" -eq 0 ]
+}
+
+@test "generate-viewer rejects a vendor APT_REPO that names no signed-by keyring" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  d="$(mktemp -d -t porthole)"
+  printf "APP=Demo\nAPT_KEY_URL=https://example.com/key.asc\nAPT_REPO='deb https://example.com/apt stable main'\nAPT_PKGS=demo\nUPDATE=float\nLIFECYCLE=ondemand\n" > "$d/demo.conf"
+  run ./bin/generate-viewer "$d/demo.conf" --out "$d"
+  rm -rf "$d"
+  [ "$status" -ne 0 ] || return 1
+  [[ "$output" == *"signed-by"* ]] || return 1
+}
