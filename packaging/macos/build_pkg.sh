@@ -69,7 +69,6 @@ chmod 755 "$ROOT/usr/local/bin/porthole"
 # daily-check LaunchAgent + the load-on-install postinstall via the shared helper (release-time;
 # the release workflow sets UPD_APP). Absent -> the pkg ships without auto-update.
 SCRIPTSDIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-scripts.XXXXXX")
-install -m 0755 "$HERE/scripts/preinstall" "$SCRIPTSDIR/preinstall"
 if [ -n "${UPD_APP:-}" ]; then
   [ -d "$UPD_APP" ] || { echo "build_pkg: UPD_APP set but no updater .app at $UPD_APP" >&2; exit 1; }
   # Sourced HERE, not at the top: a dev build without UPD_APP packages with no shipyard at all.
