@@ -1,0 +1,17 @@
+#!/bin/sh
+# Each materialized "Linux <App>.app" carries its own copy of the engine, so re-materialize every
+# installed preset against the engine just installed; otherwise the apps keep running the old one.
+# Best-effort per preset: one bad preset must not fail the Porthole install.
+set -u
+TARGET="${3:-/}"; TARGET="${TARGET%/}"
+PORTHOLE="$TARGET/Applications/Porthole.app/Contents/Resources/engine/bin/porthole"
+for _conf in "$TARGET/Library/Application Support/Mavergreen/Porthole/presets/"*.conf; do
+  [ -f "$_conf" ] || continue
+  "$PORTHOLE" materialize "$_conf" --apps-dir "$TARGET/Applications" \
+    || echo "porthole postinstall: could not re-materialize $_conf" >&2
+done
+
+_agent_load="$(dirname "$0")/agent-load"
+# shellcheck disable=SC1090
+[ -f "$_agent_load" ] && . "$_agent_load"
+exit 0

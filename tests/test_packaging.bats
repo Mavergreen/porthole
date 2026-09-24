@@ -48,3 +48,34 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
       || { echo "missing engine/bin/$_b in payload"; return 1; }
   done
 }
+
+# Each materialized app carries its own copy of the engine, so a Porthole upgrade that left them
+# alone would leave every app running the old one. The pkg's postinstall re-materializes every
+# installed preset against the engine it just installed.
+@test "postinstall re-materializes every installed preset with the new engine" {
+  command -v pkgutil >/dev/null 2>&1 || skip "pkgutil not available"
+  sh "$ENGINE/packaging/macos/build_pkg.sh" 9.9.9 "$WORK/out.pkg" "$FAKEAPP" >/dev/null
+  d="$WORK/expand"; pkgutil --expand "$WORK/out.pkg" "$d"
+  T="$WORK/target"; mkdir -p "$T"
+  (cd "$T" && gzip -dc "$d/porthole-component.pkg/Payload" | cpio -id --quiet)
+  P="$T/Library/Application Support/Mavergreen/Porthole/presets"; mkdir -p "$P"
+  cp "$ENGINE/examples/thunderbird.conf" "$P/"
+  mkdir -p "$T/Applications/Linux Thunderbird.app/Contents/MacOS"
+  printf 'stale\n' > "$T/Applications/Linux Thunderbird.app/Contents/MacOS/Porthole"
+
+  run sh "$d/porthole-component.pkg/Scripts/postinstall" "$WORK/out.pkg" "$T" "$T" "$T"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  cmp -s "$FAKEAPP/Contents/MacOS/Porthole" "$T/Applications/Linux Thunderbird.app/Contents/MacOS/Porthole"
+  [ -f "$T/Applications/Linux Thunderbird.app/Contents/Resources/thunderbird.container" ]
+}
+
+@test "postinstall with no presets installed does nothing and succeeds" {
+  command -v pkgutil >/dev/null 2>&1 || skip "pkgutil not available"
+  sh "$ENGINE/packaging/macos/build_pkg.sh" 9.9.9 "$WORK/out.pkg" "$FAKEAPP" >/dev/null
+  d="$WORK/expand"; pkgutil --expand "$WORK/out.pkg" "$d"
+  T="$WORK/target"; mkdir -p "$T"
+  (cd "$T" && gzip -dc "$d/porthole-component.pkg/Payload" | cpio -id --quiet)
+  run sh "$d/porthole-component.pkg/Scripts/postinstall" "$WORK/out.pkg" "$T" "$T" "$T"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ -z "$(ls "$T/Applications" | grep -v '^Porthole.app$')" ]
+}
