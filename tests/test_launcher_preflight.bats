@@ -51,12 +51,27 @@ EOF
   printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
   # Restricted PATH: $d (no docker-machine-ctl) + system dirs ONLY -- excludes
   # /usr/local/bin where real Container Tools lives, so the "missing" path is genuine.
-  run env DOCKER_HOST= DOCKER_CONTEXT= PATH="$d:/usr/bin:/bin" \
+  run env DOCKER_HOST= DOCKER_CONTEXT= PATH="$d:/usr/bin:/bin" PORTHOLE_TOOLS_DIR="$d/none" \
       THUNDERBIRD_VIEWER_BIN="$d/viewer" \
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   rm -rf "$d"
   [ "$status" -ne 0 ] || return 1
   [[ "$output" == *"Container Tools"* ]] || return 1
+}
+
+# A Finder double-click gets launchd's PATH (/usr/bin:/bin:/usr/sbin:/sbin), which lacks the dir
+# Container Tools and the docker CLI install into; the launcher must look there itself.
+@test "launcher: finds Container Tools from a Finder launch's bare PATH" {
+  d="$(mktemp -d -t plf)"; tools="$d/tools"; mkdir -p "$tools"
+  printf '#!/bin/sh\nexit 0\n' > "$d/osascript"
+  printf '#!/bin/sh\n[ "$1" = status ] && echo no-fusion\nexit 0\n' > "$tools/docker-machine-ctl"
+  chmod +x "$d"/osascript "$tools"/*
+  run env DOCKER_HOST= DOCKER_CONTEXT= PATH="$d:/usr/bin:/bin:/usr/sbin:/sbin" \
+      PORTHOLE_TOOLS_DIR="$tools" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+  rm -rf "$d"
+  [[ "$output" != *"Container Tools not found"* ]] || return 1
+  [[ "$output" == *"VMware Fusion"* ]] || return 1   # it reached the ctl we planted
 }
 
 @test "launcher: explicit DOCKER_HOST bypasses preflight" {

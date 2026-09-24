@@ -3,6 +3,9 @@
 # tunnel to its xpra port, and open the native Porthole "@NAME@" client. Minimal by
 # design -- Signal has no account/CLI (contrast bin/op). Env overrides in caps.
 set -eu
+# Container Tools and the docker CLI install here, but a Finder launch gets launchd's
+# /usr/bin:/bin:/usr/sbin:/sbin. Append it; a caller's own PATH still wins.
+PATH="$PATH:${PORTHOLE_TOOLS_DIR:-/usr/local/bin}"; export PATH
 IMAGE="${@ENVPREFIX@_IMAGE:-@IMAGE@}"
 CONTAINER="${@ENVPREFIX@_CONTAINER:-@CONTAINER@}"
 VOLUME="${@ENVPREFIX@_VOLUME:-@VOLUME@}"
