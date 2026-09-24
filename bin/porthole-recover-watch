@@ -14,7 +14,10 @@ set -u
 echo $$ > "$RW_PIDFILE" 2>/dev/null || true
 
 _log() { [ -n "${RW_DEBUG:-}" ] && printf '%s [%s] %s\n' "$(date +%T)" "$$" "$*" >> "$RW_DEBUG"; return 0; }
-_present() { pgrep -f "$RW_BIN" >/dev/null 2>&1; }
+# -a: the launcher execs into the viewer after starting us, so the viewer is our parent, and macOS
+# pgrep otherwise skips its own ancestors. ^: match the viewer's command line, not some shell whose
+# command text merely mentions its path.
+_present() { pgrep -a -f "^$RW_BIN" >/dev/null 2>&1; }
 _log "start bin=$RW_BIN marker=$RW_MARKER relaunch=[$RW_RELAUNCH]"
 
 # Wait for the viewer to first appear (skipped in one-shot test mode).

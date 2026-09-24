@@ -42,3 +42,9 @@ penguin `AppIcon.icns`, but the launcher's "real icon already extracted" marker 
 (installed by a pkg), so the launcher, running as the user, probably can't write the icon anyway.
 Key the check on the bundle's icon itself (is it still the penguin?) and find a writable home for
 it.
+
+## 4. Signal's menu bar icon looks terrible
+
+Reported 2026-09-24 on Linux Signal Desktop: the tray icon the app forwards (xpra `new-tray`, 16x16)
+renders badly in the Mac menu bar. See also the deferred 1Password glyph work (deriving a monochrome
+template image from a forwarded color icon failed; drawing our own was the likely way forward).
