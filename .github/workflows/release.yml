@@ -192,6 +192,13 @@ jobs:
           docker push "$IMG:$VER"
           docker push "$IMG:latest"
           echo "pushed $IMG:$VER + :latest"
+      # The release's recipes say FROM this tag, so what users need is an anonymous pull of it.
+      - name: Pull it back without credentials
+        run: |
+          set -eu
+          docker logout ghcr.io
+          docker rmi "ghcr.io/mavergreen/porthole-base:${{ needs.build.outputs.ver }}"
+          docker pull "ghcr.io/mavergreen/porthole-base:${{ needs.build.outputs.ver }}"
 
   # Before anything is published: no log of this run, and no file about to be released, carries a
   # piece of the signing key. shipyard's publish-release.yml looks for this job's record on any signed
@@ -208,8 +215,9 @@ jobs:
     secrets:
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
 
+  # A Porthole whose base image is missing can build no app at all (20260802.5 shipped that way).
   publish:
-    needs: [build, scan]
+    needs: [build, scan, base-image]
     if: needs.build.outputs.publish == 'yes'
     permissions:
       contents: write
