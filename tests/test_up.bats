@@ -32,6 +32,8 @@ case "$1 $2" in
       *.Image*)  cat "$FAKE/container.$1" ;;
     esac ;;
   "rm -f") rm -f "$FAKE/container.$3" ;;
+  "images --format") cat "$FAKE/base-tags" 2>/dev/null ;;
+  "rmi "*) : ;;
   "volume create") touch "$FAKE/volume.$3" ;;
   "start "*) : ;;
   *)
@@ -131,4 +133,32 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(builds)" -eq 1 ]
   [ "$(cat "$FAKE/container.demo-gui")" = sha256:built1 ]
+}
+
+@test "replacing an image removes the one it replaced" {
+  fake_docker; make_spec
+  "$REPO/bin/porthole" up "$SPEC"
+  printf 'FROM ghcr.io/mavergreen/porthole-base:2\n' > "$WORK/app/ctx/Dockerfile"
+  : > "$STUB_LOG"
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q '^docker rmi sha256:built1$' "$STUB_LOG"
+}
+
+@test "an up that changes nothing removes nothing" {
+  fake_docker; make_spec
+  "$REPO/bin/porthole" up "$SPEC"
+  : > "$STUB_LOG"
+  "$REPO/bin/porthole" up "$SPEC"
+  ! grep -q '^docker rmi' "$STUB_LOG"
+}
+
+# Each Porthole release pins a new ~1.4GB base; left behind, they fill the Docker VM.
+@test "a rebuild untags older tags of the base it builds FROM, and only those" {
+  fake_docker; make_spec
+  printf 'ghcr.io/mavergreen/porthole-base:0\nghcr.io/mavergreen/porthole-base:1\n' > "$FAKE/base-tags"
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:0$' "$STUB_LOG"
+  ! grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:1$' "$STUB_LOG"
 }

@@ -61,6 +61,7 @@ cmd_up() {
   # or carries another one was built from something else -- an older recipe or base -- and is
   # rebuilt, never reused.
   _fp=$(recipe_fingerprint "$_ctx")
+  _old_id=$(docker image inspect --format '{{.Id}}' "$IMAGE" 2>/dev/null || true)
   _have=$(docker image inspect --format "{{ index .Config.Labels \"$RECIPE_LABEL\" }}" "$IMAGE" 2>/dev/null || true)
   if [ "$_rebuild" = 1 ]; then
     docker build --no-cache --pull --label "$RECIPE_LABEL=$_fp" -t "$IMAGE" "$_ctx" \
@@ -118,6 +119,21 @@ cmd_up() {
     $_cap_args \
     -v "$VOLUME:$DATADIR" $_mount_args $_vol_args \
     "$IMAGE" >/dev/null || { echo "porthole up: cannot create container $CONTAINER" >&2; exit 1; }
+  [ "$_image_id" != "$_old_id" ] && drop_superseded "$_old_id" "$_ctx"
+  return 0
+}
+
+# After a build, free what it superseded: the image it replaced ($1, if any, unless something else
+# still runs it) and older tags of the base the recipe builds FROM. Each Porthole release pins a new ~1.4GB base,
+# which would otherwise pile up until the Docker VM's disk fills. Untagging a base another app's
+# image still sits on only drops the tag; its layers stay until nothing needs them.
+drop_superseded() {
+  [ -n "$1" ] && { docker rmi "$1" >/dev/null 2>&1 || true; }
+  _from=$(sed -n 's/^FROM[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' "$2/Dockerfile" 2>/dev/null | head -1)
+  case "${_from##*/}" in *:*) ;; *) return 0 ;; esac
+  docker images --format '{{.Repository}}:{{.Tag}}' "${_from%:*}" 2>/dev/null | while IFS= read -r _t; do
+    case "$_t" in "$_from"|*:"<none>") ;; *) docker rmi "$_t" >/dev/null 2>&1 || true ;; esac
+  done
 }
 
 # --- exec: run a command in the app's container (ensures up first) -----------
