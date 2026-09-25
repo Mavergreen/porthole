@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: host-agnostic
+# platform: macOS-only -- relies on BSD pgrep -a (include ancestors) and relaunches with open
 # Detached viewer watcher (spawned by the launchers). When the viewer exits:
 #   - disconnect (marker present) -> recover by re-invoking the launcher, which is
 #     idempotent (ensures backend, self-heals the tunnel, re-opens the viewer). Retry

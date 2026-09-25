@@ -69,7 +69,7 @@ endif()
 # --- Sparkle auto-update helper (release-time) --------------------------------------------
 # Gated OFF so the default build stays hermetic: building the updater fetches the Sparkle
 # framework over the network. The release workflow configures with -DPORTHOLE_BUILD_UPDATER=ON,
-# then stages + signs + appcasts it (shipyard scripts/stage_updater.sh + sign_and_appcast.sh
+# then stages + signs it (shipyard scripts/stage_product.sh --updater-app + sign_and_appcast.sh
 # -- CI shell steps, EdDSA-secret-gated). Single native x86_64/10.9 variant (this whole project
 # targets 10.9); the Sparkle slice is auto-derived from CMAKE_OSX_ARCHITECTURES.
 option(PORTHOLE_BUILD_UPDATER "Build the Sparkle auto-update helper app (fetches Sparkle; release-time)" OFF)
@@ -80,7 +80,6 @@ if(PORTHOLE_BUILD_UPDATER)
     PRODUCT_NAME "Porthole"
     ICON "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/Porthole.icns"
     VERSION "${PROJECT_VERSION}"
-    LOG_PREFIX "PortholeUpdater"
     CONFIRM_TITLE "Porthole updated"
     CONFIRM_BODY "Porthole was updated. Relaunch your Linux apps to use the new viewer engine."
     RELAUNCH_MARKER "/tmp/.porthole-updater-relaunched"
