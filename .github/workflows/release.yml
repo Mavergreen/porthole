@@ -95,7 +95,8 @@ jobs:
       - name: Build Porthole.app + the Sparkle updater (x86_64 / min-10.9)
         run: |
           set -eu
-          shipyard-cmake -S . -B "$PH_BUILD/_build" -DPORTHOLE_BUILD_UPDATER=ON
+          shipyard-cmake -S . -B "$PH_BUILD/_build" -DPORTHOLE_BUILD_UPDATER=ON \
+            -DCMAKE_TOOLCHAIN_FILE="$SHIPYARD_SCRIPTS/../MavericksToolchain.cmake"
           shipyard-cmake --build "$PH_BUILD/_build" --target Porthole
           shipyard-cmake --build "$PH_BUILD/_build" --target PortholeUpdater
           shipyard-cmake --build "$PH_BUILD/_build" --target transport   # cross-build skalibs+s6 -> _build/engine-bin
