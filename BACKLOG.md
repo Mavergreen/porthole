@@ -48,3 +48,10 @@ it.
 Reported 2026-09-24 on Linux Signal Desktop: the tray icon the app forwards (xpra `new-tray`, 16x16)
 renders badly in the Mac menu bar. See also the deferred 1Password glyph work (deriving a monochrome
 template image from a forwarded color icon failed; drawing our own was the likely way forward).
+
+## 5. A failed image build leaves its step's container behind
+
+`porthole up` runs a classic `docker build`, which keeps the container of a failed RUN step unless
+given `--force-rm`. On 2026-09-24 the Signal keyring failures left nine `Exited (100)` containers
+(auto-named, e.g. `busy_kilby`) that nothing cleans up. Pass `--force-rm` on both build paths in
+`bin/porthole` (the fake docker in tests/test_up.bats ignores unknown flags, so assert on the log).
