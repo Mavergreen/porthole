@@ -24,6 +24,10 @@ teardown() {
 }
 
 @test "porthole configures as a standalone top-level project" {
+  # A shipyard older than its toolchain file is found but cannot configure this project. That is a
+  # stale install, not a platform limit, so say so and fail rather than skip.
+  [ -f "$SHIPYARD_SCRIPTS/../MavericksToolchain.cmake" ] || {
+    echo "the shipyard at $SHIPYARD_SCRIPTS predates MavericksToolchain.cmake -- install the current shipyard pkg"; return 1; }
   run shipyard-cmake -S "$REPO_ROOT" -B "$BUILD_DIR" \
     -DCMAKE_TOOLCHAIN_FILE="$SHIPYARD_SCRIPTS/../MavericksToolchain.cmake"
   [ "$status" -eq 0 ] || { echo "shipyard-cmake configure failed (status $status):"; echo "$output"; return 1; }
