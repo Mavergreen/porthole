@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
 # Porthole -- the app-agnostic viewer-generator ENGINE, built as its own top-level product:
-# `shipyard-cmake -S . -B build` produces Porthole.app with no product repo and no container. Per-app
+# `shipyard-cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$SHIPYARD_SCRIPTS/../MavericksToolchain.cmake"`
+# produces Porthole.app with no product repo and no container (the toolchain-file backstop
+# FATAL_ERRORs a configure with no pinned sysroot; `. build/msc.sh` sets SHIPYARD_SCRIPTS). Per-app
 # name/icon are resolved at RUNTIME by `porthole materialize`, never baked here. Product repos
 # historically add_subdirectory(<porthole>/viewer) directly; this root is what porthole's OWN
 # build + CI use.
