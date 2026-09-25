@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 printf 'ps %s\n' "$*" >> "$STUB_LOG"
 # a recorded agent is "alive" only when the test created socat.alive
 [ -f "$STUB_DIR/socat.alive" ] && exit 0

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # When `porthole up` fails, the fatal dialog must include the tail of up's stderr.
 load test_helper
 

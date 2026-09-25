@@ -1,3 +1,4 @@
+# platform: host-agnostic
 import importlib.util, os, sys
 _path = os.path.join(os.path.dirname(__file__), "..", "porthole-menu-daemon.py")
 _spec = importlib.util.spec_from_file_location("menudaemon", _path)

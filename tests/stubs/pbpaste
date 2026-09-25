@@ -1,2 +1,3 @@
 #!/bin/sh
+# platform: host-agnostic
 cat "$CLIPBOARD_FILE" 2>/dev/null || :

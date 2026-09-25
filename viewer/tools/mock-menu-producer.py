@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# platform: host-agnostic
 # Stand-in menu daemon for spine verification: listen on a Unix socket, send a
 # snapshot on hello, then a delta 2s later. Prints any invoke/open it receives.
 import socket, os, sys, json, threading, time

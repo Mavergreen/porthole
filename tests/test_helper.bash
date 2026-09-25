@@ -1,3 +1,4 @@
+# platform: host-agnostic
 # Shared BATS setup for the op suite. `load test_helper` from each .bats file.
 # Each @test gets a fresh temp workspace with stub docker/pbcopy/etc. on PATH.
 

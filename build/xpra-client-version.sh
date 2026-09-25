@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # Print the xpra version the NATIVE VIEWER speaks -- the one it advertises in its hello, which is
 # what the server actually negotiates against. That is a property of the client source, NOT of the
 # base image's XPRA_VERSION pin, and keeping the two apart is deliberate: see the comment in

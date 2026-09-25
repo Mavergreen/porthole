@@ -4,8 +4,8 @@ name: release
 # -mavericks suffix: UPSTREAM_VERSION is the date YYYYMMDD, and a release is YYYYMMDD.N (N counts
 # the releases cut that day, starting at .1). push/PR to main build + test only; a manual
 # workflow_dispatch cuts + publishes a release stamped with today's next .N. Build -> signed .pkg +
-# Sparkle appcast -> the shared publish-release.yml (which mints the tag, checksums, notes body) ->
-# refresh the fixed-URL update feed. No 10.9 runner; artifacts re-validated on a real 10.9 box.
+# Sparkle appcast -> the shared publish-release.yml (which mints the tag, checksums, notes body).
+# No 10.9 runner; artifacts re-validated on a real 10.9 box.
 
 on:
   push:
@@ -98,13 +98,13 @@ jobs:
           shipyard-cmake -S . -B "$PH_BUILD/_build" -DPORTHOLE_BUILD_UPDATER=ON \
             -DCMAKE_TOOLCHAIN_FILE="$SHIPYARD_SCRIPTS/../MavericksToolchain.cmake"
           shipyard-cmake --build "$PH_BUILD/_build" --target Porthole
-          shipyard-cmake --build "$PH_BUILD/_build" --target PortholeUpdater
+          shipyard-cmake --build "$PH_BUILD/_build" --target porthole-updater
           shipyard-cmake --build "$PH_BUILD/_build" --target transport   # cross-build skalibs+s6 -> _build/engine-bin
 
       - name: Package the .pkg (Porthole.app + engine CLI + updater + LaunchAgent)
         run: |
           set -eu
-          UPD_APP="$PH_BUILD/_build/PortholeUpdater.app" \
+          UPD_APP="$PH_BUILD/_build/porthole-updater.app" \
           PORTHOLE_TRANSPORT_DIR="$PH_BUILD/_build/engine-bin" \
             sh packaging/macos/build_pkg.sh "${{ steps.ver.outputs.ver }}" \
                "$PH_BUILD/dist/porthole-${{ steps.ver.outputs.ver }}.pkg" \
@@ -136,10 +136,11 @@ jobs:
           PKG="$(ls "$PH_BUILD"/dist/porthole-*.pkg | head -1)"
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/$VER"
           sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" \
+            --product porthole --feed-dir "$PH_BUILD/dist" \
             --channel-title "Porthole" --version "$VER" \
             --pkg-url "$base/$(basename "$PKG")" --notes-file "$PH_BUILD/dist/RELEASE_NOTES.md" \
-            --pkg "$PKG" --min-os 10.9.5 > "$PH_BUILD/dist/appcast.xml"
-          echo "=== appcast.xml ==="; cat "$PH_BUILD/dist/appcast.xml"
+            --pkg "$PKG" --min-os 10.9.5
+          echo "=== porthole.xml ==="; cat "$PH_BUILD/dist/porthole.xml"
 
       # Conformance: does the pkg we are about to publish carry the family's identity, install paths,
       # floor and version scheme (INGREDIENTS.md "Conformance deviations" excuses the rest)?
@@ -226,31 +227,3 @@ jobs:
     with:
       version: ${{ needs.build.outputs.ver }}
       artifact: porthole
-
-  # The fixed-URL update FEED: Sparkle installs poll it, so it cannot be /latest/. A feed-porthole
-  # prerelease holds the appcast; its asset is replaced every release, the tag never moves.
-  feed:
-    needs: [build, publish]
-    if: needs.build.outputs.publish == 'yes'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: porthole
-          path: dist
-      - name: Point feed-porthole at ${{ needs.build.outputs.ver }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          R: ${{ github.repository }}
-          VER: ${{ needs.build.outputs.ver }}
-        run: |
-          set -eu
-          ls dist/appcast.xml >/dev/null   # a feed with no appcast is a broken product
-          if ! gh release view "feed-porthole" --repo "$R" >/dev/null 2>&1; then
-            gh release create "feed-porthole" --repo "$R" --prerelease --title "Porthole update feed" \
-              --notes "Sparkle appcast for Porthole; asset replaced every release, tag never moves."
-          fi
-          gh release upload "feed-porthole" --repo "$R" dist/appcast.xml --clobber
-          echo "feed-porthole now serves $VER"

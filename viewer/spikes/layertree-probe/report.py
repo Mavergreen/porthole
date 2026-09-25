@@ -1,3 +1,4 @@
+# platform: host-agnostic
 """Reduce run-*.json files to per-page verdicts + control validation."""
 import json
 import sys

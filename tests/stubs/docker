@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # Stub docker: logs the invocation, replays canned stdout/stderr/exit by call
 # number from $STUB_DIR/docker.{stdout,stderr,exit}[.N] (N = 1-based call
 # count; unsuffixed file is the default for calls without a numbered file).

@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # The base image's two third-party inputs -- Debian and xpra -- are pinned where Renovate can see
 # them, and pinned COMPLETELY.
 #

@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- notifies via osascript and materializes app bundles under /Applications
 # porthole -- the Porthole engine CLI (runs from inside the installed Porthole.app or a
 # repo checkout). Subcommands:
 #   materialize <conf-path> [--apps-dir DIR]

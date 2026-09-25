@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # Viewer #5, generated. The contrast case: a JetBrains IDE (Swing/JBR, NOT Electron)
 # installed from a TARBALL (not apt) -- exercises the generator's non-apt install path.
 # `load test_helper` is load-bearing, not boilerplate: it puts tests/stubs on PATH and pins

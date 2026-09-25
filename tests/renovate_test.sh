@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # .github/renovate.json is valid JSON and every third-party input of the base image is tracked.
 # CI-only (python3): 10.9 ships Python 2, and nothing on a Mavericks box needs to read this.
 set -eu

@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # xpra --start-child: set up a passwordless gnome-keyring (Signal stores its DB
 # encryption key via libsecret/safeStorage, same pattern as 1Password's 2FA token)
 # BEFORE launching Signal. Must run inside dbus-run-session (the entrypoint does that).

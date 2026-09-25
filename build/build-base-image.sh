@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # Build the shared Porthole BASE image (ghcr.io/mavergreen/porthole-base).
 #
 # The ONE place the base build context is assembled and the xpra pin is read, so the CI job that

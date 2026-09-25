@@ -1,3 +1,4 @@
+# platform: host-agnostic
 """Drive a CDP resize sweep on one page and record per-step layer data."""
 import json
 import sys

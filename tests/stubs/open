@@ -1,2 +1,3 @@
 #!/bin/sh
+# platform: host-agnostic
 printf 'open %s\n' "$*" >> "$STUB_LOG"

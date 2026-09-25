@@ -1,3 +1,4 @@
+# platform: host-agnostic
 """Minimal synchronous Chrome DevTools Protocol client over one WebSocket."""
 import json
 import itertools

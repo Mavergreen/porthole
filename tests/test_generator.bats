@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # The generator must reproduce the committed generated files with no diff.
 @test "generate-viewer thunderbird is idempotent (no git diff)" {
   cd "${BATS_TEST_DIRNAME}/.."          # porthole/ (the engine root)

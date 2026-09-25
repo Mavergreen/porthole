@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # Viewer #4, generated. The flagship browser (Chromium-based, imputnet/helium) from
 # its own Debian repo, with the audio bridge on.
 # `load test_helper` is load-bearing, not boilerplate: it puts tests/stubs on PATH and pins

@@ -1,9 +1,10 @@
 #!/bin/sh
+# platform: macOS-only -- drives shipyard's stage_product.sh/build_component_pkg.sh/set_install_floor.sh, which run pkgbuild/productbuild/PlistBuddy
 # Build the Porthole .pkg: the shared viewer ENGINE, shipped as /Applications/Porthole.app.
 # The engine CLI (bin/porthole, generate-viewer, the recovery watcher), the templates/, the
 # menu daemon, and the icon extractor are staged INSIDE the app bundle
 # (Contents/Resources/engine/) so `porthole materialize` resolves them relative to itself.
-# A /usr/local/bin/porthole convenience wrapper is also installed.
+# the product's tree gets a porthole exec shim.
 # Usage: build_pkg.sh <version> <out.pkg> [<built-Porthole.app>]
 set -eu
 VERSION=$1; OUT=$2
@@ -23,7 +24,7 @@ fi
 # Stage the payload exactly as it should land on disk.
 # BSD mktemp (all macOS, incl. 10.9) requires an explicit template.
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/porthole-root.XXXXXX")
-install -d "$ROOT/Applications" "$ROOT/usr/local/bin"
+install -d "$ROOT/Applications"
 cp -R "$APP_IN" "$ROOT/Applications/Porthole.app"
 
 # Engine CLI + assets inside the bundle. materialize's ENGINE=$(dirname $0)/.. resolves to
@@ -57,45 +58,32 @@ cp -R "$REPO/templates/." "$ENGDIR/templates/"
 # FROM to ghcr.io/mavergreen/porthole-base:<this version> (a dev checkout has none -> :latest).
 printf '%s\n' "$VERSION" > "$ENGDIR/VERSION"
 
-# Convenience CLI wrapper. Deliberately a tiny exec shim, NOT a symlink: the real porthole
-# resolves its engine root from $0, and a symlink would make $0 the /usr/local/bin path.
-cat > "$ROOT/usr/local/bin/porthole" <<'EOF'
+T="$ROOT/usr/local/mavergreen/porthole"
+install -d "$T/bin"
+cat > "$T/bin/porthole" <<'EOF'
 #!/bin/sh
 exec "/Applications/Porthole.app/Contents/Resources/engine/bin/porthole" "$@"
 EOF
-chmod 755 "$ROOT/usr/local/bin/porthole"
+chmod 755 "$T/bin/porthole"
 
-# Our postinstall re-materializes the installed presets. Optional Sparkle updater: when UPD_APP names
-# a built PortholeUpdater.app, stage it + its daily-check LaunchAgent via the shared helper, whose
-# agent-load snippet our postinstall sources (release-time; the release workflow sets UPD_APP).
-# Absent -> the pkg ships without auto-update.
+. "$REPO/build/msc.sh"
 SCRIPTSDIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-scripts.XXXXXX")
-cp "$HERE/scripts/postinstall" "$SCRIPTSDIR/postinstall"
+set -- --stage "$ROOT" --product porthole --name Porthole --version "$VERSION" \
+  --postinstall-hook "$HERE/postinstall-hook.sh" --scripts-out "$SCRIPTSDIR"
 if [ -n "${UPD_APP:-}" ]; then
   [ -d "$UPD_APP" ] || { echo "build_pkg: UPD_APP set but no updater .app at $UPD_APP" >&2; exit 1; }
-  # Sourced HERE, not at the top: a dev build without UPD_APP packages with no shipyard at all.
-  . "$REPO/build/msc.sh"
-  [ -f "$SHIPYARD/stage_updater.sh" ] \
-    || { echo "build_pkg: UPD_APP set but no stage_updater.sh in $SHIPYARD" >&2; exit 1; }
-  sh "$SHIPYARD/stage_updater.sh" \
-    --stage "$ROOT" \
-    --app "$UPD_APP" \
-    --app-dir "/Library/Application Support/Mavergreen" \
-    --agent-label "dev.mavergreen.porthole-updatecheck" \
-    --snippet-out "$SCRIPTSDIR/agent-load"
+  set -- "$@" --updater-app "$UPD_APP"
 fi
+find "$ROOT" -name '._*' -delete 2>/dev/null || true
+sh "$SHIPYARD/stage_product.sh" "$@"
 
 COMPONENT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-pkg.XXXXXX")
-pkgbuild --root "$ROOT" \
-    --identifier dev.mavergreen.porthole \
-    --version "$VERSION" \
-    --scripts "$SCRIPTSDIR" \
-    --install-location / \
-    "$COMPONENT_DIR/porthole-component.pkg"
+sh "$SHIPYARD/build_component_pkg.sh" --root "$ROOT" --identifier dev.mavergreen.porthole \
+  --version "$VERSION" --install-location / --scripts "$SCRIPTSDIR" \
+  --out "$COMPONENT_DIR/porthole-component.pkg" >&2
 
 mkdir -p "$(dirname "$OUT")"
-productbuild --distribution "$HERE/distribution.xml" \
-    --package-path "$COMPONENT_DIR" \
-    "$OUT"
+sh "$SHIPYARD/set_install_floor.sh" --identifier dev.mavergreen.porthole --title Porthole \
+  --component "$COMPONENT_DIR/porthole-component.pkg" --out "$OUT" --require-scripts --host-arch x86_64 >&2
 
 echo "Built $OUT"

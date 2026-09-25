@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # The launcher must prefer the engine-bundled s6-ipcserver (sibling of the porthole CLI).
 load test_helper
 

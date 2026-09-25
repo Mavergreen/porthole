@@ -1,3 +1,4 @@
+# platform: host-agnostic
 """Pure analysis of CDP LayerTree resize data. No I/O, no browser."""
 
 

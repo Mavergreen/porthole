@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # The shared viewer watcher: WATCH_ONCE runs a single iteration so we can drive it.
 load test_helper
 W="${BATS_TEST_DIRNAME}/../bin/porthole-recover-watch"

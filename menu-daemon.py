@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# platform: host-agnostic
 """Porthole container-side AT-SPI menu daemon.
 
 Walks a GTK/Qt app's AT-SPI menu tree and streams a normalized menu model +

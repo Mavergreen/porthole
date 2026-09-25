@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # build/check-transport.sh is the gate a skalibs/s6 bump must pass before its binaries are staged:
 # the 10.9 compat guard, then the real s6-ipcserver run the way the launchers run it. Here the
 # guard is a stub and s6-ipcserver is a small Python stand-in whose failure modes we choose, so

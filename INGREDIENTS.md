@@ -63,3 +63,4 @@ test to catch a regression.
 ## Conformance deviations
 
 - scheme: Porthole is its own upstream (original code, no one else's release to repackage), so it versions itself by date as YYYYMMDD.N with no -mavericks.N axis
+- rosetta:.github/workflows/release.yml: the release job runs on an Apple Silicon (arm64) runner and primes + uses Rosetta ("Ensure this runner can run x86_64 (Rosetta)") so the `transport` CMake target's `build/check-transport.sh` can execute the cross-built x86_64/10.9 skalibs/s6 binaries before they ship. Native 10.9 users run these binaries natively; only this arm64 CI leg is translated. Reconsider when the transport can be verified on an arm64 runner without Rosetta, or at the latest before macOS 28 removes it.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # Viewer #3, generated. Proves the generator handles a Gecko/GTK, Debian-native app
 # (no third-party apt repo, no Electron sandbox flag) -- not just the Signal mold.
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # The generated launcher preflights host prerequisites via docker-machine-ctl status.
 # Note: Mavericks /usr/bin/env has no -u, so we set DOCKER_HOST=/DOCKER_CONTEXT= EMPTY
 # (the preflight bypass tests `[ -n "$DOCKER_HOST" ]`, so empty == unset for its purposes).
@@ -50,7 +51,7 @@ EOF
   chmod +x "$d"/*
   printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
   # Restricted PATH: $d (no docker-machine-ctl) + system dirs ONLY -- excludes
-  # /usr/local/bin where real Container Tools lives, so the "missing" path is genuine.
+  # /usr/local/mavergreen/bin where real Container Tools lives, so the "missing" path is genuine.
   run env DOCKER_HOST= DOCKER_CONTEXT= PATH="$d:/usr/bin:/bin" PORTHOLE_TOOLS_DIR="$d/none" \
       THUNDERBIRD_VIEWER_BIN="$d/viewer" \
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"

@@ -76,10 +76,8 @@ option(PORTHOLE_BUILD_UPDATER "Build the Sparkle auto-update helper app (fetches
 if(PORTHOLE_BUILD_UPDATER)
   include(MavericksSparkle)
   mavericks_add_updater_app(
-    NAME PortholeUpdater
+    PRODUCT porthole
     PRODUCT_NAME "Porthole"
-    BUNDLE_ID dev.mavergreen.PortholeUpdater
-    FEED_URL "https://github.com/Mavergreen/porthole/releases/download/feed-porthole/appcast.xml"
     ICON "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/Porthole.icns"
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "PortholeUpdater"

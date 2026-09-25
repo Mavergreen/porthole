@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # Launch a throwaway Signal Electron with a CDP port + bridge it to the Mac.
 # Usage: ./launch-signal-cdp.sh   (prints the Mac-side CDP HTTP base URL)
 set -eu

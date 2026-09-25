@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- clang cross-compiles against a macOS SDK (-isysroot, -mmacosx-version-min)
 # Fetch (git, by pinned commit) + cross-build skalibs then s6 (static, no execline) as
 # x86_64/min-10.9 Mach-O, prove them with check-transport.sh, then copy the s6-ipcserver component
 # binaries into $1 (an out bin dir). Pins: the commit is read from SKALIBS_REF/S6_REF (first field;

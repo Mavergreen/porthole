@@ -1,2 +1,3 @@
 #!/bin/sh
+# platform: host-agnostic
 printf 'osascript %s\n' "$*" >> "$STUB_LOG"

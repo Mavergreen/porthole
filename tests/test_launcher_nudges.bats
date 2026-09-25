@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # Generated launcher: container-staleness + xpra-compat nudges (parity with op).
 # Mavericks: no `env -u`; set empty vars. HOME points into the temp dir so the
 # once/day nudge marker is isolated per test (no cross-run suppression).

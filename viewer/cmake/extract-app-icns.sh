@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- runs sips
 # Extract the 1Password app icon from the running op-gui container and convert it
 # to a Mac .icns for the Porthole bundle. The icon belongs to AgileBits and is NOT
 # committed to the repo -- it's pulled at build time from your own installed copy

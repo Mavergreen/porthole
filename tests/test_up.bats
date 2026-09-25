@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # `porthole up` must never run a container from an image that doesn't match the recipe it was
 # handed: an image left behind under the same name (an older recipe, an older base) is rebuilt,
 # and a container created from a superseded image is recreated -- its named volumes kept.
@@ -97,8 +98,8 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   run "$REPO/bin/porthole" up "$SPEC"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(builds)" -eq 1 ]
-  ! grep -q '^docker rm' "$STUB_LOG"
-  ! grep -q '^docker run' "$STUB_LOG"
+  ! grep -q '^docker rm' "$STUB_LOG" || false
+  ! grep -q '^docker run' "$STUB_LOG" || false
 }
 
 @test "an unlabelled image already under the name (an older recipe) is rebuilt, not reused" {
@@ -120,7 +121,7 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   [ "$(builds)" -eq 2 ]
   [ "$(cat "$FAKE/container.demo-gui")" = sha256:built2 ]
   grep -q '^docker rm -f demo-gui$' "$STUB_LOG"
-  ! grep -q '^docker volume rm' "$STUB_LOG"
+  ! grep -q '^docker volume rm' "$STUB_LOG" || false
   grep -q -- '-v demo-gui-data:/data' "$STUB_LOG"
 }
 
@@ -150,7 +151,7 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   "$REPO/bin/porthole" up "$SPEC"
   : > "$STUB_LOG"
   "$REPO/bin/porthole" up "$SPEC"
-  ! grep -q '^docker rmi' "$STUB_LOG"
+  ! grep -q '^docker rmi' "$STUB_LOG" || false
 }
 
 # Each Porthole release pins a new ~1.4GB base; left behind, they fill the Docker VM.
@@ -160,5 +161,5 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   run "$REPO/bin/porthole" up "$SPEC"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:0$' "$STUB_LOG"
-  ! grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:1$' "$STUB_LOG"
+  ! grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:1$' "$STUB_LOG" || false
 }

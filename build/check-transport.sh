@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- executes cross-built x86_64/10.9 Mach-O binaries and shipyard's Mach-O compat guard
 # Prove a freshly built s6-ipcserver transport (in $1) is shippable, before anything stages it.
 # This is what lets a skalibs/s6 bump ride the green build: every other test stubs s6-ipcserver,
 # so without this a bump that compiled but changed how the transport behaves would ship broken.

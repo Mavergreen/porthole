@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: macOS-only -- runs PlistBuddy
 # porthole materialize: render a preset conf into a standalone "Linux <App>.app" that
 # wraps the SHARED installed Porthole engine. Structural test -- no live container
 # (icon extraction skipped via PORTHOLE_MATERIALIZE_NO_ICON).

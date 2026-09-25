@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 printf 'docker-machine %s\n' "$*" >> "$STUB_LOG"
 if [ -f "$STUB_DIR/docker-machine.fail" ]; then
   echo 'Host does not exist: "default"' >&2

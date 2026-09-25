@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # generate-viewer <slug>: render an app-specific viewer from apps/<slug>.conf +
 # templates/ into <slug>/ (container dir) + bin/<slug> (launcher). POSIX sh, awk-only
 # rendering, zero third-party deps. Regeneration is idempotent (git diff clean).
