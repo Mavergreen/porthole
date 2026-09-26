@@ -35,7 +35,7 @@ case "$1 $2" in
   "rm -f") rm -f "$FAKE/container.$3" ;;
   "images --format") cat "$FAKE/base-tags" 2>/dev/null ;;
   "rmi "*) : ;;
-  "volume create") touch "$FAKE/volume.$3" ;;
+  "volume create") eval "_v=\${$#}"; touch "$FAKE/volume.$_v" ;;
   "start "*) : ;;
   *)
     case "$1" in
@@ -43,7 +43,7 @@ case "$1 $2" in
         shift; _lab="" _tag=""
         while [ $# -gt 1 ]; do
           case "$1" in
-            --label) _lab=${2#*=}; shift 2 ;;
+            --label) case "$2" in dev.mavergreen.porthole.recipe=*) _lab=${2#*=} ;; esac; shift 2 ;;
             -t) _tag=$2; shift 2 ;;
             *) shift ;;
           esac
@@ -71,6 +71,8 @@ make_spec() {
   cat > "$WORK/app/demo.container" <<'EOF'
 NAME='Linux Demo'
 CONTAINER='demo-gui'
+SLUG='demo'
+EXTRA_VOLUMES='demo-cli:/cfg'
 IMAGE='mavericks-demo'
 BUILD_CONTEXT='ctx'
 DATADIR='/data'
@@ -162,4 +164,20 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:0$' "$STUB_LOG"
   ! grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:1$' "$STUB_LOG" || false
+}
+
+@test "up labels the image, the container and every data volume with the slug" {
+  fake_docker; make_spec
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q -- '^docker build .*--label dev.mavergreen.porthole.slug=demo' "$STUB_LOG"
+  grep -q -- '^docker volume create --label dev.mavergreen.porthole.slug=demo demo-gui-data$' "$STUB_LOG"
+  grep -q -- '^docker volume create --label dev.mavergreen.porthole.slug=demo demo-cli$' "$STUB_LOG"
+  grep -q -- '^docker run .*--label dev.mavergreen.porthole.slug=demo' "$STUB_LOG"
+}
+
+@test "a build never leaves its step containers behind" {
+  fake_docker; make_spec
+  "$REPO/bin/porthole" up "$SPEC"
+  grep -q -- '^docker build .*--force-rm' "$STUB_LOG"
 }

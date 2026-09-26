@@ -33,6 +33,7 @@ EOF
 
 # --- up: the SINGLE container creator (headless) -----------------------------
 RECIPE_LABEL=dev.mavergreen.porthole.recipe
+SLUG_LABEL=dev.mavergreen.porthole.slug   # on everything up creates; housekeeping finds its objects by it
 
 # Every file in the build context, names and contents, in a stable order.
 recipe_fingerprint() {
@@ -47,9 +48,10 @@ cmd_up() {
   _spec="${1:-}"; [ -n "$_spec" ] || usage
   [ -f "$_spec" ] || { echo "porthole up: no such container spec: $_spec" >&2; exit 1; }
   _specdir=$(cd "$(dirname "$_spec")" && pwd)
-  NAME= CONTAINER= IMAGE= HOSTNAME= BUILD_CONTEXT= DATADIR= VOLUME= CAPS= EXTRA_VOLUMES= HOST_MOUNTS=
+  NAME= SLUG= CONTAINER= IMAGE= HOSTNAME= BUILD_CONTEXT= DATADIR= VOLUME= CAPS= EXTRA_VOLUMES= HOST_MOUNTS=
   # shellcheck disable=SC1090
   . "$_spec"
+  : "${SLUG:=$(basename "$_spec" .container)}"
   [ -n "$CONTAINER" ] && [ -n "$IMAGE" ] \
     || { echo "porthole up: spec missing CONTAINER/IMAGE: $_spec" >&2; exit 1; }
   _ctx="$_specdir/$BUILD_CONTEXT"
@@ -65,12 +67,12 @@ cmd_up() {
   _old_id=$(docker image inspect --format '{{.Id}}' "$IMAGE" 2>/dev/null || true)
   _have=$(docker image inspect --format "{{ index .Config.Labels \"$RECIPE_LABEL\" }}" "$IMAGE" 2>/dev/null || true)
   if [ "$_rebuild" = 1 ]; then
-    docker build --no-cache --pull --label "$RECIPE_LABEL=$_fp" -t "$IMAGE" "$_ctx" \
+    docker build --no-cache --pull --force-rm --label "$RECIPE_LABEL=$_fp" --label "$SLUG_LABEL=$SLUG" -t "$IMAGE" "$_ctx" \
       || { echo "porthole up: image build failed" >&2; exit 1; }
   elif [ "$_have" != "$_fp" ]; then
     echo "porthole up: building $IMAGE (can take a few minutes)..." >&2
     _notify "Building the Linux container. This can take a few minutes…"
-    docker build --label "$RECIPE_LABEL=$_fp" -t "$IMAGE" "$_ctx" 2>&1 | while IFS= read -r _bl; do
+    docker build --force-rm --label "$RECIPE_LABEL=$_fp" --label "$SLUG_LABEL=$SLUG" -t "$IMAGE" "$_ctx" 2>&1 | while IFS= read -r _bl; do
       case "$_bl" in "Step "*) _notify "Setting up… ${_bl%% : *}" ;; esac   # e.g. "Setting up… Step 4/7"
       printf '%s\n' "$_bl" >&2
     done
@@ -93,12 +95,12 @@ cmd_up() {
     docker rm -f "$CONTAINER" >/dev/null || { echo "porthole up: cannot remove $CONTAINER" >&2; exit 1; }
   fi
 
-  docker volume create "$VOLUME" >/dev/null || { echo "porthole up: cannot create volume $VOLUME" >&2; exit 1; }
+  docker volume create --label "$SLUG_LABEL=$SLUG" "$VOLUME" >/dev/null || { echo "porthole up: cannot create volume $VOLUME" >&2; exit 1; }
   # Extra named volumes (spec EXTRA_VOLUMES: VOLNAME:CTRPATH) -- e.g. a companion CLI's config dir.
   _vol_args=""
   for _v in $EXTRA_VOLUMES; do
     _vn=${_v%%:*}
-    docker volume create "$_vn" >/dev/null || { echo "porthole up: cannot create volume $_vn" >&2; exit 1; }
+    docker volume create --label "$SLUG_LABEL=$SLUG" "$_vn" >/dev/null || { echo "porthole up: cannot create volume $_vn" >&2; exit 1; }
     _vol_args="$_vol_args -v $_v"
   done
   # Capabilities (spec CAPS): each --cap-add'd (e.g. SYS_PTRACE for 1Password's browser peer check).
@@ -114,7 +116,7 @@ cmd_up() {
     _mount_args="$_mount_args -v $_mac:$_mc$_ro"
   done
   # shellcheck disable=SC2086  # word-splitting is intentional (one arg per token)
-  docker run -d --name "$CONTAINER" --hostname "${HOSTNAME:-$IMAGE}" \
+  docker run -d --name "$CONTAINER" --label "$SLUG_LABEL=$SLUG" --hostname "${HOSTNAME:-$IMAGE}" \
     --restart unless-stopped --init --shm-size 512m \
     --security-opt seccomp=unconfined \
     $_cap_args \
