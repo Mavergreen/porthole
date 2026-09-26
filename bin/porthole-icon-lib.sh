@@ -26,6 +26,28 @@ icon_is_png() {
   [ "$(head -c 8 "$1" 2>/dev/null | od -An -tx1 | tr -d ' \n')" = 89504e470d0a1a0a ]
 }
 
+# Redraw an image as 8-bit RGBA: sips on 10.9 can't resize a palette PNG (1Password's apple-touch-icon
+# is one) and silently writes nothing. Needs a python with Quartz (10.9's /usr/bin/python has it);
+# without one, fail and let the caller use the source as it is.
+icon_rgba() {
+  for _py in /usr/bin/python /usr/bin/python3; do
+    [ -x "$_py" ] || continue
+    "$_py" - "$1" "$2" 2>/dev/null <<'PY' && return 0
+import sys, Quartz
+from Foundation import NSURL
+src = Quartz.CGImageSourceCreateWithURL(NSURL.fileURLWithPath_(sys.argv[1]), None)
+img = Quartz.CGImageSourceCreateImageAtIndex(src, 0, None)
+w, h = Quartz.CGImageGetWidth(img), Quartz.CGImageGetHeight(img)
+ctx = Quartz.CGBitmapContextCreate(None, w, h, 8, w * 4, Quartz.CGColorSpaceCreateDeviceRGB(), Quartz.kCGImageAlphaPremultipliedLast)
+Quartz.CGContextDrawImage(ctx, ((0, 0), (w, h)), img)
+dst = Quartz.CGImageDestinationCreateWithURL(NSURL.fileURLWithPath_(sys.argv[2]), "public.png", 1, None)
+Quartz.CGImageDestinationAddImage(dst, Quartz.CGBitmapContextCreateImage(ctx), None)
+sys.exit(0 if Quartz.CGImageDestinationFinalize(dst) else 1)
+PY
+  done
+  return 1
+}
+
 # Only representations no larger than the source, so an .icns's largest representation is the
 # source's real size and "largest wins" can't be fooled by an upscale.
 icon_png_to_icns() {
@@ -35,6 +57,7 @@ icon_png_to_icns() {
   mkdir -p "$(dirname "$_out")" || return 1
   _set=$(mktemp -d "${TMPDIR:-/tmp}/porthole-icon.XXXXXX") || return 1
   mkdir "$_set/icon.iconset"
+  icon_rgba "$_src" "$_set/src.png" && _src="$_set/src.png"
   for _s in 16 32 128 256 512; do
     if [ "$_s" -le "$_w" ]; then
       sips -z "$_s" "$_s" "$_src" --out "$_set/icon.iconset/icon_${_s}x${_s}.png" >/dev/null 2>&1

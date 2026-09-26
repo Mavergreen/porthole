@@ -85,3 +85,25 @@ teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
   mkdir -p "$WORK/fakesips"; printf '#!/bin/sh\necho "  pixelWidth: <nil>"\n' > "$WORK/fakesips/sips"; chmod +x "$WORK/fakesips/sips"
   [ "$(PATH="$WORK/fakesips:$PATH" icon_width "$WORK/p512.png")" = 0 ]
 }
+
+# 1Password's apple-touch-icon is an 8-bit palette PNG, which sips on 10.9 can't resize ("Unable to
+# render destination image"). Build one here: a 180x180 two-color square.
+palette_png() {
+  py=$(command -v python3 || command -v python) || skip "needs a python to write the fixture"
+  "$py" - "$1" <<'PY'
+import struct, sys, zlib
+def chunk(t, d): return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+w = h = 180
+raw = b"".join(b"\x00" + bytes(bytearray((1 if 40 <= x < 140 and 40 <= y < 140 else 0) for x in range(w))) for y in range(h))
+png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 3, 0, 0, 0)) \
+    + chunk(b"PLTE", b"\x1a\x8c\xff\xff\xff\xff") + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+open(sys.argv[1], "wb").write(png)
+PY
+}
+
+@test "icon_png_to_icns converts a palette PNG" {
+  palette_png "$WORK/pal.png"
+  file "$WORK/pal.png" | grep -q colormap || return 1
+  icon_png_to_icns "$WORK/pal.png" "$WORK/pal.icns" || return 1
+  w=$(icon_width "$WORK/pal.icns"); [ "$w" -gt 0 ] && [ "$w" -le 180 ]
+}
