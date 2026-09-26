@@ -71,7 +71,7 @@ chmod 755 "$T/bin/porthole"
 . "$REPO/build/msc.sh"
 SCRIPTSDIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-scripts.XXXXXX")
 set -- --stage "$ROOT" --product porthole --name Porthole --version "$VERSION" \
-  --postinstall-hook "$HERE/postinstall-hook.sh" --scripts-out "$SCRIPTSDIR"
+  --preinstall-hook "$HERE/preinstall-hook.sh" --postinstall-hook "$HERE/postinstall-hook.sh" --scripts-out "$SCRIPTSDIR"
 if [ -n "${UPD_APP:-}" ]; then
   [ -d "$UPD_APP" ] || { echo "build_pkg: UPD_APP set but no updater .app at $UPD_APP" >&2; exit 1; }
   set -- "$@" --updater-app "$UPD_APP"
