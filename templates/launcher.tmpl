@@ -193,7 +193,9 @@ if [ -f "$_root/bin/porthole-icon-lib.sh" ]; then
     _stale=0
     if [ -f "$_usericon" ] && _ie=$(image_created_epoch "$IMAGE") \
        && [ "$(stat -f %m "$_usericon")" -lt "$_ie" ]; then _stale=1; fi
-    if [ "$_bw" -lt 512 ] || [ "$_stale" = 1 ]; then
+    # Extract when the container's icon isn't cached yet and nothing cached is at least 512 px, or
+    # when the cached copy predates this image. Once it's cached and fresh, re-extracting can't do better.
+    if { [ ! -f "$_usericon" ] && [ "$_bw" -lt 512 ]; } || [ "$_stale" = 1 ]; then
       sh "$_root/bin/extract-app-icns.sh" "$CONTAINER" "@ICON_GLOB@" "$_usericon" 2>/dev/null \
         || icon_log @SLUG@ "icon extraction from $CONTAINER found nothing usable for @ICON_GLOB@"
     fi

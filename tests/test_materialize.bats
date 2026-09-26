@@ -135,3 +135,20 @@ icon_w() { sips -g pixelWidth "$1" | awk '/pixelWidth/{print $2}'; }
   icon_setup; mat
   [ -f "$(R)/bin/porthole-icon-lib.sh" ]
 }
+
+# materialize runs as root in a pkg postinstall; the user cache is the console user's to write. Root
+# must never follow a symlink there (it could copy a root-only file into a world-readable bundle).
+@test "a symlink in the user's icon cache is never followed by root" {
+  icon_setup; mkdir -p "$APPS/user-icons"
+  . "$ENGINE/bin/porthole-icon-lib.sh"; icon_png_to_icns "$APPS/p512.png" "$APPS/elsewhere.icns"
+  ln -s "$APPS/elsewhere.icns" "$APPS/user-icons/thunderbird.icns"
+  mat
+  [ "$(cat "$(R)/AppIcon.width")" = 0 ]
+}
+
+@test "a non-image in the user's icon cache is never chosen" {
+  icon_setup; mkdir -p "$APPS/user-icons"; printf 'root:secret\n' > "$APPS/user-icons/thunderbird.icns"
+  mat
+  [ "$(cat "$(R)/AppIcon.width")" = 0 ]
+  cmp -s "$(R)/AppIcon.icns" "$ENGINE/packaging/macos/penguin.icns"
+}

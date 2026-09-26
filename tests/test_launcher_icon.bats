@@ -80,3 +80,12 @@ fixture_icns() {  # $1 = width, $2 = out
   [ ! -f "$WORK/extract.log" ]
 }
 run_icon_nolib() { NOLIB=1 run_icon "$@"; }
+
+# The container is the source of the user cache: once its icon is cached and fresh, extracting again
+# can't do better, however small it is. (A 256px-only app re-extracted on every launch.)
+@test "a small container icon, already cached and fresh, is not re-extracted every launch" {
+  fixture_icns 256 "$WORK/user/thunderbird.icns"; fixture_icns 512 "$WORK/src.icns"
+  EXTRACT_FROM="$WORK/src.icns" run_icon 2000-01-01T00:00:00.000000000Z 256
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ ! -f "$WORK/extract.log" ]
+}

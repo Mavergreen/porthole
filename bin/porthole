@@ -265,7 +265,14 @@ if [ -z "$USER_ICONS" ]; then
     [ -n "$_ch" ] && USER_ICONS="$_ch/Library/Caches/dev.mavergreen.porthole"
   fi
 fi
-_icon=$(icon_best "$SYS_ICONS/$SLUG.icns" ${USER_ICONS:+"$USER_ICONS/$SLUG.icns"})
+# Root never reads the user's cache in place: skip a symlink, copy the file to a root-owned temp, and
+# measure and install only the copy. A file swapped in between is at worst a non-image, never chosen.
+_ucopy=
+if [ -n "$USER_ICONS" ] && [ -f "$USER_ICONS/$SLUG.icns" ] && [ ! -L "$USER_ICONS/$SLUG.icns" ]; then
+  _ucopy=$(mktemp "${TMPDIR:-/tmp}/porthole-usericon.XXXXXX") \
+    && cat "$USER_ICONS/$SLUG.icns" > "$_ucopy" 2>/dev/null || _ucopy=
+fi
+_icon=$(icon_best "$SYS_ICONS/$SLUG.icns" ${_ucopy:+"$_ucopy"})
 ICON_FILE=
 PENGUIN="$ENGINE/penguin.icns"; [ -f "$PENGUIN" ] || PENGUIN="$ENGINE/packaging/macos/penguin.icns"
 if [ -n "$_icon" ]; then
@@ -277,6 +284,7 @@ elif [ -f "$PENGUIN" ]; then
   echo 0 > "$BUNDLE/Contents/Resources/AppIcon.width"
   ICON_FILE="AppIcon"
 fi
+[ -n "$_ucopy" ] && rm -f "$_ucopy"
 
 # 4) Info.plist.
 cat > "$BUNDLE/Contents/Info.plist" <<EOF
