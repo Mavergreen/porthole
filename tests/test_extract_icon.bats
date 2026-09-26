@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: macOS-only -- converts icons with sips and iconutil
 # The container icon extractor: argument-driven, writes only on success.
 ENGINE="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 X="$ENGINE/viewer/cmake/extract-app-icns.sh"

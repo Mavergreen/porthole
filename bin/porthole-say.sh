@@ -1,3 +1,4 @@
+# platform: host-agnostic
 # porthole-say.sh -- how the launcher and `porthole up` talk to the app's launch window. Sourced.
 # Under the viewer (PORTHOLE_PROTOCOL=1) each message is one JSON line on stdout and answers arrive
 # on stdin; otherwise text goes to stderr and a question takes its default.

@@ -1,3 +1,4 @@
+# platform: macOS-only -- measures and converts with sips and iconutil
 # porthole-icon-lib.sh -- measure, convert, choose and log app icons. Sourced, never run; every
 # function returns a status and never exits, because icons are best-effort everywhere they're used.
 

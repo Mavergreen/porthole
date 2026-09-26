@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # The generated launcher under the viewer (PORTHOLE_PROTOCOL=1): JSON on stdout, answers on stdin.
 load test_helper
 ENGINE="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
@@ -127,5 +128,5 @@ EOF
   export PORTHOLE_LOG="$WORK/porthole.log"
   launch </dev/null; launch </dev/null                     # Ask later, twice
   [ "$(grep -c '^porthole describe-data oldapp-gui-data$' "$PORTHOLE_LOG")" -eq 1 ] || { cat "$PORTHOLE_LOG"; return 1; }
-  [[ "$output" == *'Linux Old App was uninstalled; its data uses 1.2 GB.'* ]]
+  [[ "$output" == *'Linux Old App was uninstalled; its data uses 1.2 GB.'* ]] || return 1
 }

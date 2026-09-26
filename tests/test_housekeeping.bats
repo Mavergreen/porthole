@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: macOS-only -- forget's prompt is driven through BSD script(1) for a terminal
 # Housekeeping: only Porthole-labeled objects, only disposables, never data (except `forget --delete-data`).
 load test_helper
 REPO="$BATS_TEST_DIRNAME/.."

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: macOS-only -- measures and converts icons with sips and iconutil
 # Generated launcher: the per-user icon cache and the Dock icon hand-off.
 load test_helper
 ENGINE="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"

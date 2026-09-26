@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- converts with sips and iconutil (porthole-icon-lib.sh)
 # Extract an app's icon from its own container (the user's installed copy -- Porthole never ships a
 # vendor icon) into a Mac .icns. Writes OUT only on success; exits non-zero otherwise.
 # Usage: extract-app-icns.sh CONTAINER ICON_GLOB OUT.icns

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: macOS-only -- measures and converts icons with sips and iconutil
 # The shared icon helpers. Real sips/iconutil (macOS only); fixtures are made from our own penguin.
 ENGINE="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 
