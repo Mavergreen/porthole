@@ -35,7 +35,7 @@ case "$1 $2" in
     esac ;;
   "rm -f") rm -f "$FAKE/container.$3" ;;
   "images --format") cat "$FAKE/base-tags" 2>/dev/null ;;
-  "manifest inspect") case "$*" in *@sha256:*) cat "$FAKE/manifest-by-digest" 2>/dev/null || exit 1 ;; *) cat "$FAKE/manifest" 2>/dev/null || exit 1 ;; esac ;;
+  "manifest inspect") case "$*" in *@sha256:*) _dg=${3##*@}; if [ -f "$FAKE/manifest.$_dg" ]; then cat "$FAKE/manifest.$_dg"; else cat "$FAKE/manifest-by-digest" 2>/dev/null || exit 1; fi ;; *) cat "$FAKE/manifest" 2>/dev/null || exit 1 ;; esac ;;
   "images -q") echo img1 ;;
   "image prune") touch "$FAKE/pruned" ;;
   "rmi "*) : ;;
@@ -281,4 +281,24 @@ manifest_1gb() {
   run "$REPO/bin/porthole" up "$SPEC"
   [ "$status" -eq 3 ] || { echo "$output"; return 1; }
   grep -q 'manifest inspect ghcr.io/mavergreen/porthole-base@sha256:bbb' "$STUB_LOG"
+}
+
+@test "a multi-platform index is read whatever its key order or layout" {
+  fake_docker; make_spec
+  printf '{\n "manifests": [\n  {"digest": "sha256:aaa", "mediaType": "application/vnd.oci.image.manifest.v1+json", "platform": {"os": "linux", "architecture": "arm64"}, "size": 1000},\n  {"digest": "sha256:bbb", "mediaType": "application/vnd.oci.image.manifest.v1+json", "platform": {"os": "linux", "architecture": "amd64"}, "size": 1000}\n ],\n "mediaType": "application/vnd.oci.image.index.v1+json"\n}\n' > "$FAKE/manifest"
+  printf '{"config":{"size":999},"layers":[{"size":600000000},{"size":400000000}]}\n' > "$FAKE/manifest-by-digest"
+  echo 1000000 > "$FAKE/free"; echo 2900000 > "$FAKE/free-after"
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 3 ] || { echo "$output"; return 1; }
+  grep -q 'manifest inspect ghcr.io/mavergreen/porthole-base@sha256:bbb' "$STUB_LOG"
+}
+
+@test "a base pinned by digest is looked up by repository and platform digest" {
+  fake_docker; make_spec
+  printf 'FROM ghcr.io/mavergreen/porthole-base@sha256:ccc\n' > "$WORK/app/ctx/Dockerfile"
+  printf '{"manifests":[{"mediaType":"x","size":1000,"digest":"sha256:bbb","platform":{"architecture":"amd64","os":"linux"}}]}\n' > "$FAKE/manifest.sha256:ccc"
+  printf '{"config":{"size":999},"layers":[{"size":600000000},{"size":400000000}]}\n' > "$FAKE/manifest-by-digest"
+  echo 1000000 > "$FAKE/free"; echo 2900000 > "$FAKE/free-after"
+  run "$REPO/bin/porthole" up "$SPEC"
+  grep -q 'manifest inspect ghcr.io/mavergreen/porthole-base@sha256:bbb$' "$STUB_LOG" || { grep manifest "$STUB_LOG"; return 1; }
 }

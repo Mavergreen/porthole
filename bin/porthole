@@ -68,9 +68,13 @@ space_needed_kb() {  # FROM
   _m=$(docker manifest inspect "$1" 2>/dev/null | tr -d ' \t\n')
   # A multi-platform index lists manifests, not layers: estimate from the linux/amd64 one.
   case "$_m" in *'"manifests"'*)
-    _d=$(printf '%s' "$_m" | grep -o 'sha256:[0-9a-f]*","platform":{"architecture":"amd64","os":"linux"' | head -1 | cut -d'"' -f1)
+    # One line per entry (only entries are separated by "},{"), whatever order their keys come in.
+    _d=$(printf '%s' "$_m" | sed 's/},{/}\
+{/g' | grep '"architecture":"amd64"' | grep '"os":"linux"' |
+      grep -o '"digest":"sha256:[0-9a-f]*"' | head -1 | cut -d'"' -f4)
     [ -n "$_d" ] || return 1
-    _m=$(docker manifest inspect "$(printf '%s' "$1" | sed 's/:[^/:]*$//')@$_d" 2>/dev/null | tr -d ' \t\n') ;;
+    case "$1" in *@*) _repo=${1%@*} ;; *) _repo=$(printf '%s' "$1" | sed 's/:[^/:]*$//') ;; esac
+    _m=$(docker manifest inspect "$_repo@$_d" 2>/dev/null | tr -d ' \t\n') ;;
   esac
   _z=$(printf '%s' "$_m" | sed 's/.*"layers"//' | grep -o '"size":[0-9]*' | sed 's/[^0-9]//g' |
     awk '{ t += $1 } END { if (t) printf "%.0f", t }')
