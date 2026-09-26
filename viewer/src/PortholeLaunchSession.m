@@ -12,7 +12,7 @@
 @synthesize delegate = _delegate;
 
 // Answers go down a pipe the launcher may already have closed; a write there must fail, not kill the
-// app. (The viewer's other sockets want the same: a dead peer is a disconnect, not a signal.)
+// app. (The viewer's main() ignores SIGPIPE too; this covers the session wherever it's used.)
 + (void)initialize { if (self == [PortholeLaunchSession class]) signal(SIGPIPE, SIG_IGN); }
 
 + (NSDictionary *)messageFromLine:(NSString *)line {
@@ -89,7 +89,10 @@
             [_task setTerminationHandler:nil];
             [self release];   // the termination handler's retain; it will never run
             @synchronized (self) { [_errTail appendData:[[e reason] ?: @"" dataUsingEncoding:NSUTF8StringEncoding]]; }
-            dispatch_async(dispatch_get_main_queue(), ^{ [self stoppedWithoutAWord]; });
+            // No child holds the pipes' other ends, so close ours: the readers see EOF, which reports
+            // the failure and lets them (and this session) go.
+            [[[_task standardOutput] fileHandleForWriting] closeFile];
+            [[[_task standardError] fileHandleForWriting] closeFile];
         }
     }
     int fd = _readFD;

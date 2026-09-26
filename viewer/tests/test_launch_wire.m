@@ -95,6 +95,9 @@ int main(void) {
         Rec *r5 = [[[Rec alloc] init] autorelease]; s5.delegate = r5; [s5 start];
         pump(^BOOL{ return r5.events.count >= 1; });
         assert(r5.events.count == 1 && [r5.events[0] hasPrefix:@"failed:"]);
+        // ...and its readers finish rather than hold the session forever (only our reference remains).
+        pump(^BOOL{ return [s5 retainCount] == 1; });
+        assert([s5 retainCount] == 1);
 
         // Answering after the launcher closed its end: no SIGPIPE death.
         int p6[2], q6[2]; assert(pipe(p6) == 0 && pipe(q6) == 0);

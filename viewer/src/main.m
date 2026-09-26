@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#include <signal.h>
 #import <Carbon/Carbon.h>   // RegisterEventHotKey (global Quick Access hotkey)
 #import "remote_display.h"
 #import "PortholeWindow.h"
@@ -801,6 +802,9 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 @end
 
 int main(void) {
+    // A write to a peer that went away (xpra, the menu bridge, the launcher) must fail, not kill the
+    // viewer: a dead peer is a disconnect, and the disconnect path is what leaves the recovery marker.
+    signal(SIGPIPE, SIG_IGN);
     @autoreleasepool {
         NSApplication *app = [NSApplication sharedApplication];
         [app setActivationPolicy:NSApplicationActivationPolicyRegular];
