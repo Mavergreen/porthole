@@ -16,6 +16,12 @@ fi
 if [ "${1:-}" = image ] && [ "${2:-}" = inspect ] && [ -n "${CREATED_FILE:-}" ]; then
   case "$*" in *Created*) cat "$CREATED_FILE"; exit 0 ;; esac
 fi
+case "$*" in
+  "volume ls -q --filter label=dev.mavergreen.porthole.slug --format"*)
+    cat "$STUB_DIR/docker-volumes" 2>/dev/null; exit 0 ;;
+  "logs --tail"*) cat "$STUB_DIR/docker-logs" 2>/dev/null; exit 0 ;;
+  "exec "*python3*) [ -f "$STUB_DIR/docker-exec-fails" ] && exit 1 ;;
+esac
 _n=$(cat "$STUB_DIR/docker.calls" 2>/dev/null || echo 0)
 _n=$((_n + 1))
 echo "$_n" > "$STUB_DIR/docker.calls"

@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 # platform: host-agnostic
-# When `porthole up` fails, the fatal dialog must include the tail of up's stderr.
+# When `porthole up` fails, the error must include the tail of up's stderr (and open no dialog).
 load test_helper
 
-@test "launcher: up failure includes stderr tail in the dialog" {
+@test "launcher: up failure includes stderr tail in the error" {
   d="$(mktemp -d -t plu)"
   cat > "$d/docker-machine-ctl" <<'EOF'
 #!/bin/sh
@@ -24,6 +24,6 @@ EOF
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   rm -rf "$d"
   [ "$status" -ne 0 ] || return 1
-  grep -q 'display dialog' "$STUB_LOG" || return 1
-  grep -q 'DISTINCT-BUILD-ERR' "$STUB_LOG" || { echo "$(cat "$STUB_LOG")"; return 1; }
+  [[ "$output" == *"DISTINCT-BUILD-ERR"* ]] || { echo "$output"; return 1; }
+  ! grep -q 'display dialog' "$STUB_LOG" || return 1
 }

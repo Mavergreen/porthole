@@ -92,12 +92,11 @@ EOF
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
 
-# Relies on tests/stubs/osascript (put on PATH by test_helper setup()) to log every
-# osascript invocation to $STUB_LOG without opening a real dialog.
-@test "launcher: absent VM -> pops a modal dialog naming the fix" {
+# Errors go to the app's launch window (or stderr outside it), never a modal dialog: a dialog with
+# no human to dismiss it hangs the launch. tests/stubs/osascript logs any attempt to $STUB_LOG.
+@test "launcher: absent VM -> an error naming the fix, and no modal dialog" {
   run_launcher absent
   [ "$status" -ne 0 ] || return 1
-  grep -q 'display dialog' "$STUB_LOG" || { echo "no dialog in: $(cat "$STUB_LOG")"; return 1; }
-  grep -q 'docker-machine-ctl setup' "$STUB_LOG" \
-    || { echo "fix text missing from dialog log: $(cat "$STUB_LOG")"; return 1; }
+  [[ "$output" == *"docker-machine-ctl setup"* ]] || { echo "$output"; return 1; }
+  ! grep -q 'display dialog' "$STUB_LOG" || return 1
 }
