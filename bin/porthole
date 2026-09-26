@@ -181,7 +181,7 @@ CONF=$(cd "$(dirname "$CONF_ARG")" && pwd)/$(basename "$CONF_ARG")
 [ -f "$CONF" ] || { echo "porthole materialize: no such conf: $CONF" >&2; exit 1; }
 
 # Load the conf for NAME + ICON_GLOB, using the same defaults the generator applies.
-APP= NAME= ICON_GLOB=
+APP= NAME= ICON_GLOB= ICON_URL=
 # shellcheck disable=SC1090
 . "$CONF"
 # The conf's basename is authoritative for the slug -- a manifest SLUG= is ignored, exactly as
@@ -230,6 +230,7 @@ install -m 0755 "$ENGINE/bin/porthole-recover-watch" "$BUNDLE/Contents/Resources
 # container) on first launch. Resolves in the installed engine ($ENGINE/viewer/cmake) or a dev checkout.
 _extract="$ENGINE/viewer/cmake/extract-app-icns.sh"
 [ -f "$_extract" ] && install -m 0755 "$_extract" "$BUNDLE/Contents/Resources/bin/extract-app-icns.sh"
+install -m 0644 "$ENGINE/bin/porthole-icon-lib.sh" "$BUNDLE/Contents/Resources/bin/porthole-icon-lib.sh"
 
 # CFBundleExecutable stub: a double-click runs the real launcher in Resources/bin.
 cat > "$BUNDLE/Contents/MacOS/$SLUG" <<EOF
@@ -238,13 +239,42 @@ exec "\$(cd "\$(dirname "\$0")/../Resources/bin" && pwd)/$SLUG" "\$@"
 EOF
 chmod 755 "$BUNDLE/Contents/MacOS/$SLUG"
 
-# 3) App icon: bake the Linux PENGUIN default (ours, redistributable). The REAL app icon is not
-#    shipped by us -- the launcher extracts it from the user's own container on first launch and swaps
-#    it in. So a fresh materialize wears the penguin; after first launch it's the app's own icon.
+# 3) App icon: the largest real icon cached on this Mac, else the penguin. Porthole ships no vendor
+#    icon: ICON_URL is fetched from the vendor by this Mac (best-effort, kept across installs in the
+#    system cache), and the launcher adds the app's own from its container to the user's cache.
+. "$ENGINE/bin/porthole-icon-lib.sh"
+SYS_ICONS="${PORTHOLE_ICON_CACHE:-/usr/local/mavergreen/var/porthole/icons}"
+if [ -n "$ICON_URL" ] && [ -z "${PORTHOLE_MATERIALIZE_NO_ICON:-}" ]; then
+  _fetched=$(mktemp "${TMPDIR:-/tmp}/porthole-icon-url.XXXXXX")
+  if ! curl -fsSL --max-time 20 -o "$_fetched" "$ICON_URL" 2>/dev/null; then
+    icon_log "$SLUG" "ICON_URL fetch failed ($ICON_URL); kept the cached icon"
+  elif ! icon_is_png "$_fetched"; then
+    icon_log "$SLUG" "ICON_URL is not a PNG ($ICON_URL); kept the cached icon"
+  elif ! icon_png_to_icns "$_fetched" "$SYS_ICONS/$SLUG.icns"; then
+    icon_log "$SLUG" "ICON_URL could not be converted ($ICON_URL); kept the cached icon"
+  fi
+  rm -f "$_fetched"
+fi
+# The console user's cache (materialize runs as root in a pkg's postinstall). No console user,
+# or root at the console, means no user cache to read.
+USER_ICONS="${PORTHOLE_USER_ICON_CACHE:-}"
+if [ -z "$USER_ICONS" ]; then
+  _cu="${PORTHOLE_CONSOLE_USER:-$(stat -f %Su /dev/console 2>/dev/null)}"
+  if [ -n "$_cu" ] && [ "$_cu" != root ]; then
+    _ch=$(dscl . -read "/Users/$_cu" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+    [ -n "$_ch" ] && USER_ICONS="$_ch/Library/Caches/dev.mavergreen.porthole"
+  fi
+fi
+_icon=$(icon_best "$SYS_ICONS/$SLUG.icns" ${USER_ICONS:+"$USER_ICONS/$SLUG.icns"})
 ICON_FILE=
 PENGUIN="$ENGINE/penguin.icns"; [ -f "$PENGUIN" ] || PENGUIN="$ENGINE/packaging/macos/penguin.icns"
-if [ -f "$PENGUIN" ]; then
+if [ -n "$_icon" ]; then
+  install -m 0644 "$_icon" "$BUNDLE/Contents/Resources/AppIcon.icns"
+  icon_width "$_icon" > "$BUNDLE/Contents/Resources/AppIcon.width"
+  ICON_FILE="AppIcon"
+elif [ -f "$PENGUIN" ]; then
   install -m 0644 "$PENGUIN" "$BUNDLE/Contents/Resources/AppIcon.icns"
+  echo 0 > "$BUNDLE/Contents/Resources/AppIcon.width"
   ICON_FILE="AppIcon"
 fi
 
