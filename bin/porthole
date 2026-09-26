@@ -19,7 +19,7 @@
 #       through to docker exec (-i, -it, -u U, -e K=V, ...).
 set -eu
 
-ENGINE=$(cd "$(dirname "$0")/.." && pwd)   # engine root: bin/, templates/, viewer/cmake/
+ENGINE=$(cd "$(dirname "${PORTHOLE_SELF:-$0}")/.." && pwd)   # engine root: bin/, templates/, viewer/cmake/
 
 usage() {
   cat >&2 <<'EOF'
@@ -40,6 +40,18 @@ recipe_fingerprint() {
   (cd "$1" && find . -type f | LC_ALL=C sort | while IFS= read -r _f; do
     printf '%s\n' "$_f"; cat "$_f"
   done) | shasum -a 256 | cut -d' ' -f1
+}
+
+# Remove Porthole's own disposables: stopped containers that aren't an app's current one (<slug>-gui),
+# and dangling images. Found by label only; volumes are never touched here.
+porthole_cleanup() {
+  docker ps -a --filter "label=$SLUG_LABEL" --filter status=exited --filter status=created \
+      --format "{{.Names}} {{.Label \"$SLUG_LABEL\"}}" 2>/dev/null |
+    while read -r _cn _cs; do
+      [ "$_cn" = "$_cs-gui" ] || docker rm "$_cn" >/dev/null 2>&1 || true
+    done
+  docker image prune -f --filter "label=$SLUG_LABEL" >/dev/null 2>&1 || true
+  return 0
 }
 
 cmd_up() {
@@ -123,6 +135,7 @@ cmd_up() {
     -v "$VOLUME:$DATADIR" $_mount_args $_vol_args \
     "$IMAGE" >/dev/null || { echo "porthole up: cannot create container $CONTAINER" >&2; exit 1; }
   [ "$_image_id" != "$_old_id" ] && drop_superseded "$_old_id" "$_ctx"
+  porthole_cleanup
   return 0
 }
 
@@ -160,6 +173,8 @@ cmd_exec() {
   exec docker exec $_flags "$CONTAINER" "$@"
 }
 
+# Sourced by tests with PORTHOLE_LIB=1: define the functions, run nothing.
+[ -z "${PORTHOLE_LIB:-}" ] || return 0 2>/dev/null
 [ $# -gt 0 ] || usage
 cmd="$1"; shift
 case "$cmd" in
