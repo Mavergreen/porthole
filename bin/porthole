@@ -29,6 +29,7 @@ usage:
   porthole up [--rebuild] <container-spec>
   porthole exec <container-spec> [docker-exec flags...] -- <command...>
   porthole forget <slug> [--keep-data | --delete-data]
+  porthole describe-data <volume>
 EOF
   exit 2
 }
@@ -36,6 +37,7 @@ EOF
 # --- up: the SINGLE container creator (headless) -----------------------------
 RECIPE_LABEL=dev.mavergreen.porthole.recipe
 SLUG_LABEL=dev.mavergreen.porthole.slug   # on everything up creates; housekeeping finds its objects by it
+NAME_LABEL=dev.mavergreen.porthole.name   # on data volumes: whose they were, for questions after the app is gone
 
 # Every file in the build context, names and contents, in a stable order.
 recipe_fingerprint() {
@@ -73,6 +75,29 @@ space_free_kb() {
   docker run --rm --entrypoint df "$_img" -Pk / 2>/dev/null | awk 'NR == 2 { print $4 }'
 }
 space_gb() { awk -v k="$1" 'BEGIN { printf "%.1f", k / 1024 / 1024 }'; }
+
+# Data volumes, described for a person: the app's name (the name label, else the slug label, else the
+# volume's own name) and its size. Measuring runs du in any local image; no image or a failed du
+# means no size, never an error.
+data_name() {
+  _dn=$(docker volume inspect -f "{{index .Labels \"$NAME_LABEL\"}}" "$1" 2>/dev/null)
+  case "$_dn" in ''|'<no value>') _dn=$(docker volume inspect -f "{{index .Labels \"$SLUG_LABEL\"}}" "$1" 2>/dev/null) ;; esac
+  case "$_dn" in ''|'<no value>') _dn=$1 ;; esac
+  printf '%s\n' "$_dn"
+}
+data_kb() {
+  _img=$(docker images -q 2>/dev/null | head -1)
+  [ -n "$_img" ] || return 0
+  docker run --rm -v "$1:/v:ro" --entrypoint du "$_img" -sk /v 2>/dev/null | awk 'NR == 1 && $1 ~ /^[0-9]+$/ { print $1 }'
+}
+size_h() {
+  awk -v k="$1" 'BEGIN { if (k >= 1048576) printf "%.1f GB", k / 1048576; else printf "%d MB", (k + 1023) / 1024 }'
+}
+cmd_describe_data() {
+  [ -n "${1:-}" ] || usage
+  _kb=$(data_kb "$1")
+  printf '%s\t%s\n' "$(data_name "$1")" "${_kb:+$(size_h "$_kb")}"
+}
 
 cmd_up() {
   _rebuild=0
@@ -160,12 +185,12 @@ cmd_up() {
     docker rm -f "$CONTAINER" >/dev/null || { echo "porthole up: cannot remove $CONTAINER" >&2; exit 1; }
   fi
 
-  docker volume create --label "$SLUG_LABEL=$SLUG" "$VOLUME" >/dev/null || { echo "porthole up: cannot create volume $VOLUME" >&2; exit 1; }
+  docker volume create --label "$SLUG_LABEL=$SLUG" --label "$NAME_LABEL=${NAME:-Linux $SLUG}" "$VOLUME" >/dev/null || { echo "porthole up: cannot create volume $VOLUME" >&2; exit 1; }
   # Extra named volumes (spec EXTRA_VOLUMES: VOLNAME:CTRPATH) -- e.g. a companion CLI's config dir.
   _vol_args=""
   for _v in $EXTRA_VOLUMES; do
     _vn=${_v%%:*}
-    docker volume create --label "$SLUG_LABEL=$SLUG" "$_vn" >/dev/null || { echo "porthole up: cannot create volume $_vn" >&2; exit 1; }
+    docker volume create --label "$SLUG_LABEL=$SLUG" --label "$NAME_LABEL=${NAME:-Linux $SLUG}" "$_vn" >/dev/null || { echo "porthole up: cannot create volume $_vn" >&2; exit 1; }
     _vol_args="$_vol_args -v $_v"
   done
   # Capabilities (spec CAPS): each --cap-add'd (e.g. SYS_PTRACE for 1Password's browser peer check).
@@ -220,14 +245,17 @@ cmd_forget() {
     echo "porthole forget: Docker isn't reachable; nothing removed for $_slug" >&2; return 0
   fi
   _f="label=$SLUG_LABEL=$_slug"
+  # Measure the data before the app's images go: its own image may be the only one to run du in.
+  _vols=$(docker volume ls -q --filter "$_f" 2>/dev/null)
+  _kb=0; for _v in $_vols; do _k=$(data_kb "$_v"); _kb=$((_kb + ${_k:-0})); done
   docker ps -aq --filter "$_f" 2>/dev/null | while read -r _c; do docker rm -f "$_c" >/dev/null 2>&1 || true; done
   docker images -q --filter "$_f" 2>/dev/null | sort -u | while read -r _i; do docker rmi -f "$_i" >/dev/null 2>&1 || true; done
-  _vols=$(docker volume ls -q --filter "$_f" 2>/dev/null)
   [ -n "$_vols" ] || return 0
   if [ "$_data" = ask ]; then
     _data=keep
     if [ -t 0 ]; then
-      printf 'Delete the data of %s (%s)? [y/N] ' "$_slug" "$(echo $_vols)" >&2
+      _sz=; [ "$_kb" -gt 0 ] && _sz=" ($(size_h "$_kb"))"
+      printf "Delete %s's data%s? [y/N] " "$(data_name "$(echo $_vols | awk '{print $1}')")" "$_sz" >&2
       read -r _yn || _yn=
       case "$_yn" in [yY]*) _data=delete ;; esac
     fi
@@ -269,6 +297,7 @@ case "$cmd" in
   up)   cmd_up "$@"; exit $? ;;
   exec) cmd_exec "$@" ;;      # cmd_exec's `exec` replaces this process
   forget) cmd_forget "$@"; exit $? ;;
+  describe-data) cmd_describe_data "$@"; exit $? ;;
   materialize) ;;             # falls through to the linear body below
   *) usage ;;
 esac

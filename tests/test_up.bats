@@ -186,8 +186,8 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   run "$REPO/bin/porthole" up "$SPEC"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   grep -q -- '^docker build .*--label dev.mavergreen.porthole.slug=demo' "$STUB_LOG"
-  grep -q -- '^docker volume create --label dev.mavergreen.porthole.slug=demo demo-gui-data$' "$STUB_LOG"
-  grep -q -- '^docker volume create --label dev.mavergreen.porthole.slug=demo demo-cli$' "$STUB_LOG"
+  grep -qF -- 'docker volume create --label dev.mavergreen.porthole.slug=demo --label dev.mavergreen.porthole.name=Linux Demo demo-gui-data' "$STUB_LOG" || return 1
+  grep -qF -- 'docker volume create --label dev.mavergreen.porthole.slug=demo --label dev.mavergreen.porthole.name=Linux Demo demo-cli' "$STUB_LOG" || return 1
   grep -q -- '^docker run .*--label dev.mavergreen.porthole.slug=demo' "$STUB_LOG"
 }
 

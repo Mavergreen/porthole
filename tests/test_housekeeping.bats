@@ -30,7 +30,14 @@ case "$1 $2" in
       [ -z "$stat" ] || case "$stat" in *" $st "*) ;; *) continue ;; esac
       case "$2" in -aq) echo "$n" ;; *) echo "$n $s" ;; esac
     done < "$FAKE/containers" ;;
-  "images -q") while read -r i s d; do m "$s" && echo "$i"; done < "$FAKE/images" ;;
+  "images -q") if [ -z "$lab" ]; then head -1 "$FAKE/images" | cut -d' ' -f1; else while read -r i s d; do m "$s" && echo "$i"; done < "$FAKE/images"; fi ;;
+  "volume inspect")
+    eval "_v=\${$#}"
+    case "$*" in
+      *porthole.name*) awk -F '\t' -v v="$_v" '$1 == v { print $2 }' "$FAKE/volnames" 2>/dev/null ;;
+      *porthole.slug*) awk -v v="$_v" '$1 == v { print $2 }' "$FAKE/volumes" ;;
+    esac ;;
+  "run --rm") case "$*" in *"--entrypoint du"*) [ -f "$FAKE/du" ] || exit 1; printf '%s\t/v\n' "$(cat "$FAKE/du")" ;; esac ;;
   "image prune") while read -r i s d; do m "$s" && [ "$d" = 1 ] && del images "$i"; done < "$FAKE/images"; exit 0 ;;
   "volume ls") while read -r n s; do m "$s" && echo "$n"; done < "$FAKE/volumes" ;;
   "volume rm") del volumes "$3" ;;
@@ -105,4 +112,32 @@ state_demo() {
   hk_docker
   run "$REPO/bin/porthole" forget
   [ "$status" -eq 2 ]
+}
+
+@test "describe-data names a volume by its app and measures it" {
+  hk_docker; printf 'img1 demo 0\n' > "$FAKE/images"; printf 'demo-gui-data demo\n' > "$FAKE/volumes"
+  printf 'demo-gui-data\tLinux Demo\n' > "$FAKE/volnames"; echo 1258291 > "$FAKE/du"
+  run "$REPO/bin/porthole" describe-data demo-gui-data
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$output" = "$(printf 'Linux Demo\t1.2 GB')" ]
+}
+
+@test "describe-data: an unnamed volume falls back to its slug; an unmeasurable one has no size" {
+  hk_docker; printf 'demo-gui-data demo\n' > "$FAKE/volumes"          # no volnames, no images, no du
+  run "$REPO/bin/porthole" describe-data demo-gui-data
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$output" = "$(printf 'demo\t')" ]
+}
+
+@test "describe-data: small data is shown in MB" {
+  hk_docker; printf 'img1 demo 0\n' > "$FAKE/images"; printf 'demo-gui-data demo\n' > "$FAKE/volumes"; echo 348160 > "$FAKE/du"
+  run "$REPO/bin/porthole" describe-data demo-gui-data
+  [ "$output" = "$(printf 'demo\t340 MB')" ]
+}
+
+@test "forget at a terminal asks about the app by name and size" {
+  hk_docker; state_demo; printf 'demo-gui-data\tLinux Demo\n' > "$FAKE/volnames"; echo 1258291 > "$FAKE/du"
+  out=$(printf 'n\n' | script -q /dev/null "$REPO/bin/porthole" forget demo 2>&1)
+  [[ "$out" == *"Delete Linux Demo's data (1.2 GB)? [y/N]"* ]] || { echo "$out"; return 1; }
+  grep -q '^demo-gui-data ' "$FAKE/volumes"
 }
