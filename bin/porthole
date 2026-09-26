@@ -60,11 +60,19 @@ porthole_cleanup() {
 
 # Free space, in KB. Needed: pulling -> the image's compressed layers x3 to unpack, plus 1 GiB for the
 # app's own layer; building on a present base -> 1.5 GiB. Either may fail (no registry, no local image
-# to run df in); a failed estimate never blocks a launch.
+# to run df in); a failed estimate never blocks a launch. Every layer of the image counts, even one an
+# older base already has: the Docker CLI can't tell which registry layers are already unpacked here,
+# so the estimate errs high.
 space_needed_kb() {  # FROM
   if docker image inspect "$1" >/dev/null 2>&1; then echo $((1536 * 1024)); return 0; fi
-  _z=$(docker manifest inspect "$1" 2>/dev/null | tr -d '\n' | sed 's/.*"layers"//' |
-    grep -o '"size"[[:space:]]*:[[:space:]]*[0-9]*' | sed 's/[^0-9]//g' |
+  _m=$(docker manifest inspect "$1" 2>/dev/null | tr -d ' \t\n')
+  # A multi-platform index lists manifests, not layers: estimate from the linux/amd64 one.
+  case "$_m" in *'"manifests"'*)
+    _d=$(printf '%s' "$_m" | grep -o 'sha256:[0-9a-f]*","platform":{"architecture":"amd64","os":"linux"' | head -1 | cut -d'"' -f1)
+    [ -n "$_d" ] || return 1
+    _m=$(docker manifest inspect "$(printf '%s' "$1" | sed 's/:[^/:]*$//')@$_d" 2>/dev/null | tr -d ' \t\n') ;;
+  esac
+  _z=$(printf '%s' "$_m" | sed 's/.*"layers"//' | grep -o '"size":[0-9]*' | sed 's/[^0-9]//g' |
     awk '{ t += $1 } END { if (t) printf "%.0f", t }')
   [ -n "$_z" ] || return 1
   echo $((_z * 3 / 1024 + 1024 * 1024))

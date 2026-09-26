@@ -35,7 +35,7 @@ case "$1 $2" in
     esac ;;
   "rm -f") rm -f "$FAKE/container.$3" ;;
   "images --format") cat "$FAKE/base-tags" 2>/dev/null ;;
-  "manifest inspect") cat "$FAKE/manifest" 2>/dev/null || exit 1 ;;
+  "manifest inspect") case "$*" in *@sha256:*) cat "$FAKE/manifest-by-digest" 2>/dev/null || exit 1 ;; *) cat "$FAKE/manifest" 2>/dev/null || exit 1 ;; esac ;;
   "images -q") echo img1 ;;
   "image prune") touch "$FAKE/pruned" ;;
   "rmi "*) : ;;
@@ -271,4 +271,14 @@ manifest_1gb() {
   run env PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC"
   [ "$status" -eq 3 ]
   [[ "$output" == *"needs about 3.8 GB"* ]] || return 1
+}
+
+@test "a multi-platform base is estimated from its linux/amd64 image, not the index" {
+  fake_docker; make_spec
+  printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","size":1000,"digest":"sha256:aaa","platform":{"architecture":"arm64","os":"linux"}},{"mediaType":"application/vnd.oci.image.manifest.v1+json","size":1000,"digest":"sha256:bbb","platform":{"architecture":"amd64","os":"linux"}}]}\n' > "$FAKE/manifest"
+  printf '{"config":{"size":999},"layers":[{"size":600000000},{"size":400000000}]}\n' > "$FAKE/manifest-by-digest"
+  echo 1000000 > "$FAKE/free"; echo 2900000 > "$FAKE/free-after"
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 3 ] || { echo "$output"; return 1; }
+  grep -q 'manifest inspect ghcr.io/mavergreen/porthole-base@sha256:bbb' "$STUB_LOG"
 }
