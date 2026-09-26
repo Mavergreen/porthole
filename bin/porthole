@@ -27,6 +27,7 @@ usage:
   porthole materialize <conf-path> [--apps-dir DIR]
   porthole up [--rebuild] <container-spec>
   porthole exec <container-spec> [docker-exec flags...] -- <command...>
+  porthole forget <slug> [--keep-data | --delete-data]
 EOF
   exit 2
 }
@@ -152,6 +153,41 @@ drop_superseded() {
   done
 }
 
+# --- forget: an app is being uninstalled -------------------------------------------------------
+# Removes the slug's containers and images. Its data volumes go only on --delete-data, or a "y" at a
+# terminal; anything else keeps them. Safe to call when Docker is away: an uninstall must not fail
+# over Porthole.
+cmd_forget() {
+  _slug="${1:-}"; [ -n "$_slug" ] || usage; shift
+  _data=ask
+  case "${1:-}" in
+    --keep-data) _data=keep ;; --delete-data) _data=delete ;; '') ;;
+    *) usage ;;
+  esac
+  if ! docker info >/dev/null 2>&1; then
+    echo "porthole forget: Docker isn't reachable; nothing removed for $_slug" >&2; return 0
+  fi
+  _f="label=$SLUG_LABEL=$_slug"
+  docker ps -aq --filter "$_f" 2>/dev/null | while read -r _c; do docker rm -f "$_c" >/dev/null 2>&1 || true; done
+  docker images -q --filter "$_f" 2>/dev/null | sort -u | while read -r _i; do docker rmi -f "$_i" >/dev/null 2>&1 || true; done
+  _vols=$(docker volume ls -q --filter "$_f" 2>/dev/null)
+  [ -n "$_vols" ] || return 0
+  if [ "$_data" = ask ]; then
+    _data=keep
+    if [ -t 0 ]; then
+      printf 'Delete the data of %s (%s)? [y/N] ' "$_slug" "$(echo $_vols)" >&2
+      read -r _yn || _yn=
+      case "$_yn" in [yY]*) _data=delete ;; esac
+    fi
+  fi
+  if [ "$_data" = delete ]; then
+    for _v in $_vols; do docker volume rm "$_v" >/dev/null 2>&1 || true; done
+    echo "porthole forget: removed $_slug and its data" >&2
+  else
+    echo "porthole forget: removed $_slug; kept its data ($(echo $_vols))" >&2
+  fi
+}
+
 # --- exec: run a command in the app's container (ensures up first) -----------
 cmd_exec() {
   _spec="${1:-}"; [ -n "$_spec" ] || usage; shift
@@ -180,6 +216,7 @@ cmd="$1"; shift
 case "$cmd" in
   up)   cmd_up "$@"; exit $? ;;
   exec) cmd_exec "$@" ;;      # cmd_exec's `exec` replaces this process
+  forget) cmd_forget "$@"; exit $? ;;
   materialize) ;;             # falls through to the linear body below
   *) usage ;;
 esac

@@ -63,3 +63,46 @@ EOF
   run sh -c 'PORTHOLE_LIB=1 PORTHOLE_SELF="$1"; . "$1"; porthole_cleanup' _ "$REPO/bin/porthole"
   grep -q '^legacy-gui ' "$FAKE/containers"; grep -q '^legacy-gui-data ' "$FAKE/volumes"
 }
+
+state_demo() {
+  printf 'demo-gui demo running\nother-gui other running\n' > "$FAKE/containers"
+  printf 'img1 demo 0\nimg2 other 0\n' > "$FAKE/images"
+  printf 'demo-gui-data demo\nother-gui-data other\n' > "$FAKE/volumes"
+}
+
+@test "forget --keep-data removes the app's containers and images, keeps its data" {
+  hk_docker; state_demo
+  run "$REPO/bin/porthole" forget demo --keep-data
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  ! grep -q '^demo-gui ' "$FAKE/containers" || return 1; ! grep -q '^img1 ' "$FAKE/images" || return 1
+  grep -q '^demo-gui-data ' "$FAKE/volumes"
+  grep -q '^other-gui ' "$FAKE/containers"; grep -q '^other-gui-data ' "$FAKE/volumes"
+}
+
+@test "forget --delete-data also deletes the app's data volumes, and only its" {
+  hk_docker; state_demo
+  run "$REPO/bin/porthole" forget demo --delete-data
+  [ "$status" -eq 0 ]
+  ! grep -q '^demo-gui-data ' "$FAKE/volumes" || return 1; grep -q '^other-gui-data ' "$FAKE/volumes"
+}
+
+@test "forget with no flag and no terminal keeps the data" {
+  hk_docker; state_demo
+  run "$REPO/bin/porthole" forget demo </dev/null
+  [ "$status" -eq 0 ]
+  grep -q '^demo-gui-data ' "$FAKE/volumes"
+}
+
+@test "forget when Docker is unreachable removes nothing and still succeeds" {
+  hk_docker; state_demo; : > "$FAKE/down"
+  run "$REPO/bin/porthole" forget demo --delete-data
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Docker isn't reachable"* ]]
+  grep -q '^demo-gui-data ' "$FAKE/volumes"
+}
+
+@test "forget without a slug is a usage error" {
+  hk_docker
+  run "$REPO/bin/porthole" forget
+  [ "$status" -eq 2 ]
+}
