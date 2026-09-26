@@ -38,6 +38,7 @@ static const CGFloat kWidth = 460, kHeight = 170, kDetailHeight = 150;
         _bar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(100, kHeight - 100, kWidth - 120, 20)];
         [_bar setStyle:NSProgressIndicatorBarStyle];
         [_bar setIndeterminate:YES];
+        [_bar setUsesThreadedAnimation:YES];
         [_bar setAutoresizingMask:NSViewMinYMargin];
         [cv addSubview:_bar];
         [_bar startAnimation:nil];
@@ -70,7 +71,12 @@ static const CGFloat kWidth = 460, kHeight = 170, kDetailHeight = 150;
     [super dealloc];
 }
 
-- (void)show { [_window makeKeyAndOrderFront:nil]; [_window orderFrontRegardless]; }
+// An indeterminate bar started while its window was hidden sits still once shown -- on 10.9 a still
+// indeterminate bar looks like a full one -- so (re)start it whenever the window comes up.
+- (void)show {
+    [_window makeKeyAndOrderFront:nil]; [_window orderFrontRegardless];
+    if ([_bar isIndeterminate]) [_bar startAnimation:nil];
+}
 - (void)close { [_window orderOut:nil]; }
 
 - (void)setStep:(NSString *)text {
