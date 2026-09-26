@@ -19,8 +19,8 @@ launch() {  # stdin = answers
 @test "under the viewer the launcher ends with ready, not by exec'ing the viewer" {
   app; launch </dev/null
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [[ "$output" == *'{"t":"ready","socket":"'*'thunderbird-xpra.sock"'* ]]
-  [[ "$output" != *"viewer-exec"* ]]
+  [[ "$output" == *'{"t":"ready","socket":"'*'thunderbird-xpra.sock"'* ]] || return 1
+  [[ "$output" != *"viewer-exec"* ]] || return 1
 }
 
 @test "the viewer hears the launcher end even while its bridges keep running" {
@@ -42,7 +42,7 @@ launch() {  # stdin = answers
   printf '#!/bin/sh\necho "boom detail" >&2\nexit 1\n' > "$PORTHOLE_BIN"; chmod +x "$PORTHOLE_BIN"
   launch </dev/null
   [ "$status" -ne 0 ]
-  [[ "$output" == *'"t":"error"'*'boom detail'* ]]
+  [[ "$output" == *'"t":"error"'*'boom detail'* ]] || return 1
   ! grep -q osascript "$STUB_LOG" || return 1
 }
 
@@ -60,8 +60,8 @@ launch() {  # stdin = answers
   launch <<'EOF'
 {"t":"answer","id":"orphan-oldapp-gui-data","choice":"Delete"}
 EOF
-  [[ "$output" == *'{"t":"ask","id":"orphan-oldapp-gui-data"'* ]]
-  [[ "$output" != *'orphan-thunderbird'* ]]
+  [[ "$output" == *'{"t":"ask","id":"orphan-oldapp-gui-data"'* ]] || return 1
+  [[ "$output" != *'orphan-thunderbird'* ]] || return 1
   grep -q '^docker volume rm oldapp-gui-data$' "$STUB_LOG"
 }
 
@@ -73,7 +73,7 @@ EOF
 EOF
   grep -qx oldapp-gui-data "$HOME/Library/Application Support/Mavergreen/Porthole/kept-data"
   launch </dev/null
-  [[ "$output" != *'"t":"ask"'* ]]
+  [[ "$output" != *'"t":"ask"'* ]] || return 1
   ! grep -q '^docker volume rm' "$STUB_LOG" || return 1
 }
 
@@ -81,5 +81,5 @@ EOF
   app; echo 'OSError: [Errno 28] No space left on device' > "$STUB_DIR/docker-logs"
   printf '1\n' > "$STUB_DIR/docker-exec-fails"
   launch </dev/null
-  [[ "$output" == *'"t":"error"'*'out of disk space'* ]]
+  [[ "$output" == *'"t":"error"'*'out of disk space'* ]] || return 1
 }

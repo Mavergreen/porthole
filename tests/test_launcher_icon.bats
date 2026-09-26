@@ -40,21 +40,21 @@ fixture_icns() {  # $1 = width, $2 = out
   EXTRACT_FROM="$WORK/src.icns" run_icon 2026-01-01T00:00:00.000000000Z 0
   [ -f "$WORK/user/thunderbird.icns" ]
   grep -q "extract thunderbird-gui /usr/share/icons/hicolor/256x256/apps/thunderbird.png $WORK/user/thunderbird.icns" "$WORK/extract.log"
-  [[ "$output" == *"APPICON=$WORK/user/thunderbird.icns"* ]]
+  [[ "$output" == *"APPICON=$WORK/user/thunderbird.icns"* ]] || return 1
 }
 
 @test "a 512 system icon, bundle already wearing it: no extraction, no hand-off" {
   fixture_icns 512 "$WORK/sys/thunderbird.icns"
   run_icon 2026-01-01T00:00:00.000000000Z 512
   [ ! -f "$WORK/extract.log" ]
-  [[ "$output" != *"APPICON=/"* ]]
+  [[ "$output" != *"APPICON=/"* ]] || return 1
 }
 
 @test "only a 180 icon cached: extracts to upgrade it" {
   fixture_icns 180 "$WORK/sys/thunderbird.icns"; fixture_icns 512 "$WORK/src.icns"
   EXTRACT_FROM="$WORK/src.icns" run_icon 2026-01-01T00:00:00.000000000Z 180
   grep -q "^extract thunderbird-gui .* $WORK/user/thunderbird.icns$" "$WORK/extract.log"
-  [[ "$output" == *"APPICON=$WORK/user/thunderbird.icns"* ]]
+  [[ "$output" == *"APPICON=$WORK/user/thunderbird.icns"* ]] || return 1
 }
 
 @test "a user icon older than the image is re-extracted" {
@@ -67,7 +67,7 @@ fixture_icns() {  # $1 = width, $2 = out
 @test "a failed extraction still launches the viewer" {
   run_icon 2026-01-01T00:00:00.000000000Z 0
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [[ "$output" == *"APPICON="* ]]
+  [[ "$output" == *"APPICON="* ]] || return 1
 }
 
 # Icons are best-effort: a bundle without the icon library (an older materialize, or a launcher run
@@ -76,7 +76,7 @@ fixture_icns() {  # $1 = width, $2 = out
   fixture_icns 512 "$WORK/src.icns"
   EXTRACT_FROM="$WORK/src.icns" run_icon_nolib 2026-01-01T00:00:00.000000000Z 0
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [[ "$output" == *"APPICON="* ]]
+  [[ "$output" == *"APPICON="* ]] || return 1
   [ ! -f "$WORK/extract.log" ]
 }
 run_icon_nolib() { NOLIB=1 run_icon "$@"; }

@@ -97,7 +97,7 @@ state_demo() {
   hk_docker; state_demo; : > "$FAKE/down"
   run "$REPO/bin/porthole" forget demo --delete-data
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Docker isn't reachable"* ]]
+  [[ "$output" == *"Docker isn't reachable"* ]] || return 1
   grep -q '^demo-gui-data ' "$FAKE/volumes"
 }
 

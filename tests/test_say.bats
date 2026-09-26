@@ -18,14 +18,14 @@ say() { sh -c '. "$1"; shift; "$@"' _ "$REPO/bin/porthole-say.sh" "$@"; }
 @test "say_ask sends the question and returns the viewer's answer, whatever the key order" {
   export PORTHOLE_PROTOCOL=1
   out=$(printf '%s\n' '{"choice":"Delete","t":"answer","id":"q1"}' | sh -c '. "$1"; a=$(say_ask q1 "Delete?" "Ask later" Keep Delete "Ask later"); echo "ANSWER=$a"' _ "$REPO/bin/porthole-say.sh")
-  [[ "$out" == *'{"t":"ask","id":"q1","text":"Delete?","choices":["Keep","Delete","Ask later"]}'* ]]
-  [[ "$out" == *"ANSWER=Delete"* ]]
+  [[ "$out" == *'{"t":"ask","id":"q1","text":"Delete?","choices":["Keep","Delete","Ask later"]}'* ]] || return 1
+  [[ "$out" == *"ANSWER=Delete"* ]] || return 1
 }
 
 @test "say_ask ignores an answer to another question and falls back to the default on EOF" {
   export PORTHOLE_PROTOCOL=1
   out=$(printf '%s\n' '{"t":"answer","id":"other","choice":"Delete"}' | sh -c '. "$1"; echo "ANSWER=$(say_ask q1 "?" "Ask later" Keep Delete)"' _ "$REPO/bin/porthole-say.sh")
-  [[ "$out" == *"ANSWER=Ask later"* ]]
+  [[ "$out" == *"ANSWER=Ask later"* ]] || return 1
 }
 
 @test "outside the viewer, text goes to stderr and questions take their default" {

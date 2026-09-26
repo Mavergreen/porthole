@@ -201,9 +201,9 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   fake_docker; make_spec
   run env PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [[ "$output" == *'{"t":"step","text":"Downloading the Linux runtime"}'* ]]
-  [[ "$output" == *'{"t":"progress","fraction":1}'* ]]
-  [[ "$output" == *'{"t":"step","text":"Building Linux Demo (2/2)"}'* ]]
+  [[ "$output" == *'{"t":"step","text":"Downloading the Linux runtime"}'* ]] || return 1
+  [[ "$output" == *'{"t":"progress","fraction":1}'* ]] || return 1
+  [[ "$output" == *'{"t":"step","text":"Building Linux Demo (2/2)"}'* ]] || return 1
   ! grep -q 'osascript' "$STUB_LOG" || return 1
 }
 
@@ -226,7 +226,7 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   : > "$FAKE/build-fails"
   run "$REPO/bin/porthole" up --rebuild "$SPEC"
   [ "$status" -ne 0 ] || { echo "$output"; return 1; }
-  [[ "$output" == *"image build failed"* ]]
+  [[ "$output" == *"image build failed"* ]] || return 1
 }
 
 manifest_1gb() {
@@ -251,9 +251,9 @@ manifest_1gb() {
   fake_docker; make_spec; manifest_1gb; echo 1000000 > "$FAKE/free"; echo 2900000 > "$FAKE/free-after"
   run env PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC"
   [ "$status" -eq 3 ]
-  [[ "$output" == *'"t":"error"'* ]]
-  [[ "$output" == *"needs about 3.8 GB"* ]]
-  [[ "$output" == *"has 2.8 GB free"* ]]
+  [[ "$output" == *'"t":"error"'* ]] || return 1
+  [[ "$output" == *"needs about 3.8 GB"* ]] || return 1
+  [[ "$output" == *"has 2.8 GB free"* ]] || return 1
   ! grep -q '^docker build' "$STUB_LOG" || return 1
 }
 
@@ -270,5 +270,5 @@ manifest_1gb() {
   echo 1000000 > "$FAKE/free"; echo 2900000 > "$FAKE/free-after"
   run env PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC"
   [ "$status" -eq 3 ]
-  [[ "$output" == *"needs about 3.8 GB"* ]]
+  [[ "$output" == *"needs about 3.8 GB"* ]] || return 1
 }
