@@ -98,3 +98,25 @@ EOF
   launch </dev/null
   [[ "$output" == *'"t":"error"'*'out of disk space'* ]] || return 1
 }
+
+@test "the orphan question names the uninstalled app and how much data it left" {
+  app; printf 'oldapp-gui-data oldapp\n' > "$STUB_DIR/docker-volumes"
+  printf 'Linux Old App\t1.2 GB\n' > "$STUB_DIR/describe-data"
+  launch </dev/null
+  [[ "$output" == *'"text":"Linux Old App was uninstalled; its data uses 1.2 GB. Keep it, or delete it?"'* ]] || { echo "$output"; return 1; }
+}
+
+@test "an unmeasured orphan is still asked about, without a size" {
+  app; printf 'oldapp-gui-data oldapp\n' > "$STUB_DIR/docker-volumes"
+  printf 'oldapp\t\n' > "$STUB_DIR/describe-data"
+  launch </dev/null
+  [[ "$output" == *'"text":"oldapp was uninstalled; its data is still here. Keep it, or delete it?"'* ]] || { echo "$output"; return 1; }
+}
+
+@test "a kept volume is matched exactly, not as a pattern" {
+  app; printf 'old.app-data oldapp\n' > "$STUB_DIR/docker-volumes"
+  mkdir -p "$HOME/Library/Application Support/Mavergreen/Porthole"
+  echo 'oldXapp-data' > "$HOME/Library/Application Support/Mavergreen/Porthole/kept-data"   # would match old.app-data as a regex
+  launch </dev/null
+  [[ "$output" == *'"id":"orphan-old.app-data"'* ]] || { echo "$output"; return 1; }
+}

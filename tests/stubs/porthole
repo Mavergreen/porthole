@@ -4,4 +4,7 @@
 # (when set) and succeeds, so a generated launcher's delegated container bring-up is a no-op the
 # test can assert on. The REAL `up` builds/creates the container; here we just record the call.
 [ -n "${PORTHOLE_LOG:-}" ] && printf 'porthole %s\n' "$*" >> "$PORTHOLE_LOG"
+if [ "${1:-}" = describe-data ]; then
+  cat "$STUB_DIR/describe-data" 2>/dev/null
+fi
 exit 0

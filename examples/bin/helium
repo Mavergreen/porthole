@@ -191,8 +191,12 @@ while read -r _vol _vslug <&4; do
   # shellcheck disable=SC2086  # the glob must expand
   set -- ${PORTHOLE_PRESETS_GLOB:-/usr/local/mavergreen/*/share/porthole/presets}/"$_vslug".conf
   [ -e "$1" ] && continue
-  grep -qx "$_vol" "$_kept" 2>/dev/null && continue
-  case $(say_ask "orphan-$_vol" "An uninstalled app left data behind: $_vol. Keep it, or delete it?" "Ask later" Keep Delete "Ask later") in
+  grep -Fqx "$_vol" "$_kept" 2>/dev/null && continue
+  _desc=$("$PORTHOLE" describe-data "$_vol" 2>/dev/null) || _desc=
+  _dn=$(printf '%s' "$_desc" | cut -f1); _ds=$(printf '%s' "$_desc" | cut -f2)
+  [ -n "$_dn" ] || _dn=$_vol
+  if [ -n "$_ds" ]; then _q="$_dn was uninstalled; its data uses $_ds."; else _q="$_dn was uninstalled; its data is still here."; fi
+  case $(say_ask "orphan-$_vol" "$_q Keep it, or delete it?" "Ask later" Keep Delete "Ask later") in
     Keep) mkdir -p "$(dirname "$_kept")" && printf '%s\n' "$_vol" >> "$_kept" ;;
     Delete) docker volume rm "$_vol" >/dev/null 2>&1 || true ;;
   esac
