@@ -34,15 +34,6 @@ afternoon (.7, .9, .10) and filled the 18G Docker VM once (fixed since, `df9c39f
 conf, the xpra pin), so the tag changes only when the base does. Needs a decision on the tag scheme
 before building (see the family's version conventions).
 
-## 3. Re-materializing puts the penguin icon back for good
-
-`porthole materialize` (now run by every Porthole and preset install) rewrites the bundle with the
-penguin `AppIcon.icns`, but the launcher's "real icon already extracted" marker lives in
-`~/.config/porthole/<slug>/icon-done`, so it never extracts again. Also the bundle is root-owned
-(installed by a pkg), so the launcher, running as the user, probably can't write the icon anyway.
-Key the check on the bundle's icon itself (is it still the penguin?) and find a writable home for
-it.
-
 ## 4. Signal's menu bar icon looks terrible
 
 Reported 2026-09-24 on Linux Signal Desktop: the tray icon the app forwards (xpra `new-tray`, 16x16)
