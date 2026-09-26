@@ -184,6 +184,7 @@ fi
 # Data left behind by an uninstalled app: a Porthole-labeled volume whose slug has no installed preset.
 # Asked once per volume per launch until answered Keep (remembered) or Delete; never deleted otherwise.
 _kept="$HOME/Library/Application Support/Mavergreen/Porthole/kept-data"
+_described="$HOME/Library/Application Support/Mavergreen/Porthole/orphan-data"   # volume, app, size
 _vols=$(docker volume ls -q --filter label=dev.mavergreen.porthole.slug \
         --format '{{.Name}} {{.Label "dev.mavergreen.porthole.slug"}}' 2>/dev/null) || _vols=
 while read -r _vol _vslug <&4; do
@@ -192,7 +193,13 @@ while read -r _vol _vslug <&4; do
   set -- ${PORTHOLE_PRESETS_GLOB:-/usr/local/mavergreen/*/share/porthole/presets}/"$_vslug".conf
   [ -e "$1" ] && continue
   grep -Fqx "$_vol" "$_kept" 2>/dev/null && continue
-  _desc=$("$PORTHOLE" describe-data "$_vol" 2>/dev/null) || _desc=
+  # An uninstalled app's data doesn't change: describe it once (measuring starts a container) and
+  # remember the answer, so "Ask later" doesn't cost every later launch a measurement.
+  _desc=$(awk -F '\t' -v v="$_vol" '$1 == v { print $2 "\t" $3; exit }' "$_described" 2>/dev/null) || _desc=
+  if [ -z "$_desc" ]; then
+    _desc=$("$PORTHOLE" describe-data "$_vol" 2>/dev/null) || _desc=
+    case "$_desc" in *"	"?*) mkdir -p "$(dirname "$_described")" && printf '%s\t%s\n' "$_vol" "$_desc" >> "$_described" ;; esac
+  fi
   _dn=$(printf '%s' "$_desc" | cut -f1); _ds=$(printf '%s' "$_desc" | cut -f2)
   [ -n "$_dn" ] || _dn=$_vol
   if [ -n "$_ds" ]; then _q="$_dn was uninstalled; its data uses $_ds."; else _q="$_dn was uninstalled; its data is still here."; fi

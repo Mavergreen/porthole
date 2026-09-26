@@ -120,3 +120,12 @@ EOF
   launch </dev/null
   [[ "$output" == *'"id":"orphan-old.app-data"'* ]] || { echo "$output"; return 1; }
 }
+
+@test "an orphan's description is looked up once, not on every launch" {
+  app; printf 'oldapp-gui-data oldapp\n' > "$STUB_DIR/docker-volumes"
+  printf 'Linux Old App\t1.2 GB\n' > "$STUB_DIR/describe-data"
+  export PORTHOLE_LOG="$WORK/porthole.log"
+  launch </dev/null; launch </dev/null                     # Ask later, twice
+  [ "$(grep -c '^porthole describe-data oldapp-gui-data$' "$PORTHOLE_LOG")" -eq 1 ] || { cat "$PORTHOLE_LOG"; return 1; }
+  [[ "$output" == *'Linux Old App was uninstalled; its data uses 1.2 GB.'* ]]
+}

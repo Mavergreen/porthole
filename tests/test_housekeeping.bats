@@ -37,7 +37,10 @@ case "$1 $2" in
       *porthole.name*) awk -F '\t' -v v="$_v" '$1 == v { print $2 }' "$FAKE/volnames" 2>/dev/null ;;
       *porthole.slug*) awk -v v="$_v" '$1 == v { print $2 }' "$FAKE/volumes" ;;
     esac ;;
-  "run --rm") case "$*" in *"--entrypoint du"*) [ -f "$FAKE/du" ] || exit 1; printf '%s\t/v\n' "$(cat "$FAKE/du")" ;; esac ;;
+  "run --rm") case "$*" in *"--entrypoint du"*)
+      [ -f "$FAKE/du-sleep" ] && exec sleep "$(cat "$FAKE/du-sleep")"   # a hung client: one process, never answers
+      [ -f "$FAKE/du" ] || exit 1; printf '%s\t/v\n' "$(cat "$FAKE/du")"
+      [ -f "$FAKE/du-partial" ] && exit 1; exit 0 ;; esac ;;
   "image prune") while read -r i s d; do m "$s" && [ "$d" = 1 ] && del images "$i"; done < "$FAKE/images"; exit 0 ;;
   "volume ls") while read -r n s; do m "$s" && echo "$n"; done < "$FAKE/volumes" ;;
   "volume rm") del volumes "$3" ;;
@@ -140,4 +143,21 @@ state_demo() {
   out=$(printf 'n\n' | script -q /dev/null "$REPO/bin/porthole" forget demo 2>&1)
   [[ "$out" == *"Delete Linux Demo's data (1.2 GB)? [y/N]"* ]] || { echo "$out"; return 1; }
   grep -q '^demo-gui-data ' "$FAKE/volumes"
+}
+
+@test "describe-data gives up on a slow measurement instead of holding up a launch" {
+  hk_docker; printf 'img1 demo 0\n' > "$FAKE/images"; printf 'demo-gui-data demo\n' > "$FAKE/volumes"
+  echo 1258291 > "$FAKE/du"; echo 20 > "$FAKE/du-sleep"
+  t0=$(date +%s)
+  run env PORTHOLE_DU_TIMEOUT=1 "$REPO/bin/porthole" describe-data demo-gui-data
+  [ $(( $(date +%s) - t0 )) -lt 5 ] || return 1
+  [ "$output" = "$(printf 'demo\t')" ]
+}
+
+@test "describe-data measures as root and trusts only a du that finished cleanly" {
+  hk_docker; printf 'img1 demo 0\n' > "$FAKE/images"; printf 'demo-gui-data demo\n' > "$FAKE/volumes"
+  echo 1258291 > "$FAKE/du"; : > "$FAKE/du-partial"
+  run "$REPO/bin/porthole" describe-data demo-gui-data
+  [ "$output" = "$(printf 'demo\t')" ] || { echo "$output"; return 1; }
+  grep -q '^docker run --rm -u 0 ' "$STUB_LOG"
 }

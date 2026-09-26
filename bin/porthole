@@ -93,10 +93,27 @@ data_name() {
   case "$_dn" in ''|'<no value>') _dn=$1 ;; esac
   printf '%s\n' "$_dn"
 }
+# Run a command for at most $1 seconds (10.9 has no timeout(1)); print its output only if it finished,
+# and return its status. A command still running is killed and counts as failed.
+bounded() {
+  _bl=$(( $1 * 5 )); shift
+  _bo=$(mktemp "${TMPDIR:-/tmp}/porthole-bounded.XXXXXX") || return 1
+  "$@" > "$_bo" 2>/dev/null & _bp=$!
+  _bi=0
+  while kill -0 "$_bp" 2>/dev/null; do
+    if [ "$_bi" -ge "$_bl" ]; then kill "$_bp" 2>/dev/null; wait "$_bp" 2>/dev/null; rm -f "$_bo"; return 1; fi
+    sleep 0.2; _bi=$((_bi + 1))
+  done
+  wait "$_bp"; _brc=$?
+  cat "$_bo"; rm -f "$_bo"; return $_brc
+}
+# du runs as root (the image's own user may not read everything) and counts only when it finishes
+# cleanly within PORTHOLE_DU_TIMEOUT seconds; a partial total is no size, not a smaller one.
 data_kb() {
   _img=$(docker images -q 2>/dev/null | head -1)
   [ -n "$_img" ] || return 0
-  docker run --rm -v "$1:/v:ro" --entrypoint du "$_img" -sk /v 2>/dev/null | awk 'NR == 1 && $1 ~ /^[0-9]+$/ { print $1 }'
+  _du=$(bounded "${PORTHOLE_DU_TIMEOUT:-5}" docker run --rm -u 0 -v "$1:/v:ro" --entrypoint du "$_img" -sk /v) || return 0
+  printf '%s\n' "$_du" | awk 'NR == 1 && $1 ~ /^[0-9]+$/ { print $1 }'
 }
 size_h() {
   awk -v k="$1" 'BEGIN { if (k >= 1048576) printf "%.1f GB", k / 1048576; else printf "%d MB", (k + 1023) / 1024 }'
