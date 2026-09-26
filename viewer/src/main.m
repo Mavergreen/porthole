@@ -124,6 +124,13 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     // argv[0] is our own binary path -> skip it; macOS -psn_/-NS* args start with '-'.
     NSString *socketPath = nil;
     NSDictionary *env = [[NSProcessInfo processInfo] environment];
+    // The launcher hands us a better app icon than the bundle wears yet (the app's own, cached on
+    // this Mac); show it in the Dock for this run. Finder catches up at the next materialize.
+    NSString *iconPath = env[@"PORTHOLE_APP_ICON"];
+    if (iconPath.length) {
+        NSImage *appIcon = [[NSImage alloc] initWithContentsOfFile:iconPath];
+        if (appIcon) { [NSApp setApplicationIconImage:appIcon]; [appIcon release]; }
+    }
     if ([env[@"PORTHOLE_SOCKET"] length]) socketPath = env[@"PORTHOLE_SOCKET"];
     NSArray *args = [[NSProcessInfo processInfo] arguments];
     for (NSUInteger i = 1; i < args.count; i++) {
