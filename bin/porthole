@@ -270,9 +270,13 @@ cmd_forget() {
     echo "porthole forget: Docker isn't reachable; nothing removed for $_slug" >&2; return 0
   fi
   _f="label=$SLUG_LABEL=$_slug"
-  # Measure the data before the app's images go: its own image may be the only one to run du in.
   _vols=$(docker volume ls -q --filter "$_f" 2>/dev/null)
-  _kb=0; for _v in $_vols; do _k=$(data_kb "$_v"); _kb=$((_kb + ${_k:-0})); done
+  # Measure the data only to ask about it, and before the app's images go: its own image may be the
+  # only one to run du in.
+  _kb=0
+  if [ "$_data" = ask ] && [ -t 0 ]; then
+    for _v in $_vols; do _k=$(data_kb "$_v"); _kb=$((_kb + ${_k:-0})); done
+  fi
   docker ps -aq --filter "$_f" 2>/dev/null | while read -r _c; do docker rm -f "$_c" >/dev/null 2>&1 || true; done
   docker images -q --filter "$_f" 2>/dev/null | sort -u | while read -r _i; do docker rmi -f "$_i" >/dev/null 2>&1 || true; done
   [ -n "$_vols" ] || return 0

@@ -161,3 +161,11 @@ state_demo() {
   [ "$output" = "$(printf 'demo\t')" ] || { echo "$output"; return 1; }
   grep -q '^docker run --rm -u 0 ' "$STUB_LOG"
 }
+
+@test "forget measures the data only when it will ask about it" {
+  hk_docker; state_demo; echo 1258291 > "$FAKE/du"
+  run "$REPO/bin/porthole" forget demo --keep-data
+  run "$REPO/bin/porthole" forget other --delete-data
+  run "$REPO/bin/porthole" forget demo </dev/null
+  ! grep -q '^docker run --rm' "$STUB_LOG" || return 1
+}
