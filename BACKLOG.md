@@ -34,12 +34,6 @@ afternoon (.7, .9, .10) and filled the 18G Docker VM once (fixed since, `df9c39f
 conf, the xpra pin), so the tag changes only when the base does. Needs a decision on the tag scheme
 before building (see the family's version conventions).
 
-## 4. Signal's menu bar icon looks terrible
-
-Reported 2026-09-24 on Linux Signal Desktop: the tray icon the app forwards (xpra `new-tray`, 16x16)
-renders badly in the Mac menu bar. See also the deferred 1Password glyph work (deriving a monochrome
-template image from a forwarded color icon failed; drawing our own was the likely way forward).
-
 ## 5. A failed image build leaves its step's container behind
 
 `porthole up` runs a classic `docker build`, which keeps the container of a failed RUN step unless

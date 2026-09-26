@@ -54,7 +54,6 @@ add_executable(Porthole MACOSX_BUNDLE
   src/PortholeStaticMenuProducer.m
   src/PortholeRemoteMenuProducer.m
   src/PortholeMenuController.m
-  src/PortholeMenuGlyph.m
   src/PortholeTrayArt.m
   ${RDS_XPRA_SOURCES})
 target_include_directories(Porthole PRIVATE src)

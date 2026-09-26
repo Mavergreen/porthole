@@ -7,7 +7,6 @@
 #import "PortholeStaticMenuProducer.h"
 #import "PortholeRemoteMenuProducer.h"
 #import "PortholeMenuModel.h"
-#import "PortholeMenuGlyph.h"
 #import "PortholeTrayArt.h"
 
 // The native (Cocoa) shell. It drives a remote-display session through the
@@ -37,11 +36,6 @@
     rds_session *_session;
     NSMutableDictionary *_windows;
     NSMutableDictionary *_trays;   // wid -> NSStatusItem (forwarded system-tray icons)
-    NSImage *_opGlyph;             // cached 1Password menu-bar glyph (mark-in-ring), unlocked
-    NSImage *_opGlyphLocked;       // ... and locked (+ padlock badge)
-    BOOL _locked;                  // last-seen 1Password lock state (from _lockStateFile)
-    NSString *_lockStateFile;      // op writes "locked"/"unlocked" here; we poll it
-    NSTimer *_lockTimer;           // polls _lockStateFile
     BOOL _trayPopupPending;        // Quick Access summoned -> center the next OR popup
     NSInteger _mainWid;        // first normal window; popups position relative to it
     NSInteger _pbChangeCount;  // last-seen local pasteboard changeCount (loop guard)
@@ -151,12 +145,6 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
         _lostMarker = [[socketPath stringByAppendingString:@".viewer-lost"] retain];
     [[NSFileManager defaultManager] removeItemAtPath:_lostMarker error:NULL];
 
-    // Lock-state channel: the launcher (op) writes "locked"/"unlocked" here; we poll it
-    // to switch the 1Password menu-bar glyph. Derived from the shared socket path.
-    if ([socketPath hasSuffix:@"-xpra.sock"])
-        _lockStateFile = [[[socketPath substringToIndex:socketPath.length - 10]
-                           stringByAppendingString:@"-lockstate"] retain];
-
     rds_callbacks cb = {0};
     cb.ctx = self;
     cb.new_window = cb_new_window;
@@ -196,10 +184,6 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
         EventHotKeyID lkID = { 'OPLK', 2 };
         RegisterEventHotKey(kVK_ANSI_L, cmdKey | shiftKey, lkID,
                             GetApplicationEventTarget(), 0, &_lockHotKeyRef);
-        // Poll the lock-state file so the menu-bar glyph gains/loses its padlock badge.
-        _lockTimer = [NSTimer timerWithTimeInterval:1.5 target:self
-                              selector:@selector(pollLockState) userInfo:nil repeats:YES];
-        [[NSRunLoop currentRunLoop] addTimer:_lockTimer forMode:NSRunLoopCommonModes];
     }
 
     // Menu-bar-resident Dock behavior: keep a Dock icon only while a real (titled) window
@@ -252,32 +236,20 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
          pixels:(const void *)pixels length:(size_t)len rowstride:(int)rowstride {
     // The pixel buffer is valid for this synchronous call, so wrap it without a copy.
     NSData *d = [NSData dataWithBytesNoCopy:(void *)pixels length:len freeWhenDone:NO];
-    // A tray's icon pixels arrive as draws too -> update its menu-bar item; tray
-    // draws are always full frames, so the whole rect is the icon. Rendered as a
-    // TEMPLATE (monochrome, adapts to light/dark) like a modern macOS menu-bar extra
-    // -- 1Password's is colorless. Lock state is a shape difference (open vs closed
-    // padlock), which the silhouette preserves.
+    // A tray's icon pixels arrive as draws; the app redraws them to show its state (1Password's
+    // lock, Signal's unread count), so show them as drawn. Draws are full frames.
     NSStatusItem *tray = _trays[@(wid)];
     if (tray) {
         NSImage *icon = [self imageFromCoding:enc pixels:d w:(int)rect.size.width
                                             h:(int)rect.size.height stride:rowstride];
         if (icon) {
-            // 1Password: show a native mark-in-ring glyph derived from the app's OWN
-            // bundled icon -- value-threshold isolates the navy mark from the blue disc
-            // (the earlier attempt derived it from the low-res FORWARDED icon and failed).
-            // Any other app: the forwarded tray icon, as a plain template.
-            NSImage *glyph = [self isOnePassword] ? [self onePasswordTrayGlyph] : nil;
-            if (glyph) {
-                [tray setImage:glyph];
-            } else {
-                int bpp = (int)(rowstride / MAX(1, (int)rect.size.width));
-                BOOL mono = ([enc hasPrefix:@"rgb"] && (bpp == 3 || bpp == 4))
-                    && PortholeTrayArtIsMonochrome(pixels, (int)rect.size.width, (int)rect.size.height,
-                                                   (size_t)rowstride, bpp);
-                [icon setSize:PortholeTrayArtSize(NSMakeSize(rect.size.width, rect.size.height), 1 /* the app renders at 1x until BACKLOG #6 */, 22)];
-                [icon setTemplate:mono];
-                [tray setImage:icon];
-            }
+            int bpp = (int)(rowstride / MAX(1, (int)rect.size.width));
+            BOOL mono = ([enc hasPrefix:@"rgb"] && (bpp == 3 || bpp == 4))
+                && PortholeTrayArtIsMonochrome(pixels, (int)rect.size.width, (int)rect.size.height,
+                                               (size_t)rowstride, bpp);
+            [icon setSize:PortholeTrayArtSize(NSMakeSize(rect.size.width, rect.size.height), 1 /* the app renders at 1x until BACKLOG #6 */, 22)];
+            [icon setTemplate:mono];
+            [tray setImage:icon];
         }
         return;
     }
@@ -423,31 +395,6 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     return last.length ? last : @"1password";
 }
 - (BOOL)isOnePassword { return [[self appSlug] isEqualToString:@"1password"]; }
-
-// The 1Password menu-bar glyph (mark-in-ring), derived from the app's own bundled icon
-// for the current lock state and cached per state. nil if the icon has no isolable mark
-// (e.g. built with a generic icon) -- the caller falls back to the forwarded tray icon.
-- (NSImage *)onePasswordTrayGlyph {
-    NSImage *cached = _locked ? _opGlyphLocked : _opGlyph;
-    if (!cached) {
-        cached = [PortholeOnePasswordMenuGlyph([NSApp applicationIconImage], _locked) retain];
-        if (_locked) _opGlyphLocked = cached; else _opGlyph = cached;
-    }
-    return cached;
-}
-
-// Poll the lock-state file op maintains; on a change, re-glyph every live tray item.
-- (void)pollLockState {
-    if (!_lockStateFile) return;
-    NSString *s = [NSString stringWithContentsOfFile:_lockStateFile
-                                            encoding:NSUTF8StringEncoding error:NULL];
-    BOOL locked = [[s stringByTrimmingCharactersInSet:
-        [NSCharacterSet whitespaceAndNewlineCharacterSet]] isEqualToString:@"locked"];
-    if (locked == _locked) return;
-    _locked = locked;
-    NSImage *glyph = [self onePasswordTrayGlyph];
-    if (glyph) for (NSStatusItem *tray in [_trays allValues]) [tray setImage:glyph];
-}
 
 // The menu the menu-bar item pops. For 1Password it mirrors native (Open / Quick
 // Access / Lock / Settings / Quit); other apps get a generic Open <name> / Quit.
