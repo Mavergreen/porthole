@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 
 @interface Rec : NSObject <PortholeLaunchSessionDelegate>
 @property(retain) NSMutableArray *events;
@@ -85,6 +86,21 @@ int main(void) {
                    + (b.ru_stime.tv_sec - a.ru_stime.tv_sec) + (b.ru_stime.tv_usec - a.ru_stime.tv_usec) / 1e6;
         assert(cpu < 0.3);
         assert(r4.events.count == 1);   // a clean exit after ready is not a failure
+
+        // A launcher that can't be run (not executable) -> failed, not an exception.
+        NSString *nx = [NSTemporaryDirectory() stringByAppendingPathComponent:@"porthole-not-executable"];
+        [@"#!/bin/sh\n" writeToFile:nx atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+        chmod([nx fileSystemRepresentation], 0644);
+        PortholeLaunchSession *s5 = [[[PortholeLaunchSession alloc] initWithLauncher:nx arguments:@[]] autorelease];
+        Rec *r5 = [[[Rec alloc] init] autorelease]; s5.delegate = r5; [s5 start];
+        pump(^BOOL{ return r5.events.count >= 1; });
+        assert(r5.events.count == 1 && [r5.events[0] hasPrefix:@"failed:"]);
+
+        // Answering after the launcher closed its end: no SIGPIPE death.
+        int p6[2], q6[2]; assert(pipe(p6) == 0 && pipe(q6) == 0);
+        PortholeLaunchSession *s6 = [[[PortholeLaunchSession alloc] initWithReadFD:p6[0] writeFD:q6[1]] autorelease];
+        close(q6[0]);
+        [s6 answer:@"q" choice:@"Keep"];
 
         printf("test_launch_wire: OK\n");
     }

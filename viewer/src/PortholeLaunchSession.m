@@ -1,5 +1,6 @@
 #import "PortholeLaunchSession.h"
 #include <unistd.h>
+#include <signal.h>
 
 @implementation PortholeLaunchSession {
     int _readFD, _writeFD;
@@ -9,6 +10,10 @@
     BOOL _finished;
 }
 @synthesize delegate = _delegate;
+
+// Answers go down a pipe the launcher may already have closed; a write there must fail, not kill the
+// app. (The viewer's other sockets want the same: a dead peer is a disconnect, not a signal.)
++ (void)initialize { if (self == [PortholeLaunchSession class]) signal(SIGPIPE, SIG_IGN); }
 
 + (NSDictionary *)messageFromLine:(NSString *)line {
     NSData *d = [line dataUsingEncoding:NSUTF8StringEncoding];
@@ -60,7 +65,7 @@
         [self retain];   // released when stderr ends
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             char chunk[4096]; ssize_t n;
-            while ((n = read(efd, chunk, sizeof chunk)) > 0) {
+            while ((n = read(efd, chunk, sizeof chunk)) > 0) @autoreleasepool {
                 @synchronized (self) {
                     [_errTail appendBytes:chunk length:(NSUInteger)n];
                     if (_errTail.length > 8192) [_errTail replaceBytesInRange:NSMakeRange(0, _errTail.length - 8192) withBytes:NULL length:0];
@@ -79,13 +84,19 @@
                 [self stoppedWithoutAWord]; [self release];
             });
         }];
-        [_task launch];
+        @try { [_task launch]; }
+        @catch (NSException *e) {
+            [_task setTerminationHandler:nil];
+            [self release];   // the termination handler's retain; it will never run
+            @synchronized (self) { [_errTail appendData:[[e reason] ?: @"" dataUsingEncoding:NSUTF8StringEncoding]]; }
+            dispatch_async(dispatch_get_main_queue(), ^{ [self stoppedWithoutAWord]; });
+        }
     }
     int fd = _readFD;
     [self retain];   // released when the reader finishes
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSMutableData *buf = [NSMutableData data]; char chunk[4096]; ssize_t n;
-        while ((n = read(fd, chunk, sizeof chunk)) > 0) {
+        while ((n = read(fd, chunk, sizeof chunk)) > 0) @autoreleasepool {
             [buf appendBytes:chunk length:(NSUInteger)n];
             for (;;) {
                 const char *b = buf.bytes; NSUInteger len = buf.length, i = 0;
