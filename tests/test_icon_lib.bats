@@ -70,3 +70,12 @@ teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
   [ "$(icon_width_cached "$WORK/o.icns")" = 512 ] || return 1         # older than the icon: measured
   [ "$(cat "$WORK/o.icns.width")" = 512 ]
 }
+
+@test "a recorded width of 0 (a failed measurement) is measured again, and 0 is never recorded" {
+  icon_png_to_icns "$WORK/p512.png" "$WORK/o.icns"
+  echo 0 > "$WORK/o.icns.width"; touch -t 203001010000 "$WORK/o.icns.width"
+  [ "$(icon_width_cached "$WORK/o.icns")" = 512 ] || return 1
+  printf 'not an image' > "$WORK/bad.icns"
+  [ "$(icon_width_cached "$WORK/bad.icns")" = 0 ] || return 1
+  [ ! -e "$WORK/bad.icns.width" ]
+}

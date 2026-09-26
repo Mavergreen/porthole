@@ -7,14 +7,15 @@ icon_width() {
 }
 
 # The width of an icns from its sidecar (FILE.width), measured and recorded when the sidecar is
-# missing or older than the icon, so a launch needs no sips once its icons are known.
+# missing or older than the icon, so a launch needs no sips once its icons are known. A width of 0 is
+# a failed measurement: never recorded, never trusted.
 icon_width_cached() {
   if [ -f "$1.width" ] && [ ! "$1" -nt "$1.width" ]; then
     _cw=$(cat "$1.width" 2>/dev/null)
-    case "$_cw" in ''|*[!0-9]*) ;; *) printf '%s\n' "$_cw"; return 0 ;; esac
+    case "$_cw" in ''|0|*[!0-9]*) ;; *) printf '%s\n' "$_cw"; return 0 ;; esac
   fi
   _cw=$(icon_width "$1")
-  printf '%s\n' "$_cw" > "$1.width" 2>/dev/null || true
+  if [ "$_cw" -gt 0 ] 2>/dev/null; then printf '%s\n' "$_cw" > "$1.width" 2>/dev/null || true; fi
   printf '%s\n' "$_cw"
 }
 
@@ -43,7 +44,7 @@ icon_png_to_icns() {
   _tmp="${_out%.icns}.tmp.$$.icns"
   _rc=1
   if iconutil -c icns "$_set/icon.iconset" -o "$_tmp" 2>/dev/null; then
-    mv -f "$_tmp" "$_out" && _rc=0 && { icon_width "$_out" > "$_out.width"; } 2>/dev/null || true
+    mv -f "$_tmp" "$_out" && _rc=0 && { rm -f "$_out.width"; icon_width_cached "$_out" >/dev/null; } 2>/dev/null || true
   fi
   rm -rf "$_set" "$_tmp"
   return $_rc
