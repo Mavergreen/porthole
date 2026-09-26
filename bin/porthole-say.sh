@@ -2,9 +2,12 @@
 # Under the viewer (PORTHOLE_PROTOCOL=1) each message is one JSON line on stdout and answers arrive
 # on stdin; otherwise text goes to stderr and a question takes its default.
 
+# A JSON string of $1. Invalid UTF-8 is dropped (iconv -c) and control characters other than tab and
+# newline are removed, so docker's colored or truncated output can't make the line unreadable.
 json_str() {
-  printf '%s' "$1" | awk 'BEGIN { ORS = ""; printf "\"" }
-    { gsub(/\r/, ""); gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t")
+  printf '%s' "$1" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null | LC_ALL=C tr -d '\000-\010\013-\037\177' |
+    awk 'BEGIN { ORS = ""; printf "\"" }
+    { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t")
       if (NR > 1) printf "\\n"; printf "%s", $0 }
     END { printf "\"" }'
 }

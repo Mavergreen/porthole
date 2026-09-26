@@ -37,3 +37,9 @@ say() { sh -c '. "$1"; shift; "$@"' _ "$REPO/bin/porthole-say.sh" "$@"; }
   run sh -c '. "$1"; say_ask q "?" Keep Keep Delete </dev/null' _ "$REPO/bin/porthole-say.sh"
   [ "$output" = Keep ]
 }
+
+@test "an error carrying escape sequences and invalid UTF-8 is still one valid JSON line" {
+  out=$(sh -c '. "$1"; PORTHOLE_PROTOCOL=1 say_error "$(printf "bad \033[31mred")" "$(printf "tail \377\376 end\a")" 7>&1' _ "$REPO/bin/porthole-say.sh")
+  [ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" = 1 ] || { echo "$out"; return 1; }
+  printf '%s' "$out" | /usr/bin/python -c 'import json,sys; m=json.loads(sys.stdin.read()); assert m["t"]=="error" and "red" in m["text"] and "end" in m["detail"], m'
+}
