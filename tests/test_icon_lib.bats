@@ -21,7 +21,7 @@ teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
 @test "icon_is_png accepts a PNG and rejects an HTML error page" {
   icon_is_png "$WORK/p180.png"
   printf '<html>404</html>' > "$WORK/err.png"
-  ! icon_is_png "$WORK/err.png"
+  ! icon_is_png "$WORK/err.png" || return 1
 }
 
 @test "icon_png_to_icns never upscales: a 180px source yields an icns no wider than 180" {
@@ -38,7 +38,7 @@ teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
 @test "icon_png_to_icns leaves an existing OUT untouched when the source is not an image" {
   cp "$ENGINE/packaging/macos/penguin.icns" "$WORK/keep.icns"
   printf 'nope' > "$WORK/bad.png"
-  ! icon_png_to_icns "$WORK/bad.png" "$WORK/keep.icns"
+  ! icon_png_to_icns "$WORK/bad.png" "$WORK/keep.icns" || return 1
   cmp -s "$WORK/keep.icns" "$ENGINE/packaging/macos/penguin.icns"
 }
 

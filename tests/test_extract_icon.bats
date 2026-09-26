@@ -26,7 +26,7 @@ teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ -f "$WORK/out/demo.icns" ]
   grep -q '^exec demo-gui sh -c ls -S /usr/share/icons/hicolor/\*/apps/demo.png' "$WORK/docker.log"
-  ! grep -q 'op-gui\|docker-machine' "$WORK/docker.log"
+  ! grep -q 'op-gui\|docker-machine' "$WORK/docker.log" || return 1
 }
 
 @test "no match: non-zero, OUT untouched" {
