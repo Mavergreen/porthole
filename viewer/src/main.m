@@ -9,11 +9,15 @@
 #import "PortholeMenuModel.h"
 #import "PortholeTrayArt.h"
 #import "PortholeWindowTitles.h"
+#import "PortholeLaunchArgs.h"
+#import "PortholeLaunchSession.h"
+#import "PortholeLaunchWindow.h"
 
 // The native (Cocoa) shell. It drives a remote-display session through the
 // remote_display C interface and renders/handles input via NSWindow/NSEvent/
 // NSPasteboard. It knows nothing about Xpra beyond asking for that backend.
-@interface PortholeAppDelegate : NSObject <NSApplicationDelegate, NSMenuDelegate, PortholeMenuStaticInvoker>
+@interface PortholeAppDelegate : NSObject <NSApplicationDelegate, NSMenuDelegate, PortholeMenuStaticInvoker,
+                                           PortholeLaunchSessionDelegate>
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title;
 - (void)windowWid:(long)wid retitled:(NSString *)title;
 - (void)drawWid:(long)wid rect:(NSRect)rect encoding:(NSString *)enc
@@ -50,6 +54,8 @@
     id<PortholeMenuProducer> _staticMenu;   // retained
     id<PortholeMenuProducer> _remoteMenu;   // retained
     NSString *_lostMarker;         // written just before we exit on a lost backend
+    PortholeLaunchSession *_launch;       // the launcher we run with --launch, until it says ready
+    PortholeLaunchWindow *_launchWindow;  // its progress window, made on first need
 }
 
 // ---- session event callbacks (backend -> shell), bridged from C ----
@@ -120,28 +126,80 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     _titles = [[NSMutableDictionary alloc] init];
     [NSApp setMainMenu:[self buildMainMenu]];   // real App/Edit/Window menus
     [self setUpMenuBridge];
-    // Server address: an AF_UNIX socket PATH (the local end of the launcher's bridge
-    // to the container's xpra Unix socket). Precedence: a command-line path arg (how
-    // `op gui` launches us: `open --args <path>`) > PORTHOLE_SOCKET env > a temp default.
-    // argv[0] is our own binary path -> skip it; macOS -psn_/-NS* args start with '-'.
-    NSString *socketPath = nil;
+    // Started with --launch: run the app's launcher and show its progress (only if setup takes
+    // a while, or it has a question or an error) until it says which socket to connect.
+    // Otherwise connect straight away: a socket path argument > PORTHOLE_SOCKET > a temp default.
+    PortholeLaunchArgs *la = PortholeParseLaunchArgs([[NSProcessInfo processInfo] arguments]);
+    if (la.launcherPath) {
+        _launch = [[PortholeLaunchSession alloc] initWithLauncher:la.launcherPath arguments:la.launcherArgs];
+        _launch.delegate = self;
+        [_launch start];
+        [self performSelector:@selector(showLaunchWindow) withObject:nil afterDelay:0.5];
+        return;
+    }
+    NSString *socketPath = la.socketPath;
     NSDictionary *env = [[NSProcessInfo processInfo] environment];
-    // The launcher hands us a better app icon than the bundle wears yet (the app's own, cached on
-    // this Mac); show it in the Dock for this run. Finder catches up at the next materialize.
-    NSString *iconPath = env[@"PORTHOLE_APP_ICON"];
-    if (iconPath.length) {
-        NSImage *appIcon = [[NSImage alloc] initWithContentsOfFile:iconPath];
-        if (appIcon) { [NSApp setApplicationIconImage:appIcon]; [appIcon release]; }
-    }
-    if ([env[@"PORTHOLE_SOCKET"] length]) socketPath = env[@"PORTHOLE_SOCKET"];
-    NSArray *args = [[NSProcessInfo processInfo] arguments];
-    for (NSUInteger i = 1; i < args.count; i++) {
-        NSString *a = args[i];
-        if ([a hasPrefix:@"/"]) socketPath = a;   // an absolute socket path
-    }
+    if (!socketPath.length && [env[@"PORTHOLE_SOCKET"] length]) socketPath = env[@"PORTHOLE_SOCKET"];
     if (!socketPath.length)
         socketPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"porthole-xpra.sock"];
+    [self connectToSocket:socketPath];
+}
 
+- (NSString *)appName {
+    return [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleName"] ?: [[NSProcessInfo processInfo] processName];
+}
+
+- (PortholeLaunchWindow *)launchWindow {
+    if (!_launchWindow)
+        _launchWindow = [[PortholeLaunchWindow alloc] initWithTitle:[self appName]
+                                                               icon:[NSApp applicationIconImage]];
+    return _launchWindow;
+}
+
+- (void)showLaunchWindow {
+    [[self launchWindow] show];
+    [NSApp activateIgnoringOtherApps:YES];
+}
+
+- (void)endLaunchWindow {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(showLaunchWindow) object:nil];
+    [_launchWindow close];
+}
+
+- (void)launchSession:(PortholeLaunchSession *)s step:(NSString *)text {
+    (void)s; [[self launchWindow] setStep:text]; [[self launchWindow] setProgress:-1];
+}
+
+- (void)launchSession:(PortholeLaunchSession *)s progress:(double)fraction {
+    (void)s; [[self launchWindow] setProgress:fraction];
+}
+
+- (void)launchSession:(PortholeLaunchSession *)s ask:(NSString *)askId text:(NSString *)text choices:(NSArray *)choices {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(showLaunchWindow) object:nil];
+    [self showLaunchWindow];
+    [[self launchWindow] askText:text choices:choices reply:^(NSString *choice) { [s answer:askId choice:choice]; }];
+}
+
+- (void)launchSession:(PortholeLaunchSession *)s failed:(NSString *)text detail:(NSString *)detail {
+    (void)s;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(showLaunchWindow) object:nil];
+    [self showLaunchWindow];
+    [[self launchWindow] showError:text detail:detail quit:^{ [NSApp terminate:nil]; }];
+}
+
+// Setup is done: wear the icon the launcher found (the app's own, cached on this Mac; Finder
+// catches up at the next materialize) and connect as a plain socket launch would.
+- (void)launchSession:(PortholeLaunchSession *)s readyWithSocket:(NSString *)socket icon:(NSString *)icon {
+    (void)s;
+    [self endLaunchWindow];
+    if (icon.length) {
+        NSImage *appIcon = [[NSImage alloc] initWithContentsOfFile:icon];
+        if (appIcon) { [NSApp setApplicationIconImage:appIcon]; [appIcon release]; }
+    }
+    [self connectToSocket:socket];
+}
+
+- (void)connectToSocket:(NSString *)socketPath {
     // Auto-recovery marker: the launcher's watcher relaunches us iff this file exists
     // when we exit (a lost backend), vs a deliberate Quit (no marker). Derive it from the
     // socket path both sides share; clear any stale one so a past crash can't relaunch us.
