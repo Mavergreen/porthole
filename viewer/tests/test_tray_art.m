@@ -36,6 +36,10 @@ int main(void) {
     c3[0] = 255; c3[1] = 0; c3[2] = 0;
     CHECK(!PortholeTrayArtIsMonochrome(c3, 16, 16, 48, 3), "colored rgb24 is color");
 
+    // rgb24 sent in 4 bytes (BGRX, X = 0): nothing reads as visible, so it errs toward color.
+    uint8_t *x = fill(16, 16, 120, 120, 120, 0);
+    CHECK(!PortholeTrayArtIsMonochrome(x, 16, 16, 64, 4), "BGRX with X=0 errs toward color");
+
     // Sizing in points: pixels / scale, never up, only down to the menu bar's height.
     NSSize a = PortholeTrayArtSize(NSMakeSize(16, 16), 1, 22);
     CHECK(a.width == 16 && a.height == 16, "16px at 1x is 16pt");

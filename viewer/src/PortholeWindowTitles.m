@@ -13,3 +13,9 @@ int PortholeOnePasswordLockState(NSArray *titles) {
     for (NSString *t in titles) if ([t hasPrefix:@"Lock Screen"]) return 1;
     return 0;
 }
+
+NSString *PortholeTrackedTitle(BOOL overrideRedirect, NSString *title) {
+    return overrideRedirect ? nil : (title ?: @"");
+}
+BOOL PortholeLockItemOffersUnlock(NSArray *titles) { return PortholeOnePasswordLockState(titles) == 1; }
+BOOL PortholeWantsDockIcon(BOOL visibleAppWindow, NSUInteger trayCount) { return visibleAppWindow || trayCount == 0; }

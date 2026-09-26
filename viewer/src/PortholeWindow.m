@@ -559,9 +559,10 @@ static NSString *PortholeKeyname(unichar c) {
         // popup dismiss) would auto-release it and -dealloc's [_window release]
         // would then double-free -> EXC_BAD_ACCESS.
         [_window setReleasedWhenClosed:NO];
-        // Title toplevel windows. The MAIN window (no parent) gets the stable app
-        // name -- its server title changes (lock->unlock) and we don't track title
-        // updates yet, so the app name avoids a stale "Lock Screen -- 1Password".
+        // Title toplevel windows. The MAIN window (no parent) keeps the stable app
+        // name: its server title changes with the app's state (1Password: lock ->
+        // unlock), which the app delegate tracks for its menus, so the name avoids a
+        // stale "Lock Screen -- 1Password" title bar.
         // Secondary dialogs get their (fixed) server title, e.g. "Settings".
         // Borderless popups ignore the title.
         if (!overrideRedirect) {

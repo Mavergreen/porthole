@@ -281,7 +281,8 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     if (title && _titles[@(wid)]) _titles[@(wid)] = title;
 }
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title {
-    if (!overrideRedirect && title) _titles[@(wid)] = title;
+    NSString *tracked = PortholeTrackedTitle(overrideRedirect, title);
+    if (tracked) _titles[@(wid)] = tracked;
     // Every window after the main one is positioned at its server (root) position
     // relative to the main window's on-screen content origin. The main window has
     // no parent -> NaN sentinel -> default slot.
@@ -337,6 +338,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     if (tray) {
         [[NSStatusBar systemStatusBar] removeStatusItem:tray];
         [_trays removeObjectForKey:@(wid)];
+        [self scheduleDockSync:nil];   // the last tray gone with no window open: back to the Dock, or nothing is left to click
         return;
     }
     [_windows removeObjectForKey:@(wid)];
@@ -524,7 +526,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 - (void)menuNeedsUpdate:(NSMenu *)menu {
     NSMenuItem *it = [menu itemWithTag:1];
     if (!it) return;
-    BOOL locked = PortholeOnePasswordLockState([_titles allValues]) == 1;
+    BOOL locked = PortholeLockItemOffersUnlock([_titles allValues]);
     NSFont *f = [menu font] ?: [NSFont menuFontOfSize:0];
     NSString *str = locked ? @"Unlock 1Password…" : @"Lock\t⇧⌘L";
     NSMutableParagraphStyle *ps = [[[[it attributedTitle] attribute:NSParagraphStyleAttributeName atIndex:0 effectiveRange:NULL] mutableCopy] autorelease]
@@ -754,7 +756,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // alive with no window). Regaining Regular needs a re-activate for the icon to attach.
 - (void)syncDockPresence {
     NSApplicationActivationPolicy want =
-        ([self hasVisibleAppWindow] || _trays.count == 0)
+        PortholeWantsDockIcon([self hasVisibleAppWindow], _trays.count)
             ? NSApplicationActivationPolicyRegular
             : NSApplicationActivationPolicyAccessory;
     if ([NSApp activationPolicy] == want) return;
