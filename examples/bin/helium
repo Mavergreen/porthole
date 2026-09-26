@@ -76,12 +76,15 @@ nudge_once() {   # $1 = key, $2 = message; advisory, once per day
   printf '%s\n' "$_today" > "$_stamp" 2>/dev/null || true
   echo "helium: $2" >&2
 }
+image_created_epoch() {   # $1 = image -> seconds since the epoch (UTC), or fail
+  _created=$(docker image inspect -f '{{.Created}}' "$1" 2>/dev/null) || return 1
+  [ -n "$_created" ] || return 1
+  _created=${_created%%.*}; _created=${_created%Z}
+  date -ju -f '%Y-%m-%dT%H:%M:%S' "$_created" '+%s' 2>/dev/null
+}
 check_container_staleness() {
   _days=${HELIUM_STALE_DAYS:-30}
-  _created=$(docker image inspect -f '{{.Created}}' "$IMAGE" 2>/dev/null) || return 0
-  [ -n "$_created" ] || return 0
-  _created=${_created%%.*}; _created=${_created%Z}
-  _cepoch=$(date -ju -f '%Y-%m-%dT%H:%M:%S' "$_created" '+%s' 2>/dev/null) || return 0
+  _cepoch=$(image_created_epoch "$IMAGE") || return 0
   _age=$(( ($(date -u '+%s') - _cepoch) / 86400 ))
   [ "$_age" -gt "$_days" ] || return 0
   nudge_once staleness "your $IMAGE container is ${_age} days old; rebuild to pick up updates: $0 --rebuild"
@@ -176,18 +179,30 @@ if ! { [ -f "$MENU_TUNNEL_PID" ] && ps -p "$(cat "$MENU_TUNNEL_PID")" >/dev/null
   echo $! > "$MENU_TUNNEL_PID"
 fi
 
-# One-time: replace the penguin DEFAULT icon with Linux Helium's REAL icon, extracted from the container
-# (the user's OWN installed copy -- Porthole never ships a vendor icon). Runs once (marker guard),
-# best-effort. The running viewer already has the penguin; the real icon shows from the NEXT launch
-# (LaunchServices re-reads the bundle -- `touch`ed here -- so no mid-session Dock hackery needed).
-_iconmark="$CONFIG_DIR/icon-done"
-if [ ! -f "$_iconmark" ] && [ -n "/usr/share/icons/hicolor/256x256/apps/helium.png" ] && [ -x "$_root/bin/extract-app-icns.sh" ]; then
-  if ONEP_CONTAINER="$CONTAINER" PORTHOLE_ICON_GLOB="/usr/share/icons/hicolor/256x256/apps/helium.png" \
-       sh "$_root/bin/extract-app-icns.sh" "$_root/AppIcon.icns.new" >/dev/null 2>&1; then
-    mv -f "$_root/AppIcon.icns.new" "$_root/AppIcon.icns"
-    touch "$(cd "$_root/../.." && pwd)" 2>/dev/null || true   # nudge LaunchServices to re-read the icon
-    mkdir -p "$CONFIG_DIR" 2>/dev/null || true; : > "$_iconmark" 2>/dev/null || true
-    echo "helium: installed Linux Helium's real icon (from your container); it shows next launch" >&2
+# App icon. Keep the per-user cache holding the app's own icon from its container (Porthole never
+# ships a vendor icon): extract when no cached icon is at least 512 px, or the user's copy predates
+# this image. Hand the widest cached icon to the viewer for the Dock when it beats the bundle's;
+# the next materialize (any Porthole or preset install) bakes it into the bundle for Finder.
+# Icons are best-effort: without the library (an older bundle, or examples/), skip them entirely.
+if [ -f "$_root/bin/porthole-icon-lib.sh" ]; then
+  . "$_root/bin/porthole-icon-lib.sh"
+  _sysicon="${PORTHOLE_ICON_CACHE:-/usr/local/mavergreen/var/porthole/icons}/helium.icns"
+  _usericon="${PORTHOLE_USER_ICON_CACHE:-$HOME/Library/Caches/dev.mavergreen.porthole}/helium.icns"
+  if [ -n "/usr/share/icons/hicolor/256x256/apps/helium.png" ] && [ -x "$_root/bin/extract-app-icns.sh" ]; then
+    _best=$(icon_best "$_sysicon" "$_usericon"); _bw=0
+    [ -n "$_best" ] && _bw=$(icon_width "$_best")
+    _stale=0
+    if [ -f "$_usericon" ] && _ie=$(image_created_epoch "$IMAGE") \
+       && [ "$(stat -f %m "$_usericon")" -lt "$_ie" ]; then _stale=1; fi
+    if [ "$_bw" -lt 512 ] || [ "$_stale" = 1 ]; then
+      sh "$_root/bin/extract-app-icns.sh" "$CONTAINER" "/usr/share/icons/hicolor/256x256/apps/helium.png" "$_usericon" 2>/dev/null \
+        || icon_log helium "icon extraction from $CONTAINER found nothing usable for /usr/share/icons/hicolor/256x256/apps/helium.png"
+    fi
+  fi
+  _best=$(icon_best "$_sysicon" "$_usericon")
+  _have=$(cat "$_root/AppIcon.width" 2>/dev/null || echo 0)
+  if [ -n "$_best" ] && [ "$(icon_width "$_best")" -gt "${_have:-0}" ]; then
+    PORTHOLE_APP_ICON="$_best"; export PORTHOLE_APP_ICON
   fi
 fi
 

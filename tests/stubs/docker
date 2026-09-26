@@ -11,6 +11,11 @@ if [ "${1:-}" = context ] && [ "${2:-}" = inspect ]; then
   [ -f "$STUB_DIR/docker-context.${3:-}" ] && exit 0
   exit 1
 fi
+# `docker image inspect -f {{.Created}} IMAGE`: answer from $CREATED_FILE when a test sets it.
+# Does not consume a numbered replay slot.
+if [ "${1:-}" = image ] && [ "${2:-}" = inspect ] && [ -n "${CREATED_FILE:-}" ]; then
+  case "$*" in *Created*) cat "$CREATED_FILE"; exit 0 ;; esac
+fi
 _n=$(cat "$STUB_DIR/docker.calls" 2>/dev/null || echo 0)
 _n=$((_n + 1))
 echo "$_n" > "$STUB_DIR/docker.calls"
