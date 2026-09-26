@@ -159,8 +159,9 @@ if ! { [ -f "$TUNNEL_PID" ] && ps -p "$(cat "$TUNNEL_PID")" >/dev/null 2>&1; }; 
   rm -f "$XPRA_SOCK"
   # s6-ipcserver binds $XPRA_SOCK, forks per connection, and runs the child with the connection on
   # stdin/stdout; docker exec -i pipes that to the container's socat, which connects the app socket.
+  # It outlives us, so it must not hold our output open: the viewer reads its end as "setup is over".
   PATH="$ENGINE_BIN_DIR:$PATH" "$IPCSERVER" "$XPRA_SOCK" \
-    docker exec -i "$CONTAINER" socat STDIO UNIX-CONNECT:/run/user/1000/porthole-xpra.sock &
+    docker exec -i "$CONTAINER" socat STDIO UNIX-CONNECT:/run/user/1000/porthole-xpra.sock </dev/null >/dev/null 7>&- &
   echo $! > "$TUNNEL_PID"
 fi
 
@@ -175,7 +176,7 @@ MENU_TUNNEL_PID="${TMPDIR:-/tmp}/clion-menu-sock.$PORT.pid"
 if ! { [ -f "$MENU_TUNNEL_PID" ] && ps -p "$(cat "$MENU_TUNNEL_PID")" >/dev/null 2>&1; }; then
   rm -f "$MENU_SOCK"
   PATH="$ENGINE_BIN_DIR:$PATH" "$IPCSERVER" "$MENU_SOCK" \
-    docker exec -i "$CONTAINER" socat STDIO UNIX-CONNECT:/run/user/1000/porthole-menu.sock &
+    docker exec -i "$CONTAINER" socat STDIO UNIX-CONNECT:/run/user/1000/porthole-menu.sock </dev/null >/dev/null 7>&- &
   echo $! > "$MENU_TUNNEL_PID"
 fi
 
@@ -249,7 +250,7 @@ if [ -x "$_root/bin/porthole-recover-watch" ] && [ -z "${CLION_NO_RECOVER:-}" ] 
   RW_BIN="$_bin" RW_MARKER="$MARKER" RW_RELAUNCH="open \"$_appbundle\"" RW_PIDFILE="$WATCH_PID" \
   RW_ONDEMAND="$RW_ONDEMAND" RW_CONTAINER="$CONTAINER" \
   RW_STOP_PIDS="$TUNNEL_PID $MENU_TUNNEL_PID" \
-  nohup "$_root/bin/porthole-recover-watch" </dev/null >/dev/null 2>&1 3>&- &
+  nohup "$_root/bin/porthole-recover-watch" </dev/null >/dev/null 2>&1 3>&- 7>&- &
 fi
 
 if [ "${PORTHOLE_PROTOCOL:-}" = 1 ]; then

@@ -2,6 +2,7 @@
 #import "PortholeLaunchSession.h"
 #include <unistd.h>
 #include <assert.h>
+#include <sys/resource.h>
 
 @interface Rec : NSObject <PortholeLaunchSessionDelegate>
 @property(retain) NSMutableArray *events;
@@ -62,6 +63,28 @@ int main(void) {
         close(p2[1]);
         pump(^BOOL{ return r2.events.count >= 1; });
         assert([r2.events[0] hasPrefix:@"failed:"]);
+
+        // A launcher that exits while a background child still holds its stdout -> failed, not a wait
+        // for the child.
+        PortholeLaunchSession *s3 = [[[PortholeLaunchSession alloc] initWithLauncher:@"/bin/sh"
+            arguments:@[@"-c", @"echo gone >&2; sleep 6 & exit 0"]] autorelease];
+        Rec *r3 = [[[Rec alloc] init] autorelease]; s3.delegate = r3; [s3 start];
+        pump(^BOOL{ return r3.events.count >= 1; });
+        assert(r3.events.count == 1 && [r3.events[0] hasPrefix:@"failed:"]);
+
+        // After the launcher is done, its stderr at EOF costs nothing.
+        PortholeLaunchSession *s4 = [[[PortholeLaunchSession alloc] initWithLauncher:@"/bin/sh"
+            arguments:@[@"-c", @"echo '{\"t\":\"ready\",\"socket\":\"/tmp/y.sock\"}'"]] autorelease];
+        Rec *r4 = [[[Rec alloc] init] autorelease]; s4.delegate = r4; [s4 start];
+        pump(^BOOL{ return r4.events.count >= 1; });
+        assert([r4.events[0] hasPrefix:@"ready:/tmp/y.sock"]);
+        struct rusage a, b; getrusage(RUSAGE_SELF, &a);
+        sleep(1);   // the readers run on their own threads; this thread stays idle
+        getrusage(RUSAGE_SELF, &b);
+        double cpu = (b.ru_utime.tv_sec - a.ru_utime.tv_sec) + (b.ru_utime.tv_usec - a.ru_utime.tv_usec) / 1e6
+                   + (b.ru_stime.tv_sec - a.ru_stime.tv_sec) + (b.ru_stime.tv_usec - a.ru_stime.tv_usec) / 1e6;
+        assert(cpu < 0.3);
+        assert(r4.events.count == 1);   // a clean exit after ready is not a failure
 
         printf("test_launch_wire: OK\n");
     }

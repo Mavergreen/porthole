@@ -23,6 +23,14 @@ launch() {  # stdin = answers
   [[ "$output" != *"viewer-exec"* ]]
 }
 
+@test "the viewer hears the launcher end even while its bridges keep running" {
+  app; export S6_STUB_SLEEP=8
+  t0=$(date +%s)
+  out=$(env PORTHOLE_PROTOCOL=1 DOCKER_HOST=tcp://192.0.2.1:2376 THUNDERBIRD_NO_RECOVER=1 PORTHOLE_READY_TRIES=1 "$R/bin/thunderbird" 2>/dev/null </dev/null)
+  [ $(( $(date +%s) - t0 )) -lt 5 ] || return 1
+  [[ "$out" == *'"t":"ready"'* ]] || return 1
+}
+
 @test "every stdout line under the viewer is a protocol message" {
   app
   out=$(env PORTHOLE_PROTOCOL=1 DOCKER_HOST=tcp://192.0.2.1:2376 THUNDERBIRD_NO_RECOVER=1 PORTHOLE_READY_TRIES=1 "$R/bin/thunderbird" 2>/dev/null </dev/null)

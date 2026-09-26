@@ -54,15 +54,33 @@
 
 - (void)start {
     if (_stderr) {
-        [_stderr setReadabilityHandler:^(NSFileHandle *h) {
-            NSData *chunk = [h availableData];
-            @synchronized (self) {
-                [_errTail appendData:chunk];
-                if (_errTail.length > 8192) [_errTail replaceBytesInRange:NSMakeRange(0, _errTail.length - 8192) withBytes:NULL length:0];
+        // A blocking read on its own thread, like stdout's: on 10.9 a readabilityHandler keeps its
+        // source firing at EOF even after it is cleared, spinning a core for the app's whole life.
+        int efd = [_stderr fileDescriptor];
+        [self retain];   // released when stderr ends
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            char chunk[4096]; ssize_t n;
+            while ((n = read(efd, chunk, sizeof chunk)) > 0) {
+                @synchronized (self) {
+                    [_errTail appendBytes:chunk length:(NSUInteger)n];
+                    if (_errTail.length > 8192) [_errTail replaceBytesInRange:NSMakeRange(0, _errTail.length - 8192) withBytes:NULL length:0];
+                }
             }
-        }];
+            dispatch_async(dispatch_get_main_queue(), ^{ [self release]; });
+        });
     }
-    if (_task) [_task launch];
+    if (_task) {
+        // Its last lines are already in the pipe when it exits; give the reader a moment to hand
+        // them over before calling the silence a failure.
+        [self retain];   // released by the termination handler
+        [_task setTerminationHandler:^(NSTask *t) {
+            (void)t;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self stoppedWithoutAWord]; [self release];
+            });
+        }];
+        [_task launch];
+    }
     int fd = _readFD;
     [self retain];   // released when the reader finishes
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
@@ -79,21 +97,23 @@
                 if (m) dispatch_async(dispatch_get_main_queue(), ^{ [self deliver:m]; });
             }
         }
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (!_finished) {
-                _finished = YES;
-                NSString *tail;
-                @synchronized (self) {
-                    tail = [[[NSString alloc] initWithData:_errTail encoding:NSUTF8StringEncoding] autorelease] ?: @"";
-                }
-                NSArray *lines = [tail componentsSeparatedByString:@"\n"];
-                if (lines.count > 20) lines = [lines subarrayWithRange:NSMakeRange(lines.count - 20, 20)];
-                [_delegate launchSession:self failed:@"The app's setup stopped unexpectedly."
-                                  detail:[lines componentsJoinedByString:@"\n"]];
-            }
-            [self release];
-        });
+        dispatch_async(dispatch_get_main_queue(), ^{ [self stoppedWithoutAWord]; [self release]; });
     });
+}
+
+// The launcher's output ended, or the launcher exited (a child it left running may still hold the
+// output open), without ready or error: report it with the tail of what it said on stderr.
+- (void)stoppedWithoutAWord {
+    if (_finished) return;
+    _finished = YES;
+    NSString *tail;
+    @synchronized (self) {
+        tail = [[[NSString alloc] initWithData:_errTail encoding:NSUTF8StringEncoding] autorelease] ?: @"";
+    }
+    NSArray *lines = [tail componentsSeparatedByString:@"\n"];
+    if (lines.count > 20) lines = [lines subarrayWithRange:NSMakeRange(lines.count - 20, 20)];
+    [_delegate launchSession:self failed:@"The app's setup stopped unexpectedly."
+                      detail:[lines componentsJoinedByString:@"\n"]];
 }
 
 - (void)answer:(NSString *)askId choice:(NSString *)choice {
