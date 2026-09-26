@@ -55,6 +55,7 @@ add_executable(Porthole MACOSX_BUNDLE
   src/PortholeRemoteMenuProducer.m
   src/PortholeMenuController.m
   src/PortholeMenuGlyph.m
+  src/PortholeTrayArt.m
   ${RDS_XPRA_SOURCES})
 target_include_directories(Porthole PRIVATE src)
 target_link_libraries(Porthole PRIVATE ${COCOA_LIBRARY} ${CARBON_LIBRARY} ${AUDIOTOOLBOX_LIBRARY}
@@ -144,6 +145,12 @@ add_test(NAME transport_disconnect COMMAND test_transport_disconnect)
 add_executable(test_iosurface_blit tests/test_iosurface_blit.m src/PortholeBlit.m)
 target_include_directories(test_iosurface_blit PRIVATE src)
 add_test(NAME iosurface_blit COMMAND test_iosurface_blit)
+
+# --- tray art unit test (pure C over pixel buffers) ---
+add_executable(test_tray_art tests/test_tray_art.m src/PortholeTrayArt.m)
+target_include_directories(test_tray_art PRIVATE src)
+target_link_libraries(test_tray_art PRIVATE ${FOUNDATION_LIBRARY})
+add_test(NAME tray_art COMMAND test_tray_art)
 
 # --- layer presenter math unit test ---
 add_executable(test_layer_presenter tests/test_layer_presenter.m src/PortholeLayerPresenter.m)

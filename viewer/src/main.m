@@ -8,6 +8,7 @@
 #import "PortholeRemoteMenuProducer.h"
 #import "PortholeMenuModel.h"
 #import "PortholeMenuGlyph.h"
+#import "PortholeTrayArt.h"
 
 // The native (Cocoa) shell. It drives a remote-display session through the
 // remote_display C interface and renders/handles input via NSWindow/NSEvent/
@@ -269,7 +270,13 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
             if (glyph) {
                 [tray setImage:glyph];
             } else {
-                [icon setSize:NSMakeSize(18, 18)]; [icon setTemplate:YES]; [tray setImage:icon];
+                int bpp = (int)(rowstride / MAX(1, (int)rect.size.width));
+                BOOL mono = ([enc hasPrefix:@"rgb"] && (bpp == 3 || bpp == 4))
+                    && PortholeTrayArtIsMonochrome(pixels, (int)rect.size.width, (int)rect.size.height,
+                                                   (size_t)rowstride, bpp);
+                [icon setSize:PortholeTrayArtSize(NSMakeSize(rect.size.width, rect.size.height), 1 /* the app renders at 1x until BACKLOG #6 */, 22)];
+                [icon setTemplate:mono];
+                [tray setImage:icon];
             }
         }
         return;
