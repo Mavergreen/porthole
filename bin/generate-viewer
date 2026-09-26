@@ -146,8 +146,8 @@ if [ "$LIFECYCLE" = ondemand ]; then LIFECYCLE_ONDEMAND=1; else LIFECYCLE_ONDEMA
 # ICON_GLOB is pasted into the launcher's shell code and expanded by the container's shell: allow a
 # path and glob characters only, so a conf can't smuggle in a command.
 case "$ICON_GLOB" in
-  *[!]A-Za-z0-9/._*?[+-]*)
-    echo "generate-viewer: ICON_GLOB may hold only letters, digits and / . _ - + * ? [ ] -- got: $ICON_GLOB" >&2
+  *[!]!A-Za-z0-9/._*?[+-]*)
+    echo "generate-viewer: ICON_GLOB may hold only letters, digits and / . _ - + * ? [ ] ! -- got: $ICON_GLOB" >&2
     exit 2 ;;
 esac
 # EXTRA_PKGS_SP: EXTRA_PKGS space-prefixed for the --no-install-recommends line

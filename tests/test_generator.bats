@@ -214,3 +214,9 @@ conf_with() {  # a minimal valid conf plus LINE; sets $d and $C
   run ./bin/generate-viewer "$C" --out "$d"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
+
+@test "generate-viewer accepts a negated bracket in ICON_GLOB" {
+  conf_with "ICON_GLOB='/usr/share/icons/hicolor/[!s]*/apps/demo.png'"
+  run ./bin/generate-viewer "$C" --out "$d"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
