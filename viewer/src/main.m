@@ -142,6 +142,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     if (!socketPath.length && [env[@"PORTHOLE_SOCKET"] length]) socketPath = env[@"PORTHOLE_SOCKET"];
     if (!socketPath.length)
         socketPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"porthole-xpra.sock"];
+    [self wearIcon:env[@"PORTHOLE_APP_ICON"]];   // a launcher run by hand still hands it over this way
     [self connectToSocket:socketPath];
 }
 
@@ -187,16 +188,20 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     [[self launchWindow] showError:text detail:detail quit:^{ [NSApp terminate:nil]; }];
 }
 
-// Setup is done: wear the icon the launcher found (the app's own, cached on this Mac; Finder
-// catches up at the next materialize) and connect as a plain socket launch would.
+// Setup is done: wear the icon the launcher found and connect as a plain socket launch would.
 - (void)launchSession:(PortholeLaunchSession *)s readyWithSocket:(NSString *)socket icon:(NSString *)icon {
     (void)s;
     [self endLaunchWindow];
-    if (icon.length) {
-        NSImage *appIcon = [[NSImage alloc] initWithContentsOfFile:icon];
-        if (appIcon) { [NSApp setApplicationIconImage:appIcon]; [appIcon release]; }
-    }
+    [self wearIcon:icon];
     [self connectToSocket:socket];
+}
+
+// Wear the icon the launcher found (the app's own, cached on this Mac) for this run; Finder catches up
+// at the next materialize.
+- (void)wearIcon:(NSString *)path {
+    if (!path.length) return;
+    NSImage *appIcon = [[NSImage alloc] initWithContentsOfFile:path];
+    if (appIcon) { [NSApp setApplicationIconImage:appIcon]; [appIcon release]; }
 }
 
 - (void)connectToSocket:(NSString *)socketPath {

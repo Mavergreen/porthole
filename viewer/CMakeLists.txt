@@ -148,6 +148,11 @@ target_include_directories(test_launch_args PRIVATE src)
 target_link_libraries(test_launch_args PRIVATE ${FOUNDATION_LIBRARY})
 add_test(NAME launch_args COMMAND test_launch_args)
 
+add_executable(test_launch_window tests/test_launch_window.m src/PortholeLaunchWindow.m)
+target_include_directories(test_launch_window PRIVATE src)
+target_link_libraries(test_launch_window PRIVATE ${COCOA_LIBRARY})
+add_test(NAME launch_window COMMAND test_launch_window)
+
 # --- transport disconnect unit test (AF_UNIX listener; no container) ---
 add_executable(test_transport_disconnect tests/test_transport_disconnect.m
   src/PortholeTransport.m src/PortholeProtocol.m)

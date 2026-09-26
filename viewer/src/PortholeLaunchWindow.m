@@ -12,6 +12,7 @@ static const CGFloat kWidth = 460, kHeight = 170, kDetailHeight = 150;
     void (^_reply)(NSString *);
     void (^_quit)(void);
     BOOL _detailsShown;
+    NSString *_stepText;   // the current step, shown again once a question is answered
 }
 
 - (instancetype)initWithTitle:(NSString *)title icon:(NSImage *)icon {
@@ -65,14 +66,18 @@ static const CGFloat kWidth = 460, kHeight = 170, kDetailHeight = 150;
     [_window orderOut:nil];
     [_window release]; [_label release]; [_bar release]; [_buttons release];
     [_details release]; [_detailText release];
-    [_reply release]; [_quit release];
+    [_reply release]; [_quit release]; [_stepText release];
     [super dealloc];
 }
 
 - (void)show { [_window makeKeyAndOrderFront:nil]; [_window orderFrontRegardless]; }
 - (void)close { [_window orderOut:nil]; }
 
-- (void)setStep:(NSString *)text { [_label setStringValue:text ?: @""]; }
+- (void)setStep:(NSString *)text {
+    [_stepText release]; _stepText = [text copy];
+    [_label setStringValue:text ?: @""];
+}
+- (NSString *)labelText { return [_label stringValue]; }
 
 - (void)setProgress:(double)fraction {
     if (fraction < 0) { [_bar setIndeterminate:YES]; [_bar startAnimation:nil]; return; }
@@ -104,7 +109,7 @@ static const CGFloat kWidth = 460, kHeight = 170, kDetailHeight = 150;
 - (void)askText:(NSString *)text choices:(NSArray *)choices reply:(void (^)(NSString *))reply {
     [_reply release]; _reply = [reply copy];
     [_bar setHidden:YES];
-    [self setStep:text];
+    [_label setStringValue:text ?: @""];
     [self addButtons:choices action:@selector(answer:)];
     [self show];
 }
@@ -114,6 +119,7 @@ static const CGFloat kWidth = 460, kHeight = 170, kDetailHeight = 150;
     [_reply release]; _reply = nil;
     [self clearButtons];
     [_bar setHidden:NO];
+    [_label setStringValue:_stepText ?: @""];
     if (r) r([sender title]);
 }
 
@@ -147,6 +153,7 @@ static const CGFloat kWidth = 460, kHeight = 170, kDetailHeight = 150;
         void (^r)(NSString *) = [[_reply retain] autorelease];
         [_reply release]; _reply = nil;
         [self clearButtons]; [_bar setHidden:NO];
+        [_label setStringValue:_stepText ?: @""];
         r(@"Ask later");
         return NO;
     }

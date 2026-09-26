@@ -10,4 +10,5 @@
 - (void)showError:(NSString *)text detail:(NSString *)detail quit:(void (^)(void))quit;
 - (void)show;
 - (void)close;
+- (NSString *)labelText;   // what the window says now
 @end
