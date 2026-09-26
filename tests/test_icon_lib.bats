@@ -80,3 +80,8 @@ teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
   [ "$(icon_width_cached "$WORK/bad.icns")" = 0 ] || return 1
   [ ! -e "$WORK/bad.icns.width" ]
 }
+
+@test "icon_width is 0 when sips answers a non-number (newer sips on a non-image)" {
+  mkdir -p "$WORK/fakesips"; printf '#!/bin/sh\necho "  pixelWidth: <nil>"\n' > "$WORK/fakesips/sips"; chmod +x "$WORK/fakesips/sips"
+  [ "$(PATH="$WORK/fakesips:$PATH" icon_width "$WORK/p512.png")" = 0 ]
+}

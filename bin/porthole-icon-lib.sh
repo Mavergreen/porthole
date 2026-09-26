@@ -2,9 +2,11 @@
 # porthole-icon-lib.sh -- measure, convert, choose and log app icons. Sourced, never run; every
 # function returns a status and never exits, because icons are best-effort everywhere they're used.
 
+# The pixel width of an image, or 0 when sips can't read one (newer sips prints a non-number then).
 icon_width() {
   _iw=$(sips -g pixelWidth "$1" 2>/dev/null | awk '/pixelWidth/{print $2}')
-  printf '%s\n' "${_iw:-0}"
+  case "$_iw" in ''|*[!0-9]*) _iw=0 ;; esac
+  printf '%s\n' "$_iw"
 }
 
 # The width of an icns from its sidecar (FILE.width), measured and recorded when the sidecar is
