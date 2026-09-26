@@ -8,12 +8,14 @@
 #import "PortholeRemoteMenuProducer.h"
 #import "PortholeMenuModel.h"
 #import "PortholeTrayArt.h"
+#import "PortholeWindowTitles.h"
 
 // The native (Cocoa) shell. It drives a remote-display session through the
 // remote_display C interface and renders/handles input via NSWindow/NSEvent/
 // NSPasteboard. It knows nothing about Xpra beyond asking for that backend.
-@interface PortholeAppDelegate : NSObject <NSApplicationDelegate, PortholeMenuStaticInvoker>
+@interface PortholeAppDelegate : NSObject <NSApplicationDelegate, NSMenuDelegate, PortholeMenuStaticInvoker>
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title;
+- (void)windowWid:(long)wid retitled:(NSString *)title;
 - (void)drawWid:(long)wid rect:(NSRect)rect encoding:(NSString *)enc
          pixels:(const void *)pixels length:(size_t)len rowstride:(int)rowstride;
 - (void)lostWid:(long)wid;
@@ -36,6 +38,7 @@
     rds_session *_session;
     NSMutableDictionary *_windows;
     NSMutableDictionary *_trays;   // wid -> NSStatusItem (forwarded system-tray icons)
+    NSMutableDictionary *_titles;  // wid -> current title of each normal window
     BOOL _trayPopupPending;        // Quick Access summoned -> center the next OR popup
     NSInteger _mainWid;        // first normal window; popups position relative to it
     NSInteger _pbChangeCount;  // last-seen local pasteboard changeCount (loop guard)
@@ -91,6 +94,9 @@ static void cb_set_cursor(void *ctx, int w, int h, int xhot, int yhot, const voi
 }
 static void cb_reset_cursor(void *ctx) { [(PortholeAppDelegate *)ctx resetCursor]; }
 static void cb_new_tray(void *ctx, long wid, int w, int h) { [(PortholeAppDelegate *)ctx newTrayWid:wid w:w h:h]; }
+static void cb_window_title(void *ctx, long wid, const char *title) {
+    [(PortholeAppDelegate *)ctx windowWid:wid retitled:(title ? [NSString stringWithUTF8String:title] : nil)];
+}
 static void cb_audio_out(void *ctx, const char *codec, const void *data, size_t len) {
     (void)codec;   // we only advertise mp3
     [(PortholeAppDelegate *)ctx audioOut:(len ? [NSData dataWithBytes:data length:len] : nil)];
@@ -111,6 +117,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 - (void)applicationDidFinishLaunching:(NSNotification *)n {
     _windows = [[NSMutableDictionary alloc] init];
     _trays = [[NSMutableDictionary alloc] init];
+    _titles = [[NSMutableDictionary alloc] init];
     [NSApp setMainMenu:[self buildMainMenu]];   // real App/Edit/Window menus
     [self setUpMenuBridge];
     // Server address: an AF_UNIX socket PATH (the local end of the launcher's bridge
@@ -159,6 +166,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     cb.set_cursor = cb_set_cursor;
     cb.reset_cursor = cb_reset_cursor;
     cb.new_tray = cb_new_tray;
+    cb.window_title = cb_window_title;
     cb.audio_out = cb_audio_out;
     cb.disconnected = cb_disconnected;
     _audio = [[PortholeAudioPlayer alloc] init];
@@ -206,7 +214,11 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // Cmd-Shift-L: lock (the native macOS 1Password lock shortcut).
 - (void)lockHotKey { [self focusMainThenShortcut:@"l" keyval:'l' shift:YES]; }
 
+- (void)windowWid:(long)wid retitled:(NSString *)title {
+    if (title && _titles[@(wid)]) _titles[@(wid)] = title;
+}
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title {
+    if (!overrideRedirect && title) _titles[@(wid)] = title;
     // Every window after the main one is positioned at its server (root) position
     // relative to the main window's on-screen content origin. The main window has
     // no parent -> NaN sentinel -> default slot.
@@ -265,6 +277,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
         return;
     }
     [_windows removeObjectForKey:@(wid)];
+    [_titles removeObjectForKey:@(wid)];
 }
 
 // ---- local clipboard (shell owns NSPasteboard; backend owns the protocol) ----
@@ -400,6 +413,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // Access / Lock / Settings / Quit); other apps get a generic Open <name> / Quit.
 - (NSMenu *)buildTrayMenu {
     NSMenu *m = [[[NSMenu alloc] initWithTitle:[self appDisplayName]] autorelease];
+    [m setDelegate:self];   // menuNeedsUpdate: sets Lock/Unlock by the app's real state
     // Lay the shortcut out ourselves (attributed title + right tab stop) so the key
     // equivalents right-align in a column, like modern macOS. Use the menu's OWN font.
     NSFont *mfont = [m font] ?: [NSFont menuFontOfSize:0];
@@ -414,7 +428,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
         // display); Settings has no shortcut.
         [self addItemTo:m title:@"Open Quick Access" shortcut:@"⇧⌘Space" action:@selector(menuQuickAccess:) tabLoc:tabLoc];
         [m addItem:[NSMenuItem separatorItem]];
-        [self addItemTo:m title:@"Lock"     shortcut:@"⇧⌘L" action:@selector(menuLock:)     tabLoc:tabLoc];
+        [[self addItemTo:m title:@"Lock"     shortcut:@"⇧⌘L" action:@selector(menuLock:)     tabLoc:tabLoc] setTag:1];
         [self addItemTo:m title:@"Settings" shortcut:nil     action:@selector(menuSettings:) tabLoc:tabLoc];
     } else {
         [m addItem:[NSMenuItem separatorItem]];
@@ -426,7 +440,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // rows render uniformly (mixing attributed and plain titles looked uneven). When
 // `shortcut` is given we append "<tab>shortcut" with a RIGHT tab stop at tabLoc so
 // shortcuts right-align in a column (see buildTrayMenu).
-- (void)addItemTo:(NSMenu *)m title:(NSString *)title shortcut:(NSString *)sc
+- (NSMenuItem *)addItemTo:(NSMenu *)m title:(NSString *)title shortcut:(NSString *)sc
            action:(SEL)action tabLoc:(CGFloat)tabLoc {
     NSMenuItem *it = [m addItemWithTitle:title action:action keyEquivalent:@""];
     [it setTarget:self];
@@ -438,6 +452,20 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
         attributes:@{NSFontAttributeName: ([m font] ?: [NSFont menuFontOfSize:0]),
                      NSParagraphStyleAttributeName: ps}] autorelease];
     [it setAttributedTitle:as];
+    return it;
+}
+// Build the 1Password tray menu's Lock/Unlock item from the app's current state, as the menu opens.
+- (void)menuNeedsUpdate:(NSMenu *)menu {
+    NSMenuItem *it = [menu itemWithTag:1];
+    if (!it) return;
+    BOOL locked = PortholeOnePasswordLockState([_titles allValues]) == 1;
+    NSFont *f = [menu font] ?: [NSFont menuFontOfSize:0];
+    NSString *str = locked ? @"Unlock 1Password…" : @"Lock\t⇧⌘L";
+    NSMutableParagraphStyle *ps = [[[[it attributedTitle] attribute:NSParagraphStyleAttributeName atIndex:0 effectiveRange:NULL] mutableCopy] autorelease]
+                                  ?: [[[NSMutableParagraphStyle alloc] init] autorelease];
+    [it setAttributedTitle:[[[NSAttributedString alloc] initWithString:str
+        attributes:@{NSFontAttributeName: f, NSParagraphStyleAttributeName: ps}] autorelease]];
+    [it setAction:locked ? @selector(menuOpenMain:) : @selector(menuLock:)];
 }
 
 // ---- native main menu bar (App / Edit / Window), engine-wide default -------------
@@ -695,6 +723,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     [_pbTimer invalidate];
     rds_destroy(_session);
     [_windows release];
+    [_titles release];
     [_menuController release];
     [_staticMenu release];
     [_remoteMenu release];

@@ -1,3 +1,4 @@
+#import "PortholeWindowTitles.h"
 #import "PortholeClient.h"
 #import "PortholeProtocol.h"
 
@@ -337,18 +338,18 @@
         BOOL isOR = [type isEqualToString:@"new-override-redirect"];
         if (isOR) [_orWids addObject:@(wid)];
         // Window metadata (title etc.) rides at index 6 as a dict.
-        NSString *title = nil;
-        if (p.count > 6 && [p[6] isKindOfClass:[NSDictionary class]]) {
-            id t = p[6][@"title"];
-            if ([t isKindOfClass:[NSData class]])
-                t = [[[NSString alloc] initWithData:t encoding:NSUTF8StringEncoding] autorelease];
-            if ([t isKindOfClass:[NSString class]]) title = t;
-        }
+        NSString *title = p.count > 6 ? PortholeTitleFromMetadata(p[6]) : nil;
         NSLog(@"[WIN] %@ wid=%ld frame=(%d,%d %dx%d) title=%@", type, wid, x, y, w, h, title);
         if (_cb.new_window) _cb.new_window(_cb.ctx, wid, x, y, w, h, isOR ? 1 : 0,
                                            title ? [title UTF8String] : NULL);
         // Tell the server the window is mapped so it starts sending draws.
         [self sendPacket:@[@"map-window", @(wid), @(x), @(y), @(w), @(h), @{}]];
+    }
+    else if ([type isEqualToString:@"window-metadata"]) {
+        // ["window-metadata", wid, {changed keys}]: e.g. 1Password retitling its window on lock/unlock.
+        if (p.count < 3) return;
+        NSString *title = PortholeTitleFromMetadata(p[2]);
+        if (title && _cb.window_title) _cb.window_title(_cb.ctx, [p[1] integerValue], [title UTF8String]);
     }
     else if ([type isEqualToString:@"new-tray"]) {
         // ["new-tray", wid, w, h, metadata]; icon pixels then arrive as `draw`

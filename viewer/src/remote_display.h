@@ -93,6 +93,9 @@ typedef struct rds_callbacks {
      * away via `lost_window`. Clicks are sent back with rds_button() on `wid`. */
     void (*new_tray)(void *ctx, long wid, int w, int h);
 
+    /* A remote window's title changed (xpra window-metadata). */
+    void (*window_title)(void *ctx, long wid, const char *title);
+
     /* The remote app is playing sound. (data,len) is one chunk of an encoded audio
      * stream; `codec` names the format ("mp3"). The shell decodes + plays it. A
      * (NULL,0) chunk (codec="") signals the stream stopped -> flush/reset. Unlike the
