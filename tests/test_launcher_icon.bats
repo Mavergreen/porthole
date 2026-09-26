@@ -90,3 +90,12 @@ run_icon_nolib() { NOLIB=1 run_icon "$@"; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ ! -f "$WORK/extract.log" ]
 }
+
+@test "a warm launch with measured icons runs no sips" {
+  fixture_icns 512 "$WORK/sys/thunderbird.icns"; fixture_icns 512 "$WORK/user/thunderbird.icns"
+  mkdir -p "$WORK/sipsbin"; printf '#!/bin/sh\necho sips >> "%s/sips.log"\nexec /usr/bin/sips "$@"\n' "$WORK" > "$WORK/sipsbin/sips"
+  chmod +x "$WORK/sipsbin/sips"
+  PATH="$WORK/sipsbin:$PATH" run_icon 2026-01-01T00:00:00.000000000Z 512
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ ! -s "$WORK/sips.log" ]
+}

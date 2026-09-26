@@ -6,6 +6,18 @@ icon_width() {
   printf '%s\n' "${_iw:-0}"
 }
 
+# The width of an icns from its sidecar (FILE.width), measured and recorded when the sidecar is
+# missing or older than the icon, so a launch needs no sips once its icons are known.
+icon_width_cached() {
+  if [ -f "$1.width" ] && [ ! "$1" -nt "$1.width" ]; then
+    _cw=$(cat "$1.width" 2>/dev/null)
+    case "$_cw" in ''|*[!0-9]*) ;; *) printf '%s\n' "$_cw"; return 0 ;; esac
+  fi
+  _cw=$(icon_width "$1")
+  printf '%s\n' "$_cw" > "$1.width" 2>/dev/null || true
+  printf '%s\n' "$_cw"
+}
+
 icon_is_png() {
   [ "$(head -c 8 "$1" 2>/dev/null | od -An -tx1 | tr -d ' \n')" = 89504e470d0a1a0a ]
 }
@@ -31,7 +43,7 @@ icon_png_to_icns() {
   _tmp="${_out%.icns}.tmp.$$.icns"
   _rc=1
   if iconutil -c icns "$_set/icon.iconset" -o "$_tmp" 2>/dev/null; then
-    mv -f "$_tmp" "$_out" && _rc=0
+    mv -f "$_tmp" "$_out" && _rc=0 && { icon_width "$_out" > "$_out.width"; } 2>/dev/null || true
   fi
   rm -rf "$_set" "$_tmp"
   return $_rc
@@ -41,7 +53,7 @@ icon_best() {
   _best= _bw=0
   for _f in "$@"; do
     [ -f "$_f" ] || continue
-    _fw=$(icon_width "$_f")
+    _fw=$(icon_width_cached "$_f")
     if [ "$_fw" -gt "$_bw" ]; then _best=$_f; _bw=$_fw; fi
   done
   printf '%s' "$_best"

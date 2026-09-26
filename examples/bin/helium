@@ -215,7 +215,7 @@ if [ -f "$_root/bin/porthole-icon-lib.sh" ]; then
   _usericon="${PORTHOLE_USER_ICON_CACHE:-$HOME/Library/Caches/dev.mavergreen.porthole}/helium.icns"
   if [ -n "/usr/share/icons/hicolor/256x256/apps/helium.png" ] && [ -x "$_root/bin/extract-app-icns.sh" ]; then
     _best=$(icon_best "$_sysicon" "$_usericon"); _bw=0
-    [ -n "$_best" ] && _bw=$(icon_width "$_best")
+    [ -n "$_best" ] && _bw=$(icon_width_cached "$_best")
     _stale=0
     if [ -f "$_usericon" ] && _ie=$(image_created_epoch "$IMAGE") \
        && [ "$(stat -f %m "$_usericon")" -lt "$_ie" ]; then _stale=1; fi
@@ -228,7 +228,7 @@ if [ -f "$_root/bin/porthole-icon-lib.sh" ]; then
   fi
   _best=$(icon_best "$_sysicon" "$_usericon")
   _have=$(cat "$_root/AppIcon.width" 2>/dev/null || echo 0)
-  if [ -n "$_best" ] && [ "$(icon_width "$_best")" -gt "${_have:-0}" ]; then
+  if [ -n "$_best" ] && [ "$(icon_width_cached "$_best")" -gt "${_have:-0}" ]; then
     PORTHOLE_APP_ICON="$_best"; export PORTHOLE_APP_ICON
   fi
 fi

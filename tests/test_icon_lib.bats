@@ -56,3 +56,17 @@ teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
 @test "icon_log never fails, even without logger" {
   PATH=/nonexistent icon_log demo "a reason"
 }
+
+@test "icon_png_to_icns records the width beside the icns" {
+  icon_png_to_icns "$WORK/p512.png" "$WORK/o.icns"
+  [ "$(cat "$WORK/o.icns.width")" = 512 ]
+}
+
+@test "icon_width_cached trusts a current sidecar and re-measures a stale one" {
+  icon_png_to_icns "$WORK/p512.png" "$WORK/o.icns"
+  echo 77 > "$WORK/o.icns.width"; touch -t 203001010000 "$WORK/o.icns.width"
+  [ "$(icon_width_cached "$WORK/o.icns")" = 77 ] || return 1          # current: trusted, no sips
+  touch -t 200001010000 "$WORK/o.icns.width"
+  [ "$(icon_width_cached "$WORK/o.icns")" = 512 ] || return 1         # older than the icon: measured
+  [ "$(cat "$WORK/o.icns.width")" = 512 ]
+}

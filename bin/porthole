@@ -425,14 +425,14 @@ ICON_FILE=
 PENGUIN="$ENGINE/penguin.icns"; [ -f "$PENGUIN" ] || PENGUIN="$ENGINE/packaging/macos/penguin.icns"
 if [ -n "$_icon" ]; then
   install -m 0644 "$_icon" "$BUNDLE/Contents/Resources/AppIcon.icns"
-  icon_width "$_icon" > "$BUNDLE/Contents/Resources/AppIcon.width"
+  icon_width_cached "$_icon" > "$BUNDLE/Contents/Resources/AppIcon.width"
   ICON_FILE="AppIcon"
 elif [ -f "$PENGUIN" ]; then
   install -m 0644 "$PENGUIN" "$BUNDLE/Contents/Resources/AppIcon.icns"
   echo 0 > "$BUNDLE/Contents/Resources/AppIcon.width"
   ICON_FILE="AppIcon"
 fi
-[ -n "$_ucopy" ] && rm -f "$_ucopy"
+[ -n "$_ucopy" ] && rm -f "$_ucopy" "$_ucopy.width"
 
 # 4) Info.plist.
 cat > "$BUNDLE/Contents/Info.plist" <<EOF
