@@ -5,23 +5,6 @@ Work worth doing that is not worth interrupting something else to do. Each entry
 
 ---
 
-## 1. A progress window for launch-time setup, not a string of notifications
-
-**Want:** when a Linux app launches and has setup or updates to do (pull a base, build its image,
-recreate its container), the app shows one window with a progress bar and what it is doing, until
-its real window is up.
-
-**Why (2026-09-24):** today the launcher posts one Mac notification per Dockerfile step ("Setting
-up… Step 4/7") via `notify()` in `templates/launcher.tmpl` and `_notify` in `bin/porthole` up. A
-first launch or a post-upgrade rebuild takes minutes (a ~1.4G base pull, then the app's layer), and
-a pile of notifications neither shows progress nor says "still working". A failure lands as a modal
-dialog with a stderr tail, which is right, but should appear in the same window.
-
-**Notes:** the engine binary (Contents/MacOS/Porthole) is already the app's process, so it could
-host the window and have the launcher stream progress into it (docker's build/pull output). Pull
-progress needs `docker pull` run separately before the build, since classic `docker build` output
-doesn't show layer download progress.
-
 ## 2. Every Porthole release forces every app to re-pull the base and rebuild
 
 **What happens:** the base image is tagged with the Porthole version, and materialize writes
@@ -33,13 +16,6 @@ afternoon (.7, .9, .10) and filled the 18G Docker VM once (fixed since, `df9c39f
 **Direction:** tag the base by a hash of its inputs (base/Dockerfile, the menu daemon, the fonts
 conf, the xpra pin), so the tag changes only when the base does. Needs a decision on the tag scheme
 before building (see the family's version conventions).
-
-## 5. A failed image build leaves its step's container behind
-
-`porthole up` runs a classic `docker build`, which keeps the container of a failed RUN step unless
-given `--force-rm`. On 2026-09-24 the Signal keyring failures left nine `Exited (100)` containers
-(auto-named, e.g. `busy_kilby`) that nothing cleans up. Pass `--force-rm` on both build paths in
-`bin/porthole` (the fake docker in tests/test_up.bats ignores unknown flags, so assert on the log).
 
 ## 6. Retina: render apps at the Mac's backing scale
 
