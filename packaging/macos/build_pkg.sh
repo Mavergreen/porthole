@@ -46,6 +46,7 @@ fi
 install -m 0755 "$REPO/bin/generate-viewer"              "$ENGDIR/bin/generate-viewer"
 install -m 0755 "$REPO/bin/porthole-recover-watch"       "$ENGDIR/bin/porthole-recover-watch"
 install -m 0644 "$REPO/bin/porthole-icon-lib.sh"          "$ENGDIR/bin/porthole-icon-lib.sh"
+install -m 0644 "$REPO/bin/porthole-say.sh"               "$ENGDIR/bin/porthole-say.sh"
 install -m 0644 "$REPO/menu-daemon.py"                   "$ENGDIR/menu-daemon.py"
 # What the VIEWER speaks, read out of its sources (which do not ship). generate-viewer runs on the
 # USER's Mac at materialize time and renders the launcher's compat nudge against this -- not against

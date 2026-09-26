@@ -24,6 +24,7 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   echo "$files" | grep -q 'Applications/Porthole.app/Contents/Resources/engine/bin/porthole'
   echo "$files" | grep -q 'Applications/Porthole.app/Contents/Resources/engine/bin/generate-viewer'
   echo "$files" | grep -q 'Applications/Porthole.app/Contents/Resources/engine/bin/porthole-icon-lib.sh'
+  echo "$files" | grep -q 'Applications/Porthole.app/Contents/Resources/engine/bin/porthole-say.sh'
   echo "$files" | grep -q 'Applications/Porthole.app/Contents/Resources/engine/templates/launcher.tmpl'
   echo "$files" | grep -q 'usr/local/mavergreen/porthole/bin/porthole'
   echo "$files" | grep -q 'usr/local/mavergreen/porthole/mavergreen.plist'
