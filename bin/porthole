@@ -337,11 +337,16 @@ install -m 0755 "$ENGINE/bin/porthole-recover-watch" "$BUNDLE/Contents/Resources
 _extract="$ENGINE/viewer/cmake/extract-app-icns.sh"
 [ -f "$_extract" ] && install -m 0755 "$_extract" "$BUNDLE/Contents/Resources/bin/extract-app-icns.sh"
 install -m 0644 "$ENGINE/bin/porthole-icon-lib.sh" "$BUNDLE/Contents/Resources/bin/porthole-icon-lib.sh"
+install -m 0644 "$ENGINE/bin/porthole-say.sh" "$BUNDLE/Contents/Resources/bin/porthole-say.sh"
 
 # CFBundleExecutable stub: a double-click runs the real launcher in Resources/bin.
 cat > "$BUNDLE/Contents/MacOS/$SLUG" <<EOF
 #!/bin/sh
-exec "\$(cd "\$(dirname "\$0")/../Resources/bin" && pwd)/$SLUG" "\$@"
+# The viewer starts first (its window shows setup progress) and runs the launcher as its child.
+_here=\$(cd "\$(dirname "\$0")" && pwd)
+_launcher="\$(cd "\$_here/../Resources/bin" && pwd)/$SLUG"
+[ -x "\$_here/Porthole" ] && exec "\$_here/Porthole" --launch "\$_launcher" "\$@"
+exec "\$_launcher" "\$@"
 EOF
 chmod 755 "$BUNDLE/Contents/MacOS/$SLUG"
 

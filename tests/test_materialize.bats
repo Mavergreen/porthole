@@ -20,12 +20,23 @@ teardown() {
   [ -d "$APPS/Linux Thunderbird.app" ]
 }
 
-@test "the bundle has an executable stub that execs the Resources launcher" {
-  "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
+@test "the stub starts the viewer first, handing it the launcher" {
+  fake="$APPS/fake-engine"; printf '#!/bin/sh\necho "VIEWER $*"\n' > "$fake"; chmod +x "$fake"
+  PORTHOLE_ENGINE_BIN="$fake" "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
   B="$APPS/Linux Thunderbird.app/Contents"
-  [ -x "$B/MacOS/thunderbird" ]
-  grep -q 'Resources/bin' "$B/MacOS/thunderbird"
-  [ -x "$B/Resources/bin/thunderbird" ]
+  run "$B/MacOS/thunderbird" --rebuild
+  [ "$output" = "VIEWER --launch $(cd "$B/Resources/bin" && pwd)/thunderbird --rebuild" ]
+}
+
+@test "the launcher's viewer path is exactly the one the stub starts (the watcher matches it)" {
+  "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
+  L="$APPS/Linux Thunderbird.app/Contents/Resources/bin/thunderbird"
+  grep -q '_bin="${THUNDERBIRD_VIEWER_BIN:-$(cd "$_root/../MacOS" \&\& pwd)/Porthole}"' "$L"
+}
+
+@test "the bundle carries the launch protocol library" {
+  "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
+  [ -f "$APPS/Linux Thunderbird.app/Contents/Resources/bin/porthole-say.sh" ]
 }
 
 @test "the bundle carries the rendered container recipe" {

@@ -232,7 +232,7 @@ fi
 # is what lets several materialized viewers (Signal, 1Password, ...) run at once, each as itself,
 # instead of all reactivating one shared Porthole.app. The engine CODE is shared (materialize copied it
 # from the installed Porthole.app); the IDENTITY is this bundle's. $_root is Contents/Resources.
-_bin="${THUNDERBIRD_VIEWER_BIN:-$_root/../MacOS/Porthole}"   # override for dev/test
+_bin="${THUNDERBIRD_VIEWER_BIN:-$(cd "$_root/../MacOS" && pwd)/Porthole}"   # override for dev/test
 _appbundle="$(cd "$_root/../.." && pwd)"
 [ -x "$_bin" ] || die "the Linux Thunderbird viewer binary is missing -- reinstall Porthole + this app, or re-run: porthole materialize"
 
