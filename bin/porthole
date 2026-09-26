@@ -56,6 +56,24 @@ porthole_cleanup() {
   return 0
 }
 
+# Free space, in KB. Needed: pulling -> the image's compressed layers x3 to unpack, plus 1 GiB for the
+# app's own layer; building on a present base -> 1.5 GiB. Either may fail (no registry, no local image
+# to run df in); a failed estimate never blocks a launch.
+space_needed_kb() {  # FROM
+  if docker image inspect "$1" >/dev/null 2>&1; then echo $((1536 * 1024)); return 0; fi
+  _z=$(docker manifest inspect "$1" 2>/dev/null | tr -d '\n' | sed 's/.*"layers"//' |
+    grep -o '"size"[[:space:]]*:[[:space:]]*[0-9]*' | sed 's/[^0-9]//g' |
+    awk '{ t += $1 } END { if (t) printf "%.0f", t }')
+  [ -n "$_z" ] || return 1
+  echo $((_z * 3 / 1024 + 1024 * 1024))
+}
+space_free_kb() {
+  _img=$(docker images -q 2>/dev/null | head -1)
+  [ -n "$_img" ] || return 1
+  docker run --rm --entrypoint df "$_img" -Pk / 2>/dev/null | awk 'NR == 2 { print $4 }'
+}
+space_gb() { awk -v k="$1" 'BEGIN { printf "%.1f", k / 1024 / 1024 }'; }
+
 cmd_up() {
   _rebuild=0
   [ "${1:-}" = --rebuild ] && { _rebuild=1; shift; }
@@ -103,6 +121,17 @@ cmd_up() {
   _have=$(docker image inspect --format "{{ index .Config.Labels \"$RECIPE_LABEL\" }}" "$IMAGE" 2>/dev/null || true)
   if [ "$_rebuild" = 1 ] || [ "$_have" != "$_fp" ]; then
     echo "porthole up: building $IMAGE (can take a few minutes)..." >&2
+    _from=$(sed -n 's/^FROM[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' "$_ctx/Dockerfile" | head -1)
+    if _need=$(space_needed_kb "$_from") && _free=$(space_free_kb) && [ -n "$_free" ] \
+       && [ "$_free" -lt "$_need" ]; then
+      porthole_cleanup
+      _free=$(space_free_kb) || _free=
+      if [ -n "$_free" ] && [ "$_free" -lt "$_need" ]; then
+        say_error "${NAME:-This app} needs about $(space_gb "$_need") GB to update; the Docker VM has $(space_gb "$_free") GB free after cleanup." \
+          "Free space in Docker, or enlarge the VM with Container Tools."
+        exit 3
+      fi
+    fi
     _pull_base
     if [ "$_rebuild" = 1 ]; then
       _build_with_progress --no-cache --pull --force-rm --label "$RECIPE_LABEL=$_fp" --label "$SLUG_LABEL=$SLUG" -t "$IMAGE" "$_ctx"

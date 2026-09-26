@@ -35,6 +35,9 @@ case "$1 $2" in
     esac ;;
   "rm -f") rm -f "$FAKE/container.$3" ;;
   "images --format") cat "$FAKE/base-tags" 2>/dev/null ;;
+  "manifest inspect") cat "$FAKE/manifest" 2>/dev/null || exit 1 ;;
+  "images -q") echo img1 ;;
+  "image prune") touch "$FAKE/pruned" ;;
   "rmi "*) : ;;
   "volume create") eval "_v=\${$#}"; touch "$FAKE/volume.$_v" ;;
   "start "*) : ;;
@@ -58,6 +61,11 @@ case "$1 $2" in
         _n=$(( $(cat "$FAKE/builds" 2>/dev/null || echo 0) + 1 )); echo "$_n" > "$FAKE/builds"
         printf '%s\nsha256:built%s\n' "$_lab" "$_n" > "$FAKE/image.$_tag" ;;
       run)
+        case "$*" in *"--entrypoint df"*)
+          [ -f "$FAKE/free" ] || exit 1
+          f=$(cat "$FAKE/free"); [ -f "$FAKE/pruned" ] && [ -f "$FAKE/free-after" ] && f=$(cat "$FAKE/free-after")
+          printf 'Filesystem 1024-blocks Used Available Capacity Mounted\noverlay 18000000 1 %s 1%% /\n' "$f"; exit 0 ;;
+        esac
         _name=""; _img=""
         while [ $# -gt 0 ]; do
           case "$1" in --name) _name=$2; shift 2 ;; *) _img=$1; shift ;; esac
@@ -219,4 +227,48 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   run "$REPO/bin/porthole" up --rebuild "$SPEC"
   [ "$status" -ne 0 ] || { echo "$output"; return 1; }
   [[ "$output" == *"image build failed"* ]]
+}
+
+manifest_1gb() {
+  printf '{"config":{"size":999},"layers":[{"size":600000000},{"size":400000000}]}\n' > "$FAKE/manifest"
+}
+
+@test "enough space: up proceeds" {
+  fake_docker; make_spec; manifest_1gb; echo 9000000 > "$FAKE/free"
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+@test "short, then enough after cleanup: up cleans and proceeds" {
+  fake_docker; make_spec; manifest_1gb; echo 1000000 > "$FAKE/free"; echo 9000000 > "$FAKE/free-after"
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  # cleanup ran BEFORE the build (up also cleans after every run, so "a prune happened" proves nothing)
+  awk '/^docker image prune/ && !p { p = NR } /^docker build/ { b = NR } END { exit !(p && b && p < b) }' "$STUB_LOG"
+}
+
+@test "still short after cleanup: an error with both numbers, exit 3, nothing built" {
+  fake_docker; make_spec; manifest_1gb; echo 1000000 > "$FAKE/free"; echo 2900000 > "$FAKE/free-after"
+  run env PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *'"t":"error"'* ]]
+  [[ "$output" == *"needs about 3.8 GB"* ]]
+  [[ "$output" == *"has 2.8 GB free"* ]]
+  ! grep -q '^docker build' "$STUB_LOG" || return 1
+}
+
+@test "a failed estimate or measurement never blocks" {
+  fake_docker; make_spec                       # no manifest, no free file
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+# Registries and docker versions print the manifest compact or pretty; the estimate must not care.
+@test "a pretty-printed manifest is summed the same as a compact one" {
+  fake_docker; make_spec
+  printf '{\n  "config": {\n    "size": 999\n  },\n  "layers": [\n    {\n      "size": 600000000\n    },\n    {\n      "size": 400000000\n    }\n  ]\n}\n' > "$FAKE/manifest"
+  echo 1000000 > "$FAKE/free"; echo 2900000 > "$FAKE/free-after"
+  run env PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"needs about 3.8 GB"* ]]
 }
