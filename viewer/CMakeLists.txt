@@ -56,6 +56,7 @@ add_executable(Porthole MACOSX_BUNDLE
   src/PortholeRemoteMenuProducer.m
   src/PortholeMenuController.m
   src/PortholeTrayArt.m
+  src/PortholeLaunchSession.m
   ${RDS_XPRA_SOURCES})
 target_include_directories(Porthole PRIVATE src)
 target_link_libraries(Porthole PRIVATE ${COCOA_LIBRARY} ${CARBON_LIBRARY} ${AUDIOTOOLBOX_LIBRARY}
@@ -133,6 +134,12 @@ add_executable(test_menu_wire tests/test_menu_wire.m
 target_include_directories(test_menu_wire PRIVATE src)
 target_link_libraries(test_menu_wire PRIVATE ${COCOA_LIBRARY})
 add_test(NAME menu_wire COMMAND test_menu_wire)
+
+# --- launch wire unit test (pipes; no launcher, no container) ---
+add_executable(test_launch_wire tests/test_launch_wire.m src/PortholeLaunchSession.m)
+target_include_directories(test_launch_wire PRIVATE src)
+target_link_libraries(test_launch_wire PRIVATE ${COCOA_LIBRARY})
+add_test(NAME launch_wire COMMAND test_launch_wire)
 
 # --- transport disconnect unit test (AF_UNIX listener; no container) ---
 add_executable(test_transport_disconnect tests/test_transport_disconnect.m
