@@ -1,0 +1,5 @@
+#!/bin/sh
+# platform: host-agnostic
+# Stub logger: records the call instead of writing to this Mac's system log.
+printf 'logger %s\n' "$*" >> "${STUB_LOG:-/dev/null}"
+exit 0

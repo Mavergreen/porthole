@@ -68,6 +68,7 @@ fixture_icns() {  # $1 = width, $2 = out
   run_icon 2026-01-01T00:00:00.000000000Z 0
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [[ "$output" == *"APPICON="* ]] || return 1
+  grep -q '^logger -t porthole thunderbird: icon extraction from thunderbird-gui found nothing usable' "$STUB_LOG"
 }
 
 # Icons are best-effort: a bundle without the icon library (an older materialize, or a launcher run
