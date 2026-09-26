@@ -37,10 +37,8 @@ set(PORTHOLE_ICON_CONTAINER "" CACHE STRING "Container to extract the app icon f
 set(PORTHOLE_ICON_GLOB "" CACHE STRING "Glob (in the container) for the app icon PNG (per-app)")
 if(PORTHOLE_ICON_CONTAINER AND PORTHOLE_ICON_GLOB)
   execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E env
-            "ONEP_CONTAINER=${PORTHOLE_ICON_CONTAINER}"
-            "PORTHOLE_ICON_GLOB=${PORTHOLE_ICON_GLOB}"
-            sh "${CMAKE_CURRENT_SOURCE_DIR}/cmake/extract-app-icns.sh" "${_porthole_icns}"
+    COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/cmake/extract-app-icns.sh"
+            "${PORTHOLE_ICON_CONTAINER}" "${PORTHOLE_ICON_GLOB}" "${_porthole_icns}"
     RESULT_VARIABLE _porthole_icon_rc OUTPUT_QUIET ERROR_QUIET)
 endif()
 

@@ -1,36 +1,21 @@
 #!/bin/sh
-# platform: macOS-only -- runs sips
-# Extract the 1Password app icon from the running op-gui container and convert it
-# to a Mac .icns for the Porthole bundle. The icon belongs to AgileBits and is NOT
-# committed to the repo -- it's pulled at build time from your own installed copy
-# (same approach as viewer/Makefile). Best-effort: if the container/icon isn't
-# available, exit non-zero WITHOUT touching the output so the build can proceed
-# iconless.
-#
-# Usage: extract-app-icns.sh <output.icns>
+# Extract an app's icon from its own container (the user's installed copy -- Porthole never ships a
+# vendor icon) into a Mac .icns. Writes OUT only on success; exits non-zero otherwise.
+# Usage: extract-app-icns.sh CONTAINER ICON_GLOB OUT.icns
 set -u
-OUT="${1:?usage: extract-app-icns.sh <output.icns>}"
-CONTAINER="${ONEP_CONTAINER:-op-gui}"
-# Which app's icon to pull from the container. Parameterized so this generator can
-# stamp out a viewer for any app; defaults to 1Password (this repo's instance).
-ICON_GLOB="${PORTHOLE_ICON_GLOB:-/opt/1Password/resources/icons/hicolor/512x512/apps/*.png}"
-WORK="$(dirname "$OUT")/porthole-icon.tmp"
+CONTAINER="${1:?usage: extract-app-icns.sh CONTAINER ICON_GLOB OUT.icns}"
+ICON_GLOB="${2:?usage: extract-app-icns.sh CONTAINER ICON_GLOB OUT.icns}"
+OUT="${3:?usage: extract-app-icns.sh CONTAINER ICON_GLOB OUT.icns}"
+_here=$(cd "$(dirname "$0")" && pwd)
+if [ -f "$_here/porthole-icon-lib.sh" ]; then . "$_here/porthole-icon-lib.sh"
+else . "$_here/../../bin/porthole-icon-lib.sh"; fi
 
-command -v sips >/dev/null 2>&1 || { echo "icon: sips not found (not macOS?) -- skipping" >&2; exit 1; }
-command -v iconutil >/dev/null 2>&1 || { echo "icon: iconutil not found -- skipping" >&2; exit 1; }
-
-eval "$(docker-machine env 2>/dev/null)" || true
-png=$(docker exec "$CONTAINER" sh -c "ls -S $ICON_GLOB 2>/dev/null | head -1" 2>/dev/null) || true
-[ -n "$png" ] || { echo "icon: no 1Password icon in '$CONTAINER' (is it running? op setup) -- building iconless" >&2; exit 1; }
-
-rm -rf "$WORK"; mkdir -p "$WORK/icon.iconset" || exit 1
-docker exec "$CONTAINER" cat "$png" > "$WORK/icon.png" 2>/dev/null || { echo "icon: failed to read PNG -- building iconless" >&2; exit 1; }
-[ -s "$WORK/icon.png" ] || { echo "icon: empty PNG -- building iconless" >&2; exit 1; }
-
-for s in 16 32 128 256 512; do
-  sips -z "$s" "$s"             "$WORK/icon.png" --out "$WORK/icon.iconset/icon_${s}x${s}.png"    >/dev/null 2>&1 || exit 1
-  sips -z "$((s*2))" "$((s*2))" "$WORK/icon.png" --out "$WORK/icon.iconset/icon_${s}x${s}@2x.png" >/dev/null 2>&1 || exit 1
-done
-iconutil -c icns "$WORK/icon.iconset" -o "$OUT" || { echo "icon: iconutil failed" >&2; exit 1; }
-rm -rf "$WORK"
-echo "icon: wrote $OUT"
+# The glob is expanded by the container's shell on purpose (it's the conf's ICON_GLOB).
+png=$(docker exec "$CONTAINER" sh -c "ls -S $ICON_GLOB 2>/dev/null | head -1" 2>/dev/null)
+[ -n "$png" ] || { echo "icon: nothing in $CONTAINER matches $ICON_GLOB" >&2; exit 1; }
+tmp=$(mktemp "${TMPDIR:-/tmp}/porthole-extract.XXXXXX") || exit 1
+if docker exec "$CONTAINER" cat "$png" > "$tmp" 2>/dev/null && icon_is_png "$tmp" \
+   && icon_png_to_icns "$tmp" "$OUT"; then
+  rm -f "$tmp"; echo "icon: wrote $OUT" >&2; exit 0
+fi
+rm -f "$tmp"; echo "icon: could not read or convert $png from $CONTAINER" >&2; exit 1
