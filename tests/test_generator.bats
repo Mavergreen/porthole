@@ -194,3 +194,23 @@ CONF
   [ "$status" -ne 0 ] || return 1
   [[ "$output" == *"signed-by"* ]] || return 1
 }
+
+conf_with() {  # a minimal valid conf plus LINE; sets $d and $C
+  d="$(mktemp -d -t porthole)"; C="$d/demo.conf"
+  printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=ondemand\nDATADIR=/home/demo/.config/Demo\nUSER=demo\n%s\n' "$1" > "$C"
+}
+
+@test "generate-viewer rejects an ICON_GLOB with shell-active characters" {
+  for g in '/usr/share/$(id).png' '/x/`id`.png' '/x/a b.png' '/x/"q".png' '/x/a;b.png'; do
+    conf_with "ICON_GLOB='$g'"
+    run ./bin/generate-viewer "$C" --out "$d"
+    [ "$status" -ne 0 ] || { echo "accepted: $g"; return 1; }
+    [[ "$output" == *ICON_GLOB* ]] || return 1
+  done
+}
+
+@test "generate-viewer accepts a plain ICON_GLOB with wildcards and brackets" {
+  conf_with "ICON_GLOB='/usr/share/icons/hicolor/[0-9]*x*/apps/signal-desktop?.png'"
+  run ./bin/generate-viewer "$C" --out "$d"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
