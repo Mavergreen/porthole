@@ -57,6 +57,7 @@
     NSString *_lostMarker;         // written just before we exit on a lost backend
     PortholeLaunchSession *_launch;       // the launcher we run with --launch, until it says ready
     PortholeLaunchWindow *_launchWindow;  // its progress window, made on first need
+    BOOL _appShownSomething;              // the app has put up a window or tray of its own
 }
 
 // ---- session event callbacks (backend -> shell), bridged from C ----
@@ -282,6 +283,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     if (title && _titles[@(wid)]) _titles[@(wid)] = title;
 }
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title {
+    if (!overrideRedirect) _appShownSomething = YES;
     NSString *tracked = PortholeTrackedTitle(overrideRedirect, title);
     if (tracked) _titles[@(wid)] = tracked;
     // Every window after the main one is positioned at its server (root) position
@@ -456,6 +458,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // ---- system tray (remote app tray icon -> Mac menu-bar item) ----
 - (void)newTrayWid:(long)wid w:(int)w h:(int)h {
     (void)w; (void)h;
+    _appShownSomething = YES;
     NSStatusItem *item = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
     [item setHighlightMode:YES];
     [item setMenu:[self buildTrayMenu]];   // native click -> menu, like macOS 1Password
@@ -732,7 +735,9 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // Stay alive as a menu-bar-resident app while a forwarded tray icon exists (so
 // closing the 1Password window leaves its menu-bar item, like real macOS); with no
 // tray, quit when the last window closes as before. (Cmd-Q always quits.)
-- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)s { return _trays.count == 0; }
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)s {
+    (void)s; return PortholeQuitsWhenWindowsClose(_appShownSomething, _trays.count);
+}
 // Re-launching (`op gui` / clicking the app) while we sit resident in the menu bar
 // with no window open: single-instance means LaunchServices re-activates us rather
 // than starting a second process -- so bring the main 1Password window back.

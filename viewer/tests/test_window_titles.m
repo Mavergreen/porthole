@@ -24,6 +24,9 @@ int main(void) {
         assert(PortholeWantsDockIcon(YES, 1));
         assert(!PortholeWantsDockIcon(NO, 1));                                     // tray only: menu bar
         assert(PortholeWantsDockIcon(NO, 0));                                      // nothing left: the Dock
+        assert(!PortholeQuitsWhenWindowsClose(NO, 0));   // still starting: the launch window closing isn't the end
+        assert(PortholeQuitsWhenWindowsClose(YES, 0));   // the app's windows are gone and nothing else holds it
+        assert(!PortholeQuitsWhenWindowsClose(YES, 1));  // a menu-bar extra keeps it resident
         printf("test_window_titles: OK\n");
     }
     return 0;
