@@ -70,6 +70,7 @@ icon_setup() {
   export PORTHOLE_ICON_CACHE="$APPS/sys-icons" PORTHOLE_USER_ICON_CACHE="$APPS/user-icons"
   mkdir -p "$APPS/bin"; printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/logger.log"\n' "$APPS" > "$APPS/bin/logger"
   chmod +x "$APPS/bin/logger"; export PATH="$APPS/bin:$PATH"
+  ln -s "$BATS_TEST_DIRNAME/stubs/dscl" "$APPS/bin/dscl"; export STUB_LOG="$APPS/stub.log"; : > "$STUB_LOG"
   sips -s format png "$ENGINE/packaging/macos/penguin.icns" --out "$APPS/p1024.png" >/dev/null
   sips -z 180 180 "$APPS/p1024.png" --out "$APPS/p180.png" >/dev/null
   sips -z 512 512 "$APPS/p1024.png" --out "$APPS/p512.png" >/dev/null
@@ -136,10 +137,39 @@ icon_w() { sips -g pixelWidth "$1" | awk '/pixelWidth/{print $2}'; }
   [ ! -f "$APPS/sys-icons/thunderbird.icns" ]
 }
 
-@test "with no console user (and no override), materialize skips the user cache and succeeds" {
+@test "a console user found through the directory, home with a space, supplies the icon" {
   icon_setup; unset PORTHOLE_USER_ICON_CACHE
-  run env PORTHOLE_CONSOLE_USER=root "$ENGINE/bin/porthole" materialize "$APPS/thunderbird.conf" --apps-dir "$APPS"
+  export STUB_HOME="$APPS/home dir"; mkdir -p "$STUB_HOME/Library/Caches/dev.mavergreen.porthole"
+  . "$ENGINE/bin/porthole-icon-lib.sh"; icon_png_to_icns "$APPS/p512.png" "$STUB_HOME/Library/Caches/dev.mavergreen.porthole/thunderbird.icns"
+  run env PORTHOLE_CONSOLE_USER=alice "$ENGINE/bin/porthole" materialize "$APPS/thunderbird.conf" --apps-dir "$APPS"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q '^dscl /Search -read /Users/alice NFSHomeDirectory$' "$STUB_LOG" || return 1
+  [ "$(cat "$(R)/AppIcon.width")" = 512 ]
+}
+
+@test "no console user (root, or none at all): the user cache is never read, and the log says so" {
+  icon_setup; unset PORTHOLE_USER_ICON_CACHE
+  export STUB_HOME="$APPS/home"; mkdir -p "$STUB_HOME/Library/Caches/dev.mavergreen.porthole"
+  . "$ENGINE/bin/porthole-icon-lib.sh"; icon_png_to_icns "$APPS/p512.png" "$STUB_HOME/Library/Caches/dev.mavergreen.porthole/thunderbird.icns"
+  for u in root ''; do
+    run env PORTHOLE_CONSOLE_USER="$u" "$ENGINE/bin/porthole" materialize "$APPS/thunderbird.conf" --apps-dir "$APPS"
+    [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+    [ "$(cat "$(R)/AppIcon.width")" = 0 ] || return 1
+  done
+  ! grep -q '^dscl' "$STUB_LOG" || return 1
+  grep -q 'thunderbird: no console user; used only the system icon cache' "$APPS/logger.log" || return 1
+  grep -q 'thunderbird: no cached icon; the app wears the penguin' "$APPS/logger.log"
+}
+
+@test "a system icon cache it can't create is logged as such, not as a failed conversion" {
+  icon_setup; with_icon_url "file://$APPS/p512.png"
+  export PORTHOLE_ICON_CACHE="$APPS/ro/icons"; mkdir -p "$APPS/ro"; chmod 0555 "$APPS/ro"
+  run "$ENGINE/bin/porthole" materialize "$APPS/thunderbird.conf" --apps-dir "$APPS"
+  chmod 0755 "$APPS/ro"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" != *"mkdir"* ]] || return 1
+  grep -q "thunderbird: can't write the icon cache $APPS/ro/icons" "$APPS/logger.log" || return 1
+  ! grep -q 'could not be converted' "$APPS/logger.log" || return 1
 }
 
 @test "the bundle carries the icon library for its launcher" {

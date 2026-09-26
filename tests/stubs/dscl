@@ -1,0 +1,10 @@
+#!/bin/sh
+# platform: host-agnostic
+# Stub dscl: logs the call; answers NFSHomeDirectory with $STUB_HOME, on a continuation line when it
+# has a space (as dscl prints values it would otherwise have to quote).
+printf 'dscl %s\n' "$*" >> "${STUB_LOG:-/dev/null}"
+[ -n "${STUB_HOME:-}" ] || exit 56
+case "$STUB_HOME" in
+  *' '*) printf 'NFSHomeDirectory:\n %s\n' "$STUB_HOME" ;;
+  *) printf 'NFSHomeDirectory: %s\n' "$STUB_HOME" ;;
+esac

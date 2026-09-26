@@ -392,7 +392,9 @@ chmod 755 "$BUNDLE/Contents/MacOS/$SLUG"
 #    system cache), and the launcher adds the app's own from its container to the user's cache.
 . "$ENGINE/bin/porthole-icon-lib.sh"
 SYS_ICONS="${PORTHOLE_ICON_CACHE:-/usr/local/mavergreen/var/porthole/icons}"
-if [ -n "$ICON_URL" ] && [ -z "${PORTHOLE_MATERIALIZE_NO_ICON:-}" ]; then
+_cache_ok=1
+mkdir -p "$SYS_ICONS" 2>/dev/null || { _cache_ok=; icon_log "$SLUG" "can't write the icon cache $SYS_ICONS (materialize not run as root?); kept what's there"; }
+if [ -n "$ICON_URL" ] && [ -z "${PORTHOLE_MATERIALIZE_NO_ICON:-}" ] && [ -n "$_cache_ok" ]; then
   _fetched=$(mktemp "${TMPDIR:-/tmp}/porthole-icon-url.XXXXXX")
   if ! curl -fsSL --max-time 20 -o "$_fetched" "$ICON_URL" 2>/dev/null; then
     icon_log "$SLUG" "ICON_URL fetch failed ($ICON_URL); kept the cached icon"
@@ -407,10 +409,13 @@ fi
 # or root at the console, means no user cache to read.
 USER_ICONS="${PORTHOLE_USER_ICON_CACHE:-}"
 if [ -z "$USER_ICONS" ]; then
-  _cu="${PORTHOLE_CONSOLE_USER:-$(stat -f %Su /dev/console 2>/dev/null)}"
+  _cu="${PORTHOLE_CONSOLE_USER-$(stat -f %Su /dev/console 2>/dev/null)}"
   if [ -n "$_cu" ] && [ "$_cu" != root ]; then
-    _ch=$(dscl . -read "/Users/$_cu" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+    # /Search reaches directory-service accounts; a value with a space comes on a continuation line.
+    _ch=$(dscl /Search -read "/Users/$_cu" NFSHomeDirectory 2>/dev/null | tr -d '\n' | sed 's/^NFSHomeDirectory: *//')
     [ -n "$_ch" ] && USER_ICONS="$_ch/Library/Caches/dev.mavergreen.porthole"
+  else
+    icon_log "$SLUG" "no console user; used only the system icon cache"
   fi
 fi
 # Root never reads the user's cache in place: skip a symlink, copy the file to a root-owned temp, and
@@ -428,6 +433,7 @@ if [ -n "$_icon" ]; then
   icon_width_cached "$_icon" > "$BUNDLE/Contents/Resources/AppIcon.width"
   ICON_FILE="AppIcon"
 elif [ -f "$PENGUIN" ]; then
+  icon_log "$SLUG" "no cached icon; the app wears the penguin"
   install -m 0644 "$PENGUIN" "$BUNDLE/Contents/Resources/AppIcon.icns"
   echo 0 > "$BUNDLE/Contents/Resources/AppIcon.width"
   ICON_FILE="AppIcon"
