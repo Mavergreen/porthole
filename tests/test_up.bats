@@ -19,6 +19,7 @@ fake_docker() {
 printf 'docker %s\n' "$*" >> "$STUB_LOG"
 case "$1 $2" in
   "image inspect")
+    case "$*" in *porthole-base*) [ -f "$FAKE/pulled" ] && exit 0; exit 1 ;; esac
     shift 2; _fmt=""; [ "$1" = --format ] && { _fmt=$2; shift 2; }
     [ -f "$FAKE/image.$1" ] || exit 1
     case "$_fmt" in
@@ -39,7 +40,13 @@ case "$1 $2" in
   "start "*) : ;;
   *)
     case "$1" in
+      pull)
+        for l in a b c; do echo "$l: Pulling fs layer"; done
+        echo "a: Pull complete"; echo "b: Pull complete"; echo "c: Pull complete"
+        touch "$FAKE/pulled" ;;
       build)
+        echo "Step 1/2 : FROM x"; echo "Step 2/2 : RUN y"
+        [ -f "$FAKE/build-fails" ] && { echo "boom" >&2; exit 1; }
         shift; _lab="" _tag=""
         while [ $# -gt 1 ]; do
           case "$1" in
@@ -180,4 +187,36 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   fake_docker; make_spec
   "$REPO/bin/porthole" up "$SPEC"
   grep -q -- '^docker build .*--force-rm' "$STUB_LOG"
+}
+
+@test "under the viewer, up pulls the base with layer progress, then reports build steps" {
+  fake_docker; make_spec
+  run env PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *'{"t":"step","text":"Downloading the Linux runtime"}'* ]]
+  [[ "$output" == *'{"t":"progress","fraction":1}'* ]]
+  [[ "$output" == *'{"t":"step","text":"Building Linux Demo (2/2)"}'* ]]
+  ! grep -q 'osascript' "$STUB_LOG" || return 1
+}
+
+@test "every stdout line from up under the viewer is a protocol message" {
+  fake_docker; make_spec
+  out=$(PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC" 2>/dev/null)
+  printf '%s\n' "$out" | while IFS= read -r l; do case "$l" in '{"t":'*) ;; *) echo "stray: $l"; exit 1 ;; esac; done
+}
+
+@test "an already-present base is not pulled again" {
+  fake_docker; make_spec; touch "$FAKE/pulled"
+  "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  ! grep -q '^docker pull' "$STUB_LOG" || return 1
+}
+
+# A failed --rebuild leaves the old image, whose recipe label still matches; that must not pass.
+@test "a failed --rebuild is reported, not mistaken for the old image" {
+  fake_docker; make_spec
+  "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  : > "$FAKE/build-fails"
+  run "$REPO/bin/porthole" up --rebuild "$SPEC"
+  [ "$status" -ne 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"image build failed"* ]]
 }

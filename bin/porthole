@@ -20,6 +20,7 @@
 set -eu
 
 ENGINE=$(cd "$(dirname "${PORTHOLE_SELF:-$0}")/.." && pwd)   # engine root: bin/, templates/, viewer/cmake/
+. "$ENGINE/bin/porthole-say.sh"
 
 usage() {
   cat >&2 <<'EOF'
@@ -68,9 +69,30 @@ cmd_up() {
   [ -n "$CONTAINER" ] && [ -n "$IMAGE" ] \
     || { echo "porthole up: spec missing CONTAINER/IMAGE: $_spec" >&2; exit 1; }
   _ctx="$_specdir/$BUILD_CONTEXT"
-  # First-run build feedback: the caller (a windowless launcher) has no UI, so post Mac
-  # notifications (best-effort -- osascript may be absent/denied).
-  _notify() { osascript -e "display notification \"$1\" with title \"${NAME:-Porthole}\"" >/dev/null 2>&1 || true; }
+  # Progress for the app's launch window (plain text on stderr outside it). Build steps come from
+  # docker's classic "Step N/M" lines; the build log itself goes to stderr.
+  _build_with_progress() {
+    docker build "$@" 2>&1 | while IFS= read -r _bl; do
+      case "$_bl" in
+        "Step "*)
+          _nm=${_bl#Step }; _nm=${_nm%% *}
+          say_step "Building ${NAME:-the app} ($_nm)"
+          say_progress "$(echo "$_nm" | awk -F/ '{ printf "%s", $1 / $2 }')" ;;
+      esac
+      printf '%s\n' "$_bl" >&2
+    done
+  }
+  # Pull a missing base on its own first, so its download shows as layer-by-layer progress.
+  _pull_base() {
+    _from=$(sed -n 's/^FROM[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' "$_ctx/Dockerfile" | head -1)
+    [ -n "$_from" ] || return 0
+    docker image inspect "$_from" >/dev/null 2>&1 && return 0
+    say_step "Downloading the Linux runtime"
+    docker pull "$_from" 2>&1 | awk '
+      / Pulling fs layer$/ || / Already exists$/ { t++ }
+      / Pull complete$/ || / Already exists$/     { d++; if (t) { printf "%s\n", d / t; fflush() } }
+      { print > "/dev/stderr" }' | while read -r _f; do say_progress "$_f"; done
+  }
 
   # The image is labelled with a fingerprint of the recipe it was built from (the build context,
   # FROM line included, so a new base counts). An image under the same name that lacks the label
@@ -79,20 +101,21 @@ cmd_up() {
   _fp=$(recipe_fingerprint "$_ctx")
   _old_id=$(docker image inspect --format '{{.Id}}' "$IMAGE" 2>/dev/null || true)
   _have=$(docker image inspect --format "{{ index .Config.Labels \"$RECIPE_LABEL\" }}" "$IMAGE" 2>/dev/null || true)
-  if [ "$_rebuild" = 1 ]; then
-    docker build --no-cache --pull --force-rm --label "$RECIPE_LABEL=$_fp" --label "$SLUG_LABEL=$SLUG" -t "$IMAGE" "$_ctx" \
-      || { echo "porthole up: image build failed" >&2; exit 1; }
-  elif [ "$_have" != "$_fp" ]; then
+  if [ "$_rebuild" = 1 ] || [ "$_have" != "$_fp" ]; then
     echo "porthole up: building $IMAGE (can take a few minutes)..." >&2
-    _notify "Building the Linux container. This can take a few minutes…"
-    docker build --force-rm --label "$RECIPE_LABEL=$_fp" --label "$SLUG_LABEL=$SLUG" -t "$IMAGE" "$_ctx" 2>&1 | while IFS= read -r _bl; do
-      case "$_bl" in "Step "*) _notify "Setting up… ${_bl%% : *}" ;; esac   # e.g. "Setting up… Step 4/7"
-      printf '%s\n' "$_bl" >&2
-    done
-    # The pipe hides docker's exit status (POSIX sh has no PIPESTATUS); the label is truth.
+    _pull_base
+    if [ "$_rebuild" = 1 ]; then
+      _build_with_progress --no-cache --pull --force-rm --label "$RECIPE_LABEL=$_fp" --label "$SLUG_LABEL=$SLUG" -t "$IMAGE" "$_ctx"
+    else
+      _build_with_progress --force-rm --label "$RECIPE_LABEL=$_fp" --label "$SLUG_LABEL=$SLUG" -t "$IMAGE" "$_ctx"
+    fi
+    # The pipe hides docker's exit status (POSIX sh has no PIPESTATUS), so the result is judged by
+    # the image: it must carry this recipe's label and, for a --no-cache rebuild, be a new image.
     [ "$(docker image inspect --format "{{ index .Config.Labels \"$RECIPE_LABEL\" }}" "$IMAGE" 2>/dev/null || true)" = "$_fp" ] \
       || { echo "porthole up: image build failed" >&2; exit 1; }
-    _notify "Container ready — starting ${NAME:-the app}…"
+    if [ "$_rebuild" = 1 ] && [ "$(docker image inspect --format '{{.Id}}' "$IMAGE" 2>/dev/null)" = "$_old_id" ]; then
+      echo "porthole up: image build failed" >&2; exit 1
+    fi
   fi
   _image_id=$(docker image inspect --format '{{.Id}}' "$IMAGE")
 
