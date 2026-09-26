@@ -60,6 +60,7 @@ preflight_host() {
     *) die "Container Tools reports a problem -- check: docker-machine-ctl status" ;;
   esac
 }
+say_step "Checking Container Tools"   # first, so a window that appears is never blank
 preflight_host
 
 nudge_once() {   # $1 = key, $2 = message; advisory, once per day
@@ -134,6 +135,7 @@ esac
 
 check_container_staleness
 check_xpra_compat
+say_step "Starting Linux CLion"
 
 # Wait until xpra is actually ACCEPTING CONNECTIONS on its Unix socket inside the
 # container -- not merely that the process exists. On a cold start the socket is bound a
@@ -147,8 +149,7 @@ while [ "$_i" -lt "$_tries" ] && ! docker exec "$CONTAINER" \
   sleep 0.2; _i=$((_i + 1))
 done
 # A container restarting on a full disk never opens its socket; name that, not a silent reconnect loop.
-if ! docker exec "$CONTAINER" python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(1); sys.exit(s.connect_ex("/run/user/1000/porthole-xpra.sock"))' 2>/dev/null \
-   && docker logs --tail 50 "$CONTAINER" 2>&1 | grep -q 'No space left on device'; then
+if [ "$_i" -ge "$_tries" ] && docker logs --tail 50 "$CONTAINER" 2>&1 | grep -q 'No space left on device'; then
   die "can't start: the Docker VM is out of disk space." "Free space in Docker, or enlarge the VM with Container Tools."
 fi
 

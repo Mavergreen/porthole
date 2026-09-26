@@ -23,6 +23,21 @@ launch() {  # stdin = answers
   [[ "$output" != *"viewer-exec"* ]] || return 1
 }
 
+@test "a launch says what it's doing from its first line, so its window is never blank" {
+  app; launch </dev/null
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  first=$(printf '%s\n' "$output" | grep '^{' | head -n 1)
+  [[ "$first" == '{"t":"step","text":"Checking Container Tools"}' ]] || { echo "$output"; return 1; }
+  [[ "$output" == *'{"t":"step","text":"Starting Linux Thunderbird"}'*'"t":"ready"'* ]] || { echo "$output"; return 1; }
+}
+
+@test "a healthy launch doesn't go looking for a full disk" {
+  app; launch </dev/null
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  ! grep -q '^docker logs' "$STUB_LOG" || return 1
+  [ "$(grep -c '^docker exec .*python3' "$STUB_LOG")" -eq 1 ] || return 1
+}
+
 @test "the viewer hears the launcher end even while its bridges keep running" {
   app; export S6_STUB_SLEEP=8
   t0=$(date +%s)
