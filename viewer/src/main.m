@@ -278,6 +278,9 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     }
     [_windows removeObjectForKey:@(wid)];
     [_titles removeObjectForKey:@(wid)];
+    // A window the remote app removed posts no NSWindowWillClose, so re-check the Dock here too:
+    // after the user answers a prompt, 1Password removes it, and we must drop back to the menu bar.
+    [self scheduleDockSync:nil];
 }
 
 // ---- local clipboard (shell owns NSPasteboard; backend owns the protocol) ----
