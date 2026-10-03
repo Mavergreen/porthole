@@ -100,3 +100,53 @@ EOF
   [[ "$output" == *"docker-machine-ctl setup"* ]] || { echo "$output"; return 1; }
   ! grep -q 'display dialog' "$STUB_LOG" || return 1
 }
+
+# A login item starts alongside Container Tools, whose VM reads "stopped" until it is running. The
+# launcher starts or waits for it rather than telling you to. The ctl stub's status comes from a file
+# that its start verb (or a set number of polls) moves on.
+vm_stubs() {  # $1 = first status word, $2 = status after `start`
+  d="$(mktemp -d -t plf)"
+  echo "$1" > "$d/state"
+  cat > "$d/docker-machine-ctl" <<EOF
+#!/bin/sh
+case "\$1" in
+  status) cat "$d/state"; n=\$(( \$(cat "$d/polls" 2>/dev/null || echo 0) + 1 )); echo \$n > "$d/polls"
+          if [ -f "$d/after-polls" ] && [ "\$n" -ge "\$(cat "$d/after-polls")" ]; then cat "$d/later" > "$d/state"; fi ;;
+  start) echo start >> "$d/ctl.log"; echo "$2" > "$d/state" ;;
+esac
+EOF
+  for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
+  printf '#!/bin/sh\ncase "$*" in *"inspect -f"*) echo true ;; esac\nexit 0\n' > "$d/docker"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"
+  chmod +x "$d"/*
+}
+launch_vm() {
+  run env DOCKER_HOST= DOCKER_CONTEXT= PATH="$d:$PATH" THUNDERBIRD_VIEWER_BIN="$d/viewer" "$@" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+}
+
+@test "launcher: a stopped VM is started, and the launch goes on" {
+  vm_stubs stopped running
+  launch_vm
+  [ "$status" -eq 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
+  [[ "$output" == *"Starting the Docker VM"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
+  [ "$(cat "$d/ctl.log")" = start ] || { rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+@test "launcher: a VM being created is waited for, not started again" {
+  vm_stubs creating running
+  echo running > "$d/later"; echo 2 > "$d/after-polls"
+  launch_vm
+  [ "$status" -eq 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
+  [ ! -f "$d/ctl.log" ] || { rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+@test "launcher: a VM that never comes up is named, after the wait" {
+  vm_stubs working:start working:start
+  launch_vm THUNDERBIRD_VM_WAIT=0
+  [ "$status" -ne 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
+  [[ "$output" == *"Docker VM didn't start"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}

@@ -42,22 +42,36 @@ die() { say_error "@NAME@: $1" "${2:-}"; exit 1; }
 # Host prerequisites (Container Tools -> Fusion). Reuse Container Tools' own contract
 # `docker-machine-ctl status` (one word) for actionable errors instead of cryptic docker
 # failures. Bypassed on an explicit endpoint or @ENVPREFIX@_NO_PREFLIGHT=1.
+# A launch at login starts alongside Container Tools, whose VM reads "stopped" until it is running:
+# start a stopped VM, and wait while it starts, is created or is busy, for up to
+# @ENVPREFIX@_VM_WAIT seconds.
 preflight_host() {
   [ "${@ENVPREFIX@_NO_PREFLIGHT:-}" = 1 ] && return 0
   [ -n "${DOCKER_HOST:-}" ] && return 0
   [ -n "${DOCKER_CONTEXT:-}" ] && return 0
   command -v docker-machine-ctl >/dev/null 2>&1 \
     || die "Mavericks Container Tools not found -- install it (it provides the Docker VM this app runs in): https://github.com/Mavergreen/container-tools"
-  _w=$(docker-machine-ctl status 2>/dev/null)
-  case $_w in
-    running) return 0 ;;
-    no-fusion) die "VMware Fusion is required -- Container Tools can't run the Docker VM without it; install or open VMware Fusion" ;;
-    absent) die "the Docker VM isn't set up yet -- run: docker-machine-ctl setup" ;;
-    stopped) die "the Docker VM is stopped -- start it: docker-machine-ctl start" ;;
-    creating) die "Container Tools is creating the Docker VM -- try again in a moment" ;;
-    working:*) die "Container Tools is busy (${_w#working:}) -- try again in a moment" ;;
-    *) die "Container Tools reports a problem -- check: docker-machine-ctl status" ;;
-  esac
+  _vm_wait=${@ENVPREFIX@_VM_WAIT:-600}; _vm_waited=0; _vm_started=0
+  while :; do
+    _w=$(docker-machine-ctl status 2>/dev/null)
+    case $_w in
+      running) return 0 ;;
+      no-fusion) die "VMware Fusion is required -- Container Tools can't run the Docker VM without it; install or open VMware Fusion" ;;
+      absent) die "the Docker VM isn't set up yet -- run: docker-machine-ctl setup" ;;
+      stopped)
+        if [ "$_vm_started" = 0 ]; then
+          say_step "Starting the Docker VM"
+          docker-machine-ctl start </dev/null >/dev/null 2>&1 &
+          _vm_started=1
+        fi ;;
+      creating) say_step "Waiting for Container Tools to create the Docker VM" ;;
+      working:*) say_step "Waiting for the Docker VM (${_w#working:})" ;;
+      *) die "Container Tools reports a problem -- check: docker-machine-ctl status" ;;
+    esac
+    [ "$_vm_waited" -lt "$_vm_wait" ] \
+      || die "the Docker VM didn't start within $_vm_wait seconds -- check Container Tools" "docker-machine-ctl status: $_w"
+    sleep 1; _vm_waited=$((_vm_waited + 1))
+  done
 }
 say_step "Checking Container Tools"   # first, so a window that appears is never blank
 preflight_host
