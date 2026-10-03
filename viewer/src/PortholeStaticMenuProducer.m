@@ -7,6 +7,8 @@
     NSString *_jsonPath;
     id<PortholeMenuStaticInvoker> _invoker;      // weak
     NSMutableDictionary *_sendById;        // nodeId(NSNumber) -> send string
+    NSMutableArray *_unlockedOnly;         // PortholeMenuNode* marked "enabled_when": "unlocked"
+    BOOL _locked;
     NSArray *_snapshot;                    // NSArray<PortholeMenuNode*>
     NSInteger _nextId;
 }
@@ -17,6 +19,7 @@
         _jsonPath = [jsonPath copy];
         _invoker = invoker;
         _sendById = [[NSMutableDictionary alloc] init];
+        _unlockedOnly = [[NSMutableArray alloc] init];
         _nextId = 1;
     }
     return self;
@@ -39,6 +42,7 @@
 
 - (void)start {
     NSMutableArray *top = [NSMutableArray array];
+    [_unlockedOnly removeAllObjects];
     NSData *d = _jsonPath ? [NSData dataWithContentsOfFile:_jsonPath] : nil;
     NSDictionary *root = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL] : nil;
     for (NSDictionary *menuSpec in root[@"menus"]) {
@@ -57,6 +61,10 @@
                 node.role = @"item";
                 node.label = it[@"title"] ?: @"";
                 [self applyAccelFrom:it to:node];
+                if ([it[@"enabled_when"] isEqual:@"unlocked"]) {
+                    node.enabled = !_locked;
+                    [_unlockedOnly addObject:node];
+                }
                 NSString *send = it[@"send"];
                 if ([send isKindOfClass:[NSString class]] && send.length)
                     _sendById[@(node.nodeId)] = send;
@@ -69,6 +77,16 @@
     [_delegate producer:self didSnapshot:_snapshot];
 }
 
+- (void)setAppLocked:(BOOL)locked {
+    _locked = locked;
+    NSMutableArray *changes = [NSMutableArray array];
+    for (PortholeMenuNode *n in _unlockedOnly) {
+        n.enabled = !locked;
+        [changes addObject:@{@"id": @(n.nodeId), @"enabled": @(!locked)}];
+    }
+    if (changes.count) [_delegate producer:self didDelta:changes];
+}
+
 - (void)openNode:(NSInteger)nodeId { (void)nodeId; }   // static menus are fully materialized
 - (void)invokeNode:(NSInteger)nodeId {
     NSString *send = _sendById[@(nodeId)];
@@ -77,7 +95,7 @@
 - (void)stop {}
 
 - (void)dealloc {
-    [_jsonPath release]; [_sendById release]; [_snapshot release];
+    [_jsonPath release]; [_sendById release]; [_unlockedOnly release]; [_snapshot release];
     [super dealloc];
 }
 @end

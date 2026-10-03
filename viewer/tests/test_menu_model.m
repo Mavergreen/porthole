@@ -6,13 +6,14 @@
 
 @interface TestDelegate : NSObject <PortholeMenuProducerDelegate>
 @property(copy) void (^onSnapshot)(NSArray *);
+@property(copy) void (^onDelta)(NSArray *);
 @end
 @implementation TestDelegate
 - (void)producer:(id)p didSnapshot:(NSArray *)n { if (_onSnapshot) _onSnapshot(n); }
-- (void)producer:(id)p didDelta:(NSArray *)c {}
+- (void)producer:(id)p didDelta:(NSArray *)c { if (_onDelta) _onDelta(c); }
 - (void)producer:(id)p didPopulate:(NSInteger)i children:(NSArray *)c {}
 - (void)producerDidEnd:(id)p {}
-- (void)dealloc { [_onSnapshot release]; [super dealloc]; }
+- (void)dealloc { [_onSnapshot release]; [_onDelta release]; [super dealloc]; }
 @end
 
 @interface TestInvoker : NSObject <PortholeMenuStaticInvoker>
@@ -80,6 +81,33 @@ int main(void) {
         assert([lock.label isEqualToString:@"Lock"]);
         [sp invokeNode:lock.nodeId];
         assert([invoked isEqualToString:@"ctrl+shift+l"]);  // id -> original send
+
+        assert(lock.enabled);                          // no enabled_when: always enabled
+
+        // --- enabled_when "unlocked": grayed while the app is locked, like 1Password's own Lock ---
+        NSDictionary *mj2 = @{@"menus": @[@{
+            @"title": @"1Password", @"items": @[
+                @{@"title": @"New Item", @"send": @"ctrl+n"},
+                @{@"title": @"Lock", @"send": @"ctrl+shift+l", @"enabled_when": @"unlocked"},
+            ]}]};
+        [[NSJSONSerialization dataWithJSONObject:mj2 options:0 error:NULL] writeToFile:tmp atomically:YES];
+        __block NSArray *deltas = nil;
+        del.onDelta = ^(NSArray *c){ [deltas release]; deltas = [c retain]; };
+        PortholeStaticMenuProducer *sp2 = [[[PortholeStaticMenuProducer alloc]
+            initWithJSONPath:tmp invoker:inv] autorelease];
+        sp2.delegate = del;
+        [sp2 start];
+        PortholeMenuNode *lock2 = ((PortholeMenuNode *)snap[0]).children[1];
+        assert(lock2.enabled);                         // lock state unknown: Lock is offered
+        [sp2 setAppLocked:YES];
+        assert([deltas isEqualToArray:(@[@{@"id": @(lock2.nodeId), @"enabled": @NO}])]);
+        [sp2 setAppLocked:NO];
+        assert([deltas isEqualToArray:(@[@{@"id": @(lock2.nodeId), @"enabled": @YES}])]);
+        // A fresh snapshot (e.g. reverting from a live menu) keeps the current state.
+        [sp2 setAppLocked:YES];
+        [sp2 start];
+        assert(!((PortholeMenuNode *)((PortholeMenuNode *)snap[0]).children[1]).enabled);
+        assert(((PortholeMenuNode *)((PortholeMenuNode *)snap[0]).children[0]).enabled);
 
         printf("test_menu_model: OK\n");
     }

@@ -4,6 +4,6 @@
 NSString *PortholeTitleFromMetadata(id metadata);
 int PortholeOnePasswordLockState(NSArray *titles);   // 1 locked, 0 unlocked, -1 unknown
 NSString *PortholeTrackedTitle(BOOL overrideRedirect, NSString *title);   // nil: not a window we track
-BOOL PortholeLockItemOffersUnlock(NSArray *titles);                       // the tray's Lock item reads Unlock
+BOOL PortholeLockItemEnabled(NSArray *titles);                            // Lock grays out while locked
 BOOL PortholeWantsDockIcon(BOOL visibleAppWindow, NSUInteger trayCount);  // no tray to click -> keep the Dock
 BOOL PortholeQuitsWhenWindowsClose(BOOL appHasShownSomething, NSUInteger trayCount);  // not while still starting

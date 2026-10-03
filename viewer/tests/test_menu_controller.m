@@ -54,6 +54,9 @@ int main(void) {
         NSMenuItem *reloadItem = [c itemForNodeId:3];
         assert(saveItem && [saveItem isEnabled]);
         assert(reloadItem && ![reloadItem isEnabled]);   // gray-out from the model
+        // AppKit re-validates a menu's items as it opens; the model's gray-out must survive that.
+        [[reloadItem menu] update];
+        assert(![reloadItem isEnabled]);
 
         // Invoking routes to the producer by nodeId.
         [saveItem.target performSelector:saveItem.action withObject:saveItem];

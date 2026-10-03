@@ -52,7 +52,7 @@
     EventHotKeyRef _lockHotKeyRef; // global Lock hotkey (Cmd-Shift-L)
     PortholeAudioPlayer *_audio;     // plays the app's forwarded audio out the speakers
     PortholeMenuController *_menuController;
-    id<PortholeMenuProducer> _staticMenu;   // retained
+    PortholeStaticMenuProducer *_staticMenu;   // retained
     id<PortholeMenuProducer> _remoteMenu;   // retained
     NSString *_lostMarker;         // written just before we exit on a lost backend
     PortholeLaunchSession *_launch;       // the launcher we run with --launch, until it says ready
@@ -281,11 +281,16 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 
 - (void)windowWid:(long)wid retitled:(NSString *)title {
     if (title && _titles[@(wid)]) _titles[@(wid)] = title;
+    [self titlesChanged];
+}
+// 1Password's titles say whether it's locked; menu.json's Lock grays out while it is.
+- (void)titlesChanged {
+    [_staticMenu setAppLocked:!PortholeLockItemEnabled([_titles allValues])];
 }
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title {
     if (!overrideRedirect) _appShownSomething = YES;
     NSString *tracked = PortholeTrackedTitle(overrideRedirect, title);
-    if (tracked) _titles[@(wid)] = tracked;
+    if (tracked) { _titles[@(wid)] = tracked; [self titlesChanged]; }
     // Every window after the main one is positioned at its server (root) position
     // relative to the main window's on-screen content origin. The main window has
     // no parent -> NaN sentinel -> default slot.
@@ -346,6 +351,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     }
     [_windows removeObjectForKey:@(wid)];
     [_titles removeObjectForKey:@(wid)];
+    [self titlesChanged];
     // A window the remote app removed posts no NSWindowWillClose, so re-check the Dock here too:
     // after the user answers a prompt, 1Password removes it, and we must drop back to the menu bar.
     [self scheduleDockSync:nil];
@@ -485,7 +491,8 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // Access / Lock / Settings / Quit); other apps get a generic Open <name> / Quit.
 - (NSMenu *)buildTrayMenu {
     NSMenu *m = [[[NSMenu alloc] initWithTitle:[self appDisplayName]] autorelease];
-    [m setDelegate:self];   // menuNeedsUpdate: sets Lock/Unlock by the app's real state
+    [m setDelegate:self];   // menuNeedsUpdate: enables Lock by the app's real state
+    [m setAutoenablesItems:NO];
     // Lay the shortcut out ourselves (attributed title + right tab stop) so the key
     // equivalents right-align in a column, like modern macOS. Use the menu's OWN font.
     NSFont *mfont = [m font] ?: [NSFont menuFontOfSize:0];
@@ -526,18 +533,9 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     [it setAttributedTitle:as];
     return it;
 }
-// Build the 1Password tray menu's Lock/Unlock item from the app's current state, as the menu opens.
+// As on a modern Mac, the 1Password tray menu's Lock grays out while the app is locked.
 - (void)menuNeedsUpdate:(NSMenu *)menu {
-    NSMenuItem *it = [menu itemWithTag:1];
-    if (!it) return;
-    BOOL locked = PortholeLockItemOffersUnlock([_titles allValues]);
-    NSFont *f = [menu font] ?: [NSFont menuFontOfSize:0];
-    NSString *str = locked ? @"Unlock 1Password…" : @"Lock\t⇧⌘L";
-    NSMutableParagraphStyle *ps = [[[[it attributedTitle] attribute:NSParagraphStyleAttributeName atIndex:0 effectiveRange:NULL] mutableCopy] autorelease]
-                                  ?: [[[NSMutableParagraphStyle alloc] init] autorelease];
-    [it setAttributedTitle:[[[NSAttributedString alloc] initWithString:str
-        attributes:@{NSFontAttributeName: f, NSParagraphStyleAttributeName: ps}] autorelease]];
-    [it setAction:locked ? @selector(menuOpenMain:) : @selector(menuLock:)];
+    [[menu itemWithTag:1] setEnabled:PortholeLockItemEnabled([_titles allValues])];
 }
 
 // ---- native main menu bar (App / Edit / Window), engine-wide default -------------

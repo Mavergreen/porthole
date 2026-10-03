@@ -17,10 +17,11 @@ int main(void) {
         assert([PortholeTrackedTitle(NO, nil) isEqualToString:@""]);            // an untitled window is still tracked
         assert([PortholeTrackedTitle(NO, @"Settings") isEqualToString:@"Settings"]);
         assert(PortholeTrackedTitle(YES, @"popup") == nil);                        // popups never are
-        assert(PortholeLockItemOffersUnlock(@[@"Lock Screen — 1Password"]));
-        assert(!PortholeLockItemOffersUnlock(@[@"All Items — 1Password"]));
-        assert(!PortholeLockItemOffersUnlock(@[]));                                // unknown -> Lock
-        assert(!PortholeLockItemOffersUnlock(@[@""]));
+        // Lock always reads Lock, as on a modern Mac; it grays out only while the app is locked.
+        assert(!PortholeLockItemEnabled(@[@"Lock Screen — 1Password"]));
+        assert(PortholeLockItemEnabled(@[@"All Items — 1Password"]));
+        assert(PortholeLockItemEnabled(@[]));                                      // unknown -> offered
+        assert(PortholeLockItemEnabled(@[@""]));
         assert(PortholeWantsDockIcon(YES, 1));
         assert(!PortholeWantsDockIcon(NO, 1));                                     // tray only: menu bar
         assert(PortholeWantsDockIcon(NO, 0));                                      // nothing left: the Dock

@@ -17,7 +17,7 @@ int PortholeOnePasswordLockState(NSArray *titles) {
 NSString *PortholeTrackedTitle(BOOL overrideRedirect, NSString *title) {
     return overrideRedirect ? nil : (title ?: @"");
 }
-BOOL PortholeLockItemOffersUnlock(NSArray *titles) { return PortholeOnePasswordLockState(titles) == 1; }
+BOOL PortholeLockItemEnabled(NSArray *titles) { return PortholeOnePasswordLockState(titles) != 1; }
 BOOL PortholeWantsDockIcon(BOOL visibleAppWindow, NSUInteger trayCount) { return visibleAppWindow || trayCount == 0; }
 // The launch window closing as setup finishes isn't the app going away: only quit on the last window
 // once the app itself has shown a window or tray, and nothing (a tray) keeps it resident.

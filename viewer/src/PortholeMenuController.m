@@ -40,6 +40,15 @@
 
 - (NSString *)macKeyEquivFor:(PortholeMenuNode *)n { return n.accelKey ?: @""; }
 
+// The producer says which items are enabled; AppKit's autoenabling would re-enable every one
+// we target as the menu opens.
+- (NSMenu *)appMenuTitled:(NSString *)title {
+    NSMenu *m = [[[NSMenu alloc] initWithTitle:(title ?: @"")] autorelease];
+    [m setAutoenablesItems:NO];
+    [m setDelegate:self];
+    return m;
+}
+
 - (NSMenuItem *)buildItem:(PortholeMenuNode *)n intoMenu:(NSMenu *)menu {
     if ([n.role isEqualToString:@"separator"]) {
         [menu addItem:[NSMenuItem separatorItem]];
@@ -56,8 +65,7 @@
     [_itemById setObject:it forKey:@(n.nodeId)];
     [_nodeById setObject:n forKey:@(n.nodeId)];
     if ([n.role isEqualToString:@"submenu"]) {
-        NSMenu *sub = [[[NSMenu alloc] initWithTitle:(n.label ?: @"")] autorelease];
-        [sub setDelegate:self];
+        NSMenu *sub = [self appMenuTitled:n.label];
         [it setSubmenu:sub];
         [_nodeIdByMenu setObject:@(n.nodeId) forKey:sub];
         [it setAction:NULL];   // a submenu holder isn't itself invoked
@@ -76,8 +84,7 @@
     for (PortholeMenuNode *top in topLevelNodes) {
         NSMenuItem *holder = [[[NSMenuItem alloc] initWithTitle:(top.label ?: @"")
             action:NULL keyEquivalent:@""] autorelease];   // a submenu holder isn't itself invoked
-        NSMenu *sub = [[[NSMenu alloc] initWithTitle:(top.label ?: @"")] autorelease];
-        [sub setDelegate:self];
+        NSMenu *sub = [self appMenuTitled:top.label];
         [holder setSubmenu:sub];
         [_nodeIdByMenu setObject:@(top.nodeId) forKey:sub];
         [_itemById setObject:holder forKey:@(top.nodeId)];
