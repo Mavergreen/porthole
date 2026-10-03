@@ -44,8 +44,8 @@ case "$1 $2" in
   *)
     case "$1" in
       pull)
-        for l in a b c; do echo "$l: Pulling fs layer"; done
-        echo "a: Pull complete"; echo "b: Pull complete"; echo "c: Pull complete"
+        for l in aaaaaaaaaaaa bbbbbbbbbbbb; do echo "$l: Pulling fs layer"; done
+        echo "aaaaaaaaaaaa: Pull complete"; echo "bbbbbbbbbbbb: Pull complete"
         touch "$FAKE/pulled" ;;
       build)
         echo "Step 1/2 : FROM x"; echo "Step 2/2 : RUN y"
@@ -199,12 +199,58 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
 
 @test "under the viewer, up pulls the base with layer progress, then reports build steps" {
   fake_docker; make_spec
-  run env PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC"
-  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [[ "$output" == *'{"t":"step","text":"Downloading the Linux runtime"}'* ]] || return 1
-  [[ "$output" == *'{"t":"progress","fraction":1}'* ]] || return 1
+  printf '{"layers":[{"size":3000000,"digest":"sha256:aaaaaaaaaaaa00"},{"size":1000000,"digest":"sha256:bbbbbbbbbbbb00"}]}\n' > "$FAKE/manifest"
+  output=$(PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC" 2>/dev/null) || { echo "$output"; return 1; }
+  [[ "$output" == *'{"t":"step","text":"Downloading the Linux runtime"}
+{"t":"progress","fraction":0.75}
+{"t":"progress","fraction":1}
+{"t":"step","text":"Building'* ]] || { echo "$output"; return 1; }
   [[ "$output" == *'{"t":"step","text":"Building Linux Demo (2/2)"}'* ]] || return 1
   ! grep -q 'osascript' "$STUB_LOG" || return 1
+}
+
+# docker pull's own words, as a terminal shows them (cursor moves, carriage returns): the base's
+# first layer is already here; the other two download, then extract, with byte counts.
+tty_pull() {
+  e=$(printf '\033'); r=$(printf '\r')
+  printf 'aaaaaaaaaaaa: Already exists\n'
+  for l in "bbbbbbbbbbbb: Pulling fs layer" "cccccccccccc: Pulling fs layer" "cccccccccccc: Waiting" \
+           "bbbbbbbbbbbb: Downloading [=>   ]  1.5MB/3MB" "bbbbbbbbbbbb: Download complete" \
+           "bbbbbbbbbbbb: Extracting [=>   ]  1.5MB/3MB" "cccccccccccc: Downloading [=>   ]  500kB/1MB" \
+           "bbbbbbbbbbbb: Pull complete" "cccccccccccc: Download complete" "cccccccccccc: Pull complete"; do
+    printf '%s[1A%s[2K%s%s %s%s[1B' "$e" "$e" "$r" "$l" "$r" "$e"
+  done
+  printf 'Digest: sha256:0123\r\nStatus: Downloaded newer image\r\n'
+}
+# Run one of porthole's functions, sourced in its own shell (porthole sets -eu).
+lib() { sh -c 'PORTHOLE_LIB=1 PORTHOLE_SELF="$1"; . "$1"; shift; "$@"' _ "$REPO/bin/porthole" "$@"; }
+SIZES='aaaaaaaaaaaa 1000000
+bbbbbbbbbbbb 3000000
+cccccccccccc 1000000'
+
+# The bar used to read 100% from the first line: a layer already here counted as one of one done.
+@test "pull progress counts the bytes still to fetch, downloaded then extracted, rising from the start" {
+  out=$(tty_pull | lib pull_fractions "$SIZES" 2>/dev/null)
+  [ "$(printf '%s\n' "$out" | tr '\n' ' ')" = "0.1875 0.375 0.5625 0.625 0.8125 0.875 1 " ] || { echo "$out"; return 1; }
+}
+
+@test "without a terminal, pull progress still weighs each layer by its size" {
+  out=$(printf '%s\n' "aaaaaaaaaaaa: Already exists" "bbbbbbbbbbbb: Pulling fs layer" "cccccccccccc: Pulling fs layer" \
+    "bbbbbbbbbbbb: Download complete" "cccccccccccc: Download complete" "bbbbbbbbbbbb: Pull complete" \
+    "cccccccccccc: Pull complete" | lib pull_fractions "$SIZES" 2>/dev/null)
+  [ "$(printf '%s\n' "$out" | tr '\n' ' ')" = "0.375 0.5 0.875 1 " ] || { echo "$out"; return 1; }
+}
+
+# With no sizes to weigh (no manifest), the bar stays indeterminate rather than claiming anything.
+@test "pull progress with no layer sizes claims nothing until bytes are reported" {
+  out=$(printf '%s\n' "aaaaaaaaaaaa: Already exists" "bbbbbbbbbbbb: Pulling fs layer" | lib pull_fractions "" 2>/dev/null)
+  [ -z "$out" ] || { echo "$out"; return 1; }
+}
+
+@test "layer_sizes names each linux/amd64 layer by the id docker pull prints" {
+  fake_docker
+  printf '{"config":{"size":999,"digest":"sha256:ffffffffffff00"},"layers":[{"mediaType":"x","size":600,"digest":"sha256:0123456789abcdef"},{"digest":"sha256:fedcba9876543210","size":400,"mediaType":"x"}]}\n' > "$FAKE/manifest"
+  [ "$(lib layer_sizes ghcr.io/mavergreen/porthole-base:1 | tr '\n' ' ')" = "0123456789ab 600 fedcba987654 400 " ]
 }
 
 @test "every stdout line from up under the viewer is a protocol message" {

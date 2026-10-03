@@ -63,10 +63,11 @@ porthole_cleanup() {
 # to run df in); a failed estimate never blocks a launch. Every layer of the image counts, even one an
 # older base already has: the Docker CLI can't tell which registry layers are already unpacked here,
 # so the estimate errs high.
-space_needed_kb() {  # FROM
-  if docker image inspect "$1" >/dev/null 2>&1; then echo $((1536 * 1024)); return 0; fi
+# The image's linux/amd64 layers from its manifest, one "<id> <bytes>" line each, where <id> is the
+# 12-hex name docker pull prints for the layer. A multi-platform index is followed to its linux/amd64
+# image.
+layer_sizes() {  # FROM
   _m=$(docker manifest inspect "$1" 2>/dev/null | tr -d ' \t\n')
-  # A multi-platform index lists manifests, not layers: estimate from the linux/amd64 one.
   case "$_m" in *'"manifests"'*)
     # One line per entry (only entries are separated by "},{"), whatever order their keys come in.
     _d=$(printf '%s' "$_m" | sed 's/},{/}\
@@ -76,10 +77,43 @@ space_needed_kb() {  # FROM
     case "$1" in *@*) _repo=${1%@*} ;; *) _repo=$(printf '%s' "$1" | sed 's/:[^/:]*$//') ;; esac
     _m=$(docker manifest inspect "$_repo@$_d" 2>/dev/null | tr -d ' \t\n') ;;
   esac
-  _z=$(printf '%s' "$_m" | sed 's/.*"layers"//' | grep -o '"size":[0-9]*' | sed 's/[^0-9]//g' |
-    awk '{ t += $1 } END { if (t) printf "%.0f", t }')
+  case "$_m" in *'"layers"'*) ;; *) return 1 ;; esac
+  printf '%s' "$_m" | sed 's/.*"layers"//' | sed 's/},{/}\
+{/g' | awk '{
+    id = ""; if (match($0, /"digest":"sha256:[0-9a-f]+/)) id = substr($0, RSTART + 17, 12)
+    if (match($0, /"size":[0-9]+/)) printf "%s %s\n", (id == "" ? "-" : id), substr($0, RSTART + 7, RLENGTH - 7) }'
+}
+space_needed_kb() {  # FROM
+  if docker image inspect "$1" >/dev/null 2>&1; then echo $((1536 * 1024)); return 0; fi
+  _z=$(layer_sizes "$1" | awk '{ t += $2 } END { if (t) printf "%.0f", t }')
   [ -n "$_z" ] || return 1
   echo $((_z * 3 / 1024 + 1024 * 1024))
+}
+# docker pull's output in, fractions done out (one per line, rising). Under a terminal docker reports
+# each layer's bytes as it downloads and extracts; without one, only each step's end. A layer already
+# here doesn't count; each one to fetch weighs its size ($1, from layer_sizes), half for downloading
+# and half for extracting. With no sizes known nothing is claimed; steps under half a percent aren't sent. The log, less the byte counts,
+# goes to stderr.
+pull_fractions() {  # SIZES
+  tr '\r' '\n' | awk -v sizes="$(printf '%s' "$1" | tr '\n' ' ')" '
+    function bytes(s,   u) { u = s; sub(/^[0-9.]+/, "", u)
+      return (s + 0) * (u == "kB" ? 1e3 : u == "MB" ? 1e6 : u == "GB" ? 1e9 : 1) }
+    BEGIN { n = split(sizes, a, / +/); for (i = 1; i < n; i += 2) size[a[i]] = a[i + 1] }
+    { gsub(/\033\[[0-9]*[A-Za-z]/, ""); sub(/[ ]+$/, "") }
+    $0 == "" { next }
+    !match($0, /^[0-9a-f]+: /) { print > "/dev/stderr"; next }
+    { id = substr($0, 1, RLENGTH - 2); st = substr($0, RLENGTH + 1) }
+    st !~ /^(Downloading|Extracting) / { print > "/dev/stderr" }
+    st ~ /^Already exists/ { here[id] = 1; next }
+    !(id in tot) { tot[id] = size[id] + 0 }
+    st ~ /^(Downloading|Extracting) / && match(st, /[0-9.]+[kMG]?B\/[0-9.]+[kMG]?B/) {
+      split(substr(st, RSTART, RLENGTH), p, "/"); if (!tot[id]) tot[id] = bytes(p[2])
+      if (st ~ /^Downloading/) dl[id] = bytes(p[1]); else { dl[id] = tot[id]; ex[id] = bytes(p[1]) } }
+    st ~ /^Download complete/ { dl[id] = tot[id] }
+    st ~ /^Pull complete/ { dl[id] = tot[id]; ex[id] = tot[id] }
+    { t = 0; d = 0; for (k in tot) if (!(k in here)) { t += 2 * tot[k]; d += dl[k] + ex[k] }
+      if (t == 0) next; f = d / t; if (f > 1) f = 1   # docker rounds what it shows, so it can pass 1
+      if (f >= last + 0.005 || (f == 1 && last < 1)) { last = f; printf "%g\n", f; fflush() } }'
 }
 space_free_kb() {
   _img=$(docker images -q 2>/dev/null | head -1)
@@ -154,16 +188,18 @@ cmd_up() {
       printf '%s\n' "$_bl" >&2
     done
   }
-  # Pull a missing base on its own first, so its download shows as layer-by-layer progress.
+  # Pull a missing base on its own first, so its download shows as real progress.
   _pull_base() {
     _from=$(sed -n 's/^FROM[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' "$_ctx/Dockerfile" | head -1)
     [ -n "$_from" ] || return 0
     docker image inspect "$_from" >/dev/null 2>&1 && return 0
     say_step "Downloading the Linux runtime"
-    docker pull "$_from" 2>&1 | awk '
-      / Pulling fs layer$/ || / Already exists$/ { t++ }
-      / Pull complete$/ || / Already exists$/     { d++; if (t) { printf "%s\n", d / t; fflush() } }
-      { print > "/dev/stderr" }' | while read -r _f; do say_progress "$_f"; done
+    _sizes=$(layer_sizes "$_from") || _sizes=
+    # docker counts bytes only for a terminal; script(1) gives it one (BSD's: 10.9's, and macOS's).
+    case $(uname) in
+      Darwin) script -q /dev/null docker pull "$_from" </dev/null 2>&1 ;;
+      *) docker pull "$_from" 2>&1 ;;
+    esac | pull_fractions "$_sizes" | while read -r _f; do say_progress "$_f"; done
   }
 
   # The image is labelled with a fingerprint of the recipe it was built from (the build context,
