@@ -6,3 +6,5 @@ for _conf in "$ROOT"/usr/local/mavergreen/*/share/porthole/presets/*.conf; do
   "$_porthole" materialize "$_conf" --apps-dir "$ROOT/Applications" \
     || echo "porthole postinstall: could not re-materialize $_conf" >&2
 done
+# A new base changes every app's recipe: build each now, in its own window, so none waits at launch.
+"$_porthole" prepare-for-install --root "$ROOT" --apps-dir "$ROOT/Applications" || true

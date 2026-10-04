@@ -30,6 +30,7 @@ usage:
   porthole exec <container-spec> [docker-exec flags...] -- <command...>
   porthole forget <slug> [--keep-data | --delete-data]
   porthole describe-data <volume>
+  porthole prepare-for-install [--root R] [--apps-dir DIR] [<conf>...]
 EOF
   exit 2
 }
@@ -399,6 +400,41 @@ cmd_exec() {
   exec docker exec $_flags "$CONTAINER" "$@"
 }
 
+# Run by an install's postinstall (as root): open each app's own launch window in the console user's
+# session with --prepare, one after another, so each app is built before Installer finishes. An install
+# to another volume, or with no one at the console, does nothing: the first launch builds instead. A
+# prepare that fails is logged and the install goes on.
+cmd_prepare_for_install() {
+  _root="" _apps=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --root) _root="${2:-}"; shift 2 ;;
+      --apps-dir) _apps="${2:?--apps-dir needs a dir}"; shift 2 ;;
+      *) break ;;
+    esac
+  done
+  if [ -n "$_root" ] && [ "$(cd "$_root" 2>/dev/null && pwd -P)" != / ]; then return 0; fi
+  : "${_apps:=/Applications}"
+  _user="${PORTHOLE_CONSOLE_USER:-$(stat -f %Su /dev/console 2>/dev/null || true)}"
+  case "$_user" in ''|root) return 0 ;; esac
+  _lw=$(pgrep -x -u "$_user" loginwindow 2>/dev/null | head -1) || _lw=
+  [ -n "$_lw" ] || return 0
+  [ $# -gt 0 ] || set -- "${PORTHOLE_PRESETS_DIR:-/usr/local/mavergreen}"/*/share/porthole/presets/*.conf
+  for _conf in "$@"; do
+    [ -f "$_conf" ] || continue
+    # NAME and SLUG as materialize derives them, without letting the conf touch this shell.
+    _name=$(APP= NAME=; . "$_conf"; : "${APP:=$NAME}"; printf '%s' "${NAME:-Linux $APP}")
+    _slug=$(basename "$_conf" .conf)
+    _bundle="$_apps/$_name.app"
+    _prc=0
+    launchctl bsexec "$_lw" sudo -u "$_user" -H "$_bundle/Contents/MacOS/Porthole" \
+      --prepare "$_bundle/Contents/Resources/bin/$_slug" || _prc=$?
+    if [ "$_prc" -eq 0 ]; then echo "porthole: prepared $_name" >&2
+    else echo "porthole: $_name not prepared (status $_prc)" >&2; fi
+  done
+  return 0
+}
+
 # Sourced by tests with PORTHOLE_LIB=1: define the functions, run nothing.
 [ -z "${PORTHOLE_LIB:-}" ] || return 0 2>/dev/null
 [ $# -gt 0 ] || usage
@@ -408,6 +444,7 @@ case "$cmd" in
   exec) cmd_exec "$@" ;;      # cmd_exec's `exec` replaces this process
   forget) cmd_forget "$@"; exit $? ;;
   describe-data) cmd_describe_data "$@"; exit $? ;;
+  prepare-for-install) cmd_prepare_for_install "$@"; exit 0 ;;
   materialize) ;;             # falls through to the linear body below
   *) usage ;;
 esac
