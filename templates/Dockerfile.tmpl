@@ -1,4 +1,7 @@
 FROM @BASE_REF@
+#@IF APP_VERSION
+LABEL dev.mavergreen.porthole.app-version="@APP_VERSION@"
+#@ENDIF
 
 # @NAME@'s own package(s), from the vendor's apt repo -- installed here on YOUR Mac, so Porthole
 # never redistributes vendor software. The common runtime (xpra + Xvfb, dbus, keyring, socat, the

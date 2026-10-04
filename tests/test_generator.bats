@@ -220,3 +220,40 @@ conf_with() {  # a minimal valid conf plus LINE; sets $d and $C
   run ./bin/generate-viewer "$C" --out "$d"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
+
+# Each preset release names its version, so installing it changes the recipe and rebuilds the app with
+# apt's newest package. The label sits right after FROM: a label further down would leave docker's cached
+# apt layer in place, and the rebuild would install nothing new.
+version_conf() {  # $1 = dir, $2 = APP_VERSION line or empty
+  printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=ondemand\nDATADIR=/home/demo/.config/Demo\nUSER=demo\n%s' "$2" > "$1/demo.conf"
+  ./bin/generate-viewer "$1/demo.conf" --out "$1" >/dev/null
+}
+
+@test "APP_VERSION becomes a label right after FROM, before the packages are installed" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  d="$(mktemp -d -t ver)"; version_conf "$d" 'APP_VERSION=1.2.3-mavericks.4
+'
+  df="$d/demo/Dockerfile"
+  after_from=$(awk 'f { print; exit } /^FROM / { f = 1 }' "$df")
+  [ "$after_from" = 'LABEL dev.mavergreen.porthole.app-version="1.2.3-mavericks.4"' ] || { cat "$df"; rm -rf "$d"; return 1; }
+  [ "$(grep -n 'app-version' "$df" | cut -d: -f1)" -lt "$(grep -n 'apt-get' "$df" | head -1 | cut -d: -f1)" ] || { rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+@test "a conf without APP_VERSION renders no version label" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  d="$(mktemp -d -t ver)"; version_conf "$d" ''
+  ! grep -q 'app-version' "$d/demo/Dockerfile" || { rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+@test "a new APP_VERSION is a new recipe" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  fp() { sh -c 'PORTHOLE_LIB=1 PORTHOLE_SELF="$1"; . "$1"; recipe_fingerprint "$2"' _ "$PWD/bin/porthole" "$1"; }
+  a="$(mktemp -d -t ver)"; b="$(mktemp -d -t ver)"
+  version_conf "$a" 'APP_VERSION=1.0-mavericks.1
+'; version_conf "$b" 'APP_VERSION=1.0-mavericks.2
+'
+  [ "$(fp "$a/demo")" != "$(fp "$b/demo")" ] || { rm -rf "$a" "$b"; return 1; }
+  rm -rf "$a" "$b"
+}
