@@ -164,17 +164,27 @@ cmd_describe_data() {
 }
 
 # One build per app at a time: a second up (a launch during an install's prepare) waits for the
-# first. A lock whose holder is gone (killed outright, or its pid now another process) is taken
-# over; a lock not yet holding a pid gets a moment to.
+# first. If that build has its own window (an install's), the waiting launch shows nothing over it;
+# if it has none, the launch shows that build's steps and progress. A lock whose holder is gone
+# (killed outright, or its pid now another process) is taken over; a lock not yet holding a pid
+# gets a moment to.
 up_lock() {  # LOCKDIR
   mkdir -p "$(dirname "$1")" 2>/dev/null || true
-  _said= _nopid=0
+  _said= _nopid=0 _seen=0
   until mkdir "$1" 2>/dev/null; do
     _holder=$(cat "$1/pid" 2>/dev/null) || _holder=
     # Held only while that pid is still a porthole build: a lock outlives a power loss, and its pid
     # may come back as anything.
     if [ -n "$_holder" ] && /bin/ps -p "$_holder" -o command= 2>/dev/null | grep -q porthole; then
-      [ -n "$_said" ] || { say_step "Waiting for ${NAME:-the app}'s update to finish"; _said=1; }
+      if [ -f "$1/shown" ]; then
+        [ -n "$_said" ] || { say_quiet; _said=1; }
+      else
+        [ -n "$_said" ] || { say_step "Waiting for ${NAME:-the app}'s update to finish"; _said=1; }
+        _n=$(wc -l < "$1/progress" 2>/dev/null | tr -d ' ') || _n=0
+        if _say_json && [ "${_n:-0}" -gt "$_seen" ]; then
+          sed -n "$((_seen + 1)),${_n}p" "$1/progress" >&7; _seen=$_n
+        fi
+      fi
       sleep 1
     elif [ -z "$_holder" ] && [ "$_nopid" -lt 2 ]; then
       _nopid=$((_nopid + 1)); sleep 1
@@ -183,6 +193,8 @@ up_lock() {  # LOCKDIR
     fi
   done
   echo $$ > "$1/pid"
+  [ "${PORTHOLE_PROTOCOL:-}" != 1 ] || : > "$1/shown"   # this build's progress is in a window
+  PORTHOLE_PROGRESS_FILE="$1/progress"; export PORTHOLE_PROGRESS_FILE
   _up_lock=$1
   trap up_unlock EXIT
 }

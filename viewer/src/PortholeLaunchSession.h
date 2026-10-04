@@ -11,6 +11,8 @@
 - (void)launchSession:(PortholeLaunchSession *)s readyWithSocket:(NSString *)socket icon:(NSString *)icon image:(NSString *)image;
 // --prepare finished: the app is built, and nothing was started.
 - (void)launchSessionPrepared:(PortholeLaunchSession *)s;
+// Nothing to show for now: another window (an install's) is already showing this app's progress.
+- (void)launchSessionQuiet:(PortholeLaunchSession *)s;
 @end
 
 @interface PortholeLaunchSession : NSObject

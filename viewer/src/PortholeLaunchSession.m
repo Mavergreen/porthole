@@ -56,6 +56,7 @@
     else if ([t isEqualToString:@"error"]) { _finished = YES; [d launchSession:self failed:m[@"text"] ?: @"" detail:m[@"detail"] ?: @""]; }
     else if ([t isEqualToString:@"ready"]) { _finished = YES; [d launchSession:self readyWithSocket:m[@"socket"] icon:m[@"icon"] ?: @"" image:m[@"image"] ?: @""]; }
     else if ([t isEqualToString:@"prepared"]) { _finished = YES; [d launchSessionPrepared:self]; }
+    else if ([t isEqualToString:@"quiet"]) [d launchSessionQuiet:self];
 }
 
 - (void)start {

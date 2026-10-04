@@ -317,6 +317,35 @@ holder() { sh -c 'sleep "$1"; :' porthole-up "$1" >/dev/null 2>&1 & echo $!; }  
   [ -f "$FAKE/container.demo-gui" ]
 }
 
+# Opening the app while an install builds it: that build's own window already shows the progress, so
+# the launch waits without a second window on top of it.
+@test "a launch waiting on a build that has its own window waits quietly" {
+  fake_docker; make_spec
+  mkdir -p "$WORK/cache/demo.lock"; holder 2 > "$WORK/cache/demo.lock/pid"; : > "$WORK/cache/demo.lock/shown"
+  output=$(PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC" 2>/dev/null) || { echo "$output"; return 1; }
+  [[ "$output" == *'{"t":"quiet"}'* ]] || { echo "$output"; return 1; }
+  [[ "$output" != *"Waiting for"* ]] || { echo "$output"; return 1; }
+}
+
+# A build with no window (an install over ssh, op's CLI): the launch shows where that build is.
+@test "a launch waiting on a headless build shows that build's progress" {
+  fake_docker; make_spec
+  mkdir -p "$WORK/cache/demo.lock"; holder 2 > "$WORK/cache/demo.lock/pid"
+  printf '%s\n' '{"t":"step","text":"Building Linux Demo (3/9)"}' '{"t":"progress","fraction":0.33}' > "$WORK/cache/demo.lock/progress"
+  output=$(PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC" 2>/dev/null) || { echo "$output"; return 1; }
+  [[ "$output" == *'{"t":"step","text":"Building Linux Demo (3/9)"}
+{"t":"progress","fraction":0.33}'* ]] || { echo "$output"; return 1; }
+}
+
+# What a waiting launch reads: whether this build has a window, and where it has got to.
+@test "a build under a window marks its lock so, and records its progress there" {
+  fake_docker; make_spec
+  sed -i '' 's|^      build)$|      build) cp -R "$PORTHOLE_CACHE_DIR/demo.lock" "$FAKE/seen-lock" 2>/dev/null|' "$WORK/bin/docker"
+  PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  [ -f "$FAKE/seen-lock/shown" ] || { ls -la "$FAKE/seen-lock"; return 1; }
+  grep -q '"t":"step","text":"Downloading the Linux runtime"' "$FAKE/seen-lock/progress" || { cat "$FAKE/seen-lock/progress"; return 1; }
+}
+
 # A build killed outright (Installer force-quit, power loss) must not block every launch after it.
 @test "a lock left by a dead build is reclaimed" {
   fake_docker; make_spec

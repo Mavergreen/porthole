@@ -19,12 +19,25 @@ _say_json() { [ "${PORTHOLE_PROTOCOL:-}" = 1 ]; }
 # even from inside $(...) -- `case $(say_ask ...)` must not swallow the question it asks.
 exec 7>&1
 
+# A build's steps and progress are also kept in $PORTHOLE_PROGRESS_FILE (porthole up sets it), so a
+# launch waiting for that build can show where it has got to.
+_say_keep() { [ -z "${PORTHOLE_PROGRESS_FILE:-}" ] || printf '%s\n' "$1" >> "$PORTHOLE_PROGRESS_FILE" 2>/dev/null || true; }
+
 say_step() {
-  if _say_json; then printf '{"t":"step","text":%s}\n' "$(json_str "$1")" >&7; else printf '%s\n' "$1" >&2; fi
+  _ss_line=$(printf '{"t":"step","text":%s}' "$(json_str "$1")")
+  _say_keep "$_ss_line"
+  if _say_json; then printf '%s\n' "$_ss_line" >&7; else printf '%s\n' "$1" >&2; fi
 }
 
 say_progress() {
+  _say_keep "{\"t\":\"progress\",\"fraction\":$1}"
   _say_json && printf '{"t":"progress","fraction":%s}\n' "$1" >&7
+  return 0
+}
+
+# Nothing to show for now: another window (an install's) is already showing this app's progress.
+say_quiet() {
+  _say_json && printf '{"t":"quiet"}\n' >&7
   return 0
 }
 

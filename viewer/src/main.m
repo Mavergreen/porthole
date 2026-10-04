@@ -59,6 +59,7 @@
     PortholeLaunchSession *_launch;       // the launcher we run with --launch, until it says ready
     PortholeLaunchWindow *_launchWindow;  // its progress window, made on first need
     BOOL _preparing;                      // --prepare: show setup, then quit; never connect
+    BOOL _quietLaunch;                    // waiting on a build whose own window shows its progress
     NSString *_runningImage;              // the image the app's container runs, from the launcher
     BOOL _appShownSomething;              // the app has put up a window or tray of its own
 }
@@ -177,6 +178,18 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 
 - (void)launchSession:(PortholeLaunchSession *)s step:(NSString *)text {
     (void)s; [[self launchWindow] setStep:text]; [[self launchWindow] setProgress:-1];
+    // The build we waited on is done and this launch goes on: show its window if it takes a while.
+    if (_quietLaunch) {
+        _quietLaunch = NO;
+        [self performSelector:@selector(showLaunchWindow) withObject:nil afterDelay:0.5];
+    }
+}
+
+// An install's window is already showing this app's build: don't put a second window over it.
+- (void)launchSessionQuiet:(PortholeLaunchSession *)s {
+    (void)s;
+    _quietLaunch = YES;
+    [self endLaunchWindow];
 }
 
 - (void)launchSession:(PortholeLaunchSession *)s progress:(double)fraction {

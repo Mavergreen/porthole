@@ -19,6 +19,7 @@
 - (void)launchSession:(id)s readyWithSocket:(NSString *)k icon:(NSString *)i image:(NSString *)m {
     [_events addObject:[NSString stringWithFormat:@"ready:%@:%@:%@", k, i, m]]; }
 - (void)launchSessionPrepared:(id)s { [_events addObject:@"prepared"]; }
+- (void)launchSessionQuiet:(id)s { [_events addObject:@"quiet"]; }
 @end
 
 static void pump(BOOL (^cond)(void)) {
@@ -44,6 +45,10 @@ int main(void) {
         s.delegate = r; [s start];
 
         put(toViewer[1], "{\"t\":\"step\",\"text\":\"Downloading\"}\nnot json at all\n{\"t\":\"progress\",\"fraction\":0.5}\n");
+        put(toViewer[1], "{\"t\":\"quiet\"}\n");
+        pump(^BOOL{ return r.events.count >= 3; });
+        assert([r.events[2] isEqualToString:@"quiet"]);
+        [r.events removeLastObject];
         put(toViewer[1], "{\"t\":\"ask\",\"id\":\"q1\",\"text\":\"?\",\"choices\":[\"Keep\",\"Delete\"]}\n");
         pump(^BOOL{ return r.events.count >= 3; });
         assert([r.events[0] isEqualToString:@"step:Downloading"]);
