@@ -13,6 +13,7 @@
 #import "PortholeLaunchArgs.h"
 #import "PortholeLaunchSession.h"
 #import "PortholeLaunchWindow.h"
+#import "PortholeUpdateItem.h"
 
 // The native (Cocoa) shell. It drives a remote-display session through the
 // remote_display C interface and renders/handles input via NSWindow/NSEvent/
@@ -555,6 +556,36 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // As on a modern Mac, the 1Password tray menu's Lock grays out while the app is locked.
 - (void)menuNeedsUpdate:(NSMenu *)menu {
     [[menu itemWithTag:1] setEnabled:PortholeLockItemEnabled([_titles allValues])];
+    NSMenuItem *upd = [menu itemWithTag:2];
+    if (!upd) return;
+    NSString *cache = [[[NSProcessInfo processInfo] environment][@"PORTHOLE_CACHE_DIR"] length]
+        ? [[NSProcessInfo processInfo] environment][@"PORTHOLE_CACHE_DIR"]
+        : [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Caches/Porthole"];
+    switch (PortholeUpdateItemFor(_runningImage, PortholeRecordedImage(cache, [self appSlug]),
+                                  [[NSFileManager defaultManager] fileExistsAtPath:[self updaterPath]])) {
+        case PortholeUpdateItemHidden: [upd setHidden:YES]; break;
+        case PortholeUpdateItemCheck:
+            [upd setHidden:NO]; [upd setTitle:@"Check for Updates\u2026"]; [upd setAction:@selector(menuCheckForUpdates:)]; break;
+        case PortholeUpdateItemRestart:
+            [upd setHidden:NO]; [upd setTitle:@"Restart to Update"]; [upd setAction:@selector(menuRestartToUpdate:)]; break;
+    }
+}
+// This preset's Sparkle updater, where shipyard installs it (its registry's updater-app).
+- (NSString *)updaterPath {
+    return [NSString stringWithFormat:@"/Library/Application Support/Mavergreen/%@-updater.app", [self appSlug]];
+}
+// A check the user asked for: --user shows the updater's dialog, even "You're up to date".
+- (void)menuCheckForUpdates:(id)s {
+    (void)s;
+    [NSTask launchedTaskWithLaunchPath:@"/usr/bin/open" arguments:@[@"-a", [self updaterPath], @"--args", @"--user"]];
+}
+// Quit (cleanly, so the recovery watcher stays down) and reopen: the launcher moves the container to
+// the newer image the install built.
+- (void)menuRestartToUpdate:(id)s {
+    (void)s;
+    NSArray *cmd = PortholeRestartCommand(getpid(), [[NSBundle mainBundle] bundlePath]);
+    [NSTask launchedTaskWithLaunchPath:cmd[0] arguments:[cmd subarrayWithRange:NSMakeRange(1, cmd.count - 1)]];
+    [NSApp terminate:nil];
 }
 
 // ---- native main menu bar (App / Edit / Window), engine-wide default -------------
@@ -625,6 +656,9 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     NSMenu *appMenu = [[[NSMenu alloc] initWithTitle:app] autorelease];
     [self item:appMenu title:[@"About " stringByAppendingString:app]
          action:@selector(orderFrontStandardAboutPanel:) key:@"" target:nil];
+    // Check for Updates… / Restart to Update; menuNeedsUpdate: decides which, as the menu opens.
+    [[self item:appMenu title:@"Check for Updates\u2026" action:@selector(menuCheckForUpdates:) key:@"" target:self] setTag:2];
+    [appMenu setDelegate:self];
     [appMenu addItem:[NSMenuItem separatorItem]];
     [self item:appMenu title:[@"Hide " stringByAppendingString:app] action:@selector(hide:) key:@"h" target:nil];
     NSMenuItem *hideOthers = [self item:appMenu title:@"Hide Others"

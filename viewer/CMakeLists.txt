@@ -18,7 +18,8 @@ set(RDS_XPRA_SOURCES
   src/PortholeProtocol.m
   src/PortholeTransport.m
   src/PortholeClient.m
-  src/PortholeWindowTitles.m)
+  src/PortholeWindowTitles.m
+  src/PortholeUpdateItem.m)
 
 # --- app identity ---
 # This repo is a Mac-like app-specific-viewer GENERATOR: the Porthole engine is
@@ -170,6 +171,11 @@ add_executable(test_tray_art tests/test_tray_art.m src/PortholeTrayArt.m)
 target_include_directories(test_tray_art PRIVATE src)
 target_link_libraries(test_tray_art PRIVATE ${FOUNDATION_LIBRARY})
 add_test(NAME tray_art COMMAND test_tray_art)
+
+add_executable(test_update_item tests/test_update_item.m src/PortholeUpdateItem.m)
+target_include_directories(test_update_item PRIVATE src)
+target_link_libraries(test_update_item PRIVATE ${FOUNDATION_LIBRARY})
+add_test(NAME update_item COMMAND test_update_item)
 
 add_executable(test_window_titles tests/test_window_titles.m src/PortholeWindowTitles.m)
 target_include_directories(test_window_titles PRIVATE src)
