@@ -77,6 +77,7 @@ exit 0
 EOF
   chmod +x "$WORK/bin/docker"
   export PATH="$WORK/bin:$PATH"
+  export PORTHOLE_CACHE_DIR="$WORK/cache"   # never this Mac's ~/Library/Caches
 }
 
 # A materialized-style spec + build context.
@@ -181,6 +182,17 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   ! grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:1$' "$STUB_LOG" || false
 }
 
+# Builds now happen at install (--image-only), and the launch after one finds nothing to rebuild:
+# the old base must go when the build does, or each Porthole release leaves ~1.4 GB behind.
+@test "an install-time build untags older tags of the base too" {
+  fake_docker; make_spec
+  printf 'ghcr.io/mavergreen/porthole-base:0\nghcr.io/mavergreen/porthole-base:1\n' > "$FAKE/base-tags"
+  run "$REPO/bin/porthole" up --image-only "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:0$' "$STUB_LOG" || { cat "$STUB_LOG"; return 1; }
+  ! grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:1$' "$STUB_LOG" || false
+}
+
 @test "up labels the image, the container and every data volume with the slug" {
   fake_docker; make_spec
   run "$REPO/bin/porthole" up "$SPEC"
@@ -263,6 +275,64 @@ cccccccccccc 1000000'
   fake_docker; make_spec; touch "$FAKE/pulled"
   "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
   ! grep -q '^docker pull' "$STUB_LOG" || return 1
+}
+
+@test "up records the image it built" {
+  fake_docker; make_spec
+  "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  [ "$(cat "$WORK/cache/demo.image")" = sha256:built1 ]
+}
+
+# An install prepares the image while the app may be open and in use: its container must be left alone.
+@test "--image-only builds but leaves the container alone" {
+  fake_docker; make_spec
+  "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  printf 'RUN new\n' >> "$WORK/app/ctx/Dockerfile"
+  : > "$STUB_LOG"
+  run "$REPO/bin/porthole" up --image-only "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(cat "$FAKE/container.demo-gui")" = sha256:built1 ] || return 1
+  ! grep -q '^docker rm -f' "$STUB_LOG" || return 1
+  [ "$(cat "$WORK/cache/demo.image")" = sha256:built2 ]
+}
+
+# A build holding an app's lock, as ps shows one: a porthole process.
+holder() { sh -c 'sleep "$1"; :' porthole-up "$1" >/dev/null 2>&1 & echo $!; }   # two commands: sh stays, so ps shows it
+
+# A lock outlives a power loss in ~/Library/Caches; if its pid comes back as some other process, it
+# must not keep the app from opening -- silently, if that lock was an install's.
+@test "a lock whose pid is now some other process is reclaimed" {
+  fake_docker; make_spec
+  mkdir -p "$WORK/cache/demo.lock"; sleep 3 & echo $! > "$WORK/cache/demo.lock/pid"; : > "$WORK/cache/demo.lock/shown"
+  output=$(PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC" 2>/dev/null) || { echo "$output"; return 1; }
+  [[ "$output" != *'"t":"quiet"'* ]] || { echo "$output"; return 1; }
+  [ ! -d "$WORK/cache/demo.lock" ]
+}
+
+@test "a second up waits for a build in progress, then goes on" {
+  fake_docker; make_spec
+  mkdir -p "$WORK/cache/demo.lock"; holder 3 > "$WORK/cache/demo.lock/pid"
+  output=$(PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC" 2>/dev/null) || { echo "$output"; return 1; }
+  [[ "$output" == *'{"t":"step","text":"Waiting for Linux Demo'"'"'s update to finish"}'* ]] || { echo "$output"; return 1; }
+  [ -f "$FAKE/container.demo-gui" ]
+}
+
+# A build killed outright (Installer force-quit, power loss) must not block every launch after it.
+@test "a lock left by a dead build is reclaimed" {
+  fake_docker; make_spec
+  true & _dead=$!; wait "$_dead"
+  mkdir -p "$WORK/cache/demo.lock"; echo "$_dead" > "$WORK/cache/demo.lock/pid"
+  output=$(PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC" 2>/dev/null) || { echo "$output"; return 1; }
+  [[ "$output" != *"Waiting for"* ]] || { echo "$output"; return 1; }
+  [ ! -d "$WORK/cache/demo.lock" ]
+}
+
+# porthole exec ends by exec'ing docker in the same process, so up's exit trap never runs; a long
+# command (op's bridges) would hold the app's lock and stall every launch.
+@test "porthole exec releases the app's lock before running the command" {
+  fake_docker; make_spec
+  "$REPO/bin/porthole" exec "$SPEC" -- true >/dev/null 2>&1
+  [ ! -d "$WORK/cache/demo.lock" ]
 }
 
 # A failed --rebuild leaves the old image, whose recipe label still matches; that must not pass.

@@ -26,7 +26,7 @@ usage() {
   cat >&2 <<'EOF'
 usage:
   porthole materialize <conf-path> [--apps-dir DIR]
-  porthole up [--rebuild] <container-spec>
+  porthole up [--rebuild] [--image-only] <container-spec>
   porthole exec <container-spec> [docker-exec flags...] -- <command...>
   porthole forget <slug> [--keep-data | --delete-data]
   porthole describe-data <volume>
@@ -162,9 +162,40 @@ cmd_describe_data() {
   printf '%s\t%s\n' "$(data_name "$1")" "${_kb:+$(size_h "$_kb")}"
 }
 
+# One build per app at a time: a second up (a launch during an install's prepare) waits for the
+# first. A lock whose holder is gone (killed outright, or its pid now another process) is taken
+# over; a lock not yet holding a pid gets a moment to.
+up_lock() {  # LOCKDIR
+  mkdir -p "$(dirname "$1")" 2>/dev/null || true
+  _said= _nopid=0
+  until mkdir "$1" 2>/dev/null; do
+    _holder=$(cat "$1/pid" 2>/dev/null) || _holder=
+    # Held only while that pid is still a porthole build: a lock outlives a power loss, and its pid
+    # may come back as anything.
+    if [ -n "$_holder" ] && /bin/ps -p "$_holder" -o command= 2>/dev/null | grep -q porthole; then
+      [ -n "$_said" ] || { say_step "Waiting for ${NAME:-the app}'s update to finish"; _said=1; }
+      sleep 1
+    elif [ -z "$_holder" ] && [ "$_nopid" -lt 2 ]; then
+      _nopid=$((_nopid + 1)); sleep 1
+    else
+      rm -rf "$1"
+    fi
+  done
+  echo $$ > "$1/pid"
+  _up_lock=$1
+  trap up_unlock EXIT
+}
+up_unlock() { [ -z "${_up_lock:-}" ] || rm -rf "$_up_lock"; _up_lock=; }
+
 cmd_up() {
-  _rebuild=0
-  [ "${1:-}" = --rebuild ] && { _rebuild=1; shift; }
+  _rebuild=0 _image_only=0
+  while :; do
+    case "${1:-}" in
+      --rebuild) _rebuild=1; shift ;;
+      --image-only) _image_only=1; shift ;;
+      *) break ;;
+    esac
+  done
   _spec="${1:-}"; [ -n "$_spec" ] || usage
   [ -f "$_spec" ] || { echo "porthole up: no such container spec: $_spec" >&2; exit 1; }
   _specdir=$(cd "$(dirname "$_spec")" && pwd)
@@ -174,6 +205,8 @@ cmd_up() {
   : "${SLUG:=$(basename "$_spec" .container)}"
   [ -n "$CONTAINER" ] && [ -n "$IMAGE" ] \
     || { echo "porthole up: spec missing CONTAINER/IMAGE: $_spec" >&2; exit 1; }
+  _cache="${PORTHOLE_CACHE_DIR:-$HOME/Library/Caches/Porthole}"
+  up_lock "$_cache/$SLUG.lock"
   _ctx="$_specdir/$BUILD_CONTEXT"
   # Progress for the app's launch window (plain text on stderr outside it). Build steps come from
   # docker's classic "Step N/M" lines; the build log itself goes to stderr.
@@ -235,8 +268,15 @@ cmd_up() {
     if [ "$_rebuild" = 1 ] && [ "$(docker image inspect --format '{{.Id}}' "$IMAGE" 2>/dev/null)" = "$_old_id" ]; then
       echo "porthole up: image build failed" >&2; exit 1
     fi
+    # Older bases go with the build, wherever it runs: after an install-time build the launch finds
+    # nothing to rebuild. A container still on an old image keeps its layers.
+    drop_superseded "" "$_ctx"
   fi
   _image_id=$(docker image inspect --format '{{.Id}}' "$IMAGE")
+  # The newest image for this app, which an open app compares with its own to offer Restart to Update.
+  mkdir -p "$_cache" 2>/dev/null && printf '%s\n' "$_image_id" > "$_cache/$SLUG.image" 2>/dev/null || true
+  # Prepared ahead of a launch (an install): the container, perhaps in use, moves to it at the next one.
+  [ "$_image_only" = 1 ] && return 0
 
   # A container is reused only if it runs the current image; otherwise it is recreated. Its
   # state lives in named volumes, which are kept.
@@ -354,6 +394,7 @@ cmd_exec() {
   . "$_spec"
   [ -n "$CONTAINER" ] || { echo "porthole exec: spec missing CONTAINER: $_spec" >&2; exit 1; }
   cmd_up "$_spec" 1>&2   # ensure it's up; keep up's chatter off the command's stdout
+  up_unlock              # exec keeps this pid, which would hold the lock for the command's whole run
   # shellcheck disable=SC2086  # $_flags passthrough to docker exec is intentional
   exec docker exec $_flags "$CONTAINER" "$@"
 }
