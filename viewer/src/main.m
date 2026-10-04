@@ -60,6 +60,7 @@
     PortholeLaunchWindow *_launchWindow;  // its progress window, made on first need
     BOOL _preparing;                      // --prepare: show setup, then quit; never connect
     BOOL _quietLaunch;                    // waiting on a build whose own window shows its progress
+    BOOL _openAfterPrepare;               // opened while preparing: open the app once the build is done
     NSString *_runningImage;              // the image the app's container runs, from the launcher
     BOOL _appShownSomething;              // the app has put up a window or tray of its own
 }
@@ -215,12 +216,15 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     [[self launchWindow] showError:text detail:detail quit:^{ [NSApp terminate:nil]; }];
 }
 
-// --prepare finished: the app is ready for its next launch.
+// --prepare finished: the app is ready for its next launch. If it was opened meanwhile, open it now
+// -- as its own process, once this one has quit: the install that runs this one waits for it.
 - (void)launchSessionPrepared:(PortholeLaunchSession *)s {
     (void)s;
+    if (_openAfterPrepare) PortholeRunDetached(PortholeRestartCommand(getpid(), [[NSBundle mainBundle] bundlePath]));
     [self endLaunchWindow];
     [NSApp terminate:nil];
 }
+
 
 // Setup is done: wear the icon the launcher found and connect as a plain socket launch would.
 - (void)launchSession:(PortholeLaunchSession *)s readyWithSocket:(NSString *)socket icon:(NSString *)icon image:(NSString *)image {
@@ -596,8 +600,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // the newer image the install built.
 - (void)menuRestartToUpdate:(id)s {
     (void)s;
-    NSArray *cmd = PortholeRestartCommand(getpid(), [[NSBundle mainBundle] bundlePath]);
-    [NSTask launchedTaskWithLaunchPath:cmd[0] arguments:[cmd subarrayWithRange:NSMakeRange(1, cmd.count - 1)]];
+    PortholeRunDetached(PortholeRestartCommand(getpid(), [[NSBundle mainBundle] bundlePath]));
     [NSApp terminate:nil];
 }
 
@@ -805,8 +808,11 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // Re-launching (`op gui` / clicking the app) while we sit resident in the menu bar
 // with no window open: single-instance means LaunchServices re-activates us rather
 // than starting a second process -- so bring the main 1Password window back.
+// During an install's prepare, it's this process the click re-activates (same bundle, already
+// running): remember, and launch once the build is done.
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)hasVisible {
     (void)app; (void)hasVisible;
+    if (_preparing) { _openAfterPrepare = YES; return NO; }
     // Reuse the tray's "Open" path rather than a bare `if (_mainWid) showFront`: that
     // did nothing when 1Password had destroyed its own main window (its tray toggle-hide
     // clears _mainWid), so a Dock click / `op gui` / `open` re-activated us with NO window.

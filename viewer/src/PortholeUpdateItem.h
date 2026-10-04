@@ -12,3 +12,6 @@ NSString *PortholeRecordedImage(NSString *cacheDir, NSString *slug);   // <cache
 // and its recovery watcher has finished (at most 30 s): on-demand apps' watchers stop the container after
 // a clean quit, and must not stop the relaunched one. argv[0] is the program to run.
 NSArray *PortholeRestartCommand(pid_t pid, NSString *bundle);
+// Start `cmd` (argv[0] is the program) without waiting for it, holding none of our input or output, so
+// it outlives us and nothing reading our output waits for it.
+void PortholeRunDetached(NSArray *cmd);

@@ -22,3 +22,13 @@ NSArray *PortholeRestartCommand(pid_t pid, NSString *bundle) {
         @"exec open \"$3\"";
     return @[@"/bin/sh", @"-c", script, @"sh", [NSString stringWithFormat:@"%d", (int)pid], watcher, bundle];
 }
+
+void PortholeRunDetached(NSArray *cmd) {
+    NSTask *t = [[[NSTask alloc] init] autorelease];
+    [t setLaunchPath:cmd[0]];
+    [t setArguments:[cmd subarrayWithRange:NSMakeRange(1, cmd.count - 1)]];
+    [t setStandardInput:[NSFileHandle fileHandleWithNullDevice]];
+    [t setStandardOutput:[NSFileHandle fileHandleWithNullDevice]];
+    [t setStandardError:[NSFileHandle fileHandleWithNullDevice]];
+    [t launch];
+}

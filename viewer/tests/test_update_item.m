@@ -56,6 +56,17 @@ int main(void) {
                 isEqualToString:bundle]);                      // ...then reopened this app
         (void)app;
 
+        // A detached command outlives us without holding our output: an install's postinstall waits for
+        // its output to close, and must not wait for the app the command opens.
+        int fds[2]; assert(pipe(fds) == 0);
+        int saved = dup(1); dup2(fds[1], 1); close(fds[1]);
+        PortholeRunDetached(@[@"/bin/sleep", @"3"]);
+        dup2(saved, 1); close(saved);
+        NSDate *t1 = [NSDate date];
+        char b; while (read(fds[0], &b, 1) > 0) {}
+        assert([[NSDate date] timeIntervalSinceDate:t1] < 1.0);   // EOF now, not when sleep ends
+        close(fds[0]);
+
         [[NSFileManager defaultManager] removeItemAtPath:dir error:NULL];
         printf("test_update_item: OK\n");
     }
