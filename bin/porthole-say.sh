@@ -36,8 +36,15 @@ say_error() {
   fi
 }
 
-say_ready() {
-  _say_json && printf '{"t":"ready","socket":%s,"icon":%s}\n' "$(json_str "$1")" "$(json_str "${2:-}")" >&7
+say_ready() {  # SOCKET ICON IMAGE (the image the app's container runs)
+  _say_json && printf '{"t":"ready","socket":%s,"icon":%s,"image":%s}\n' \
+    "$(json_str "$1")" "$(json_str "${2:-}")" "$(json_str "${3:-}")" >&7
+  return 0
+}
+
+# The app is ready to launch (--prepare): built, and nothing started.
+say_prepared() {
+  _say_json && printf '{"t":"prepared"}\n' >&7
   return 0
 }
 

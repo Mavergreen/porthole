@@ -16,6 +16,11 @@ fi
 if [ "${1:-}" = image ] && [ "${2:-}" = inspect ] && [ -n "${CREATED_FILE:-}" ]; then
   case "$*" in *Created*) cat "$CREATED_FILE"; exit 0 ;; esac
 fi
+# `docker image inspect --format {{.Id}} IMAGE`: answer from $STUB_DIR/docker-image-id when a test
+# sets it. Does not consume a numbered replay slot.
+if [ "${1:-}" = image ] && [ "${2:-}" = inspect ] && [ -f "$STUB_DIR/docker-image-id" ]; then
+  case "$*" in *.Id*) cat "$STUB_DIR/docker-image-id"; exit 0 ;; esac
+fi
 case "$*" in
   "volume ls -q --filter label=dev.mavergreen.porthole.slug --format"*)
     cat "$STUB_DIR/docker-volumes" 2>/dev/null; exit 0 ;;

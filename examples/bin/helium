@@ -17,8 +17,10 @@ TUNNEL_PID="${TMPDIR:-/tmp}/helium-xpra-tunnel.$PORT.pid"
 # Mac-side end of the xpra Unix-socket bridge (the client connects here).
 XPRA_SOCK="${TMPDIR:-/tmp}/helium-xpra.sock"
 CONFIG_DIR="${HELIUM_CONFIG_DIR:-$HOME/.config/porthole/helium}"
-REBUILD=0
+REBUILD=0 PREPARE=0
 [ "${1:-}" = --rebuild ] && REBUILD=1
+# --prepare (an install, ahead of any launch): the VM, then the image; no container change, no questions.
+[ "${1:-}" = --prepare ] && PREPARE=1
 PORTHOLE_XPRA_VERSION="${HELIUM_XPRA_VERSION:-6.5}"   # major.minor the viewer speaks
 
 _root=$(cd "$(dirname "$0")/.." && pwd)   # Contents/Resources of the materialized app
@@ -31,6 +33,7 @@ else
   say_step() { printf '%s\n' "$1" >&2; }
   say_progress() { :; }
   say_ready() { :; }
+  say_prepared() { :; }
   say_error() { printf '%s\n' "$1" >&2; [ -z "${2:-}" ] || printf '%s\n' "$2" >&2; }
   say_ask() { printf '%s' "$3"; }
 fi
@@ -132,7 +135,7 @@ fi
 # Guard: both IPCSERVER (invoked) and ENGINE_BIN_DIR (prepended to PATH) are non-empty past here.
 { [ -n "$IPCSERVER" ] && [ -x "$IPCSERVER" ]; } \
   || die "the Porthole transport (s6-ipcserver) is missing -- reinstall Porthole"
-_up_flag=""; [ "$REBUILD" = 1 ] && _up_flag="--rebuild"
+_up_flag=""; [ "$REBUILD" = 1 ] && _up_flag="--rebuild"; [ "$PREPARE" = 1 ] && _up_flag="--image-only"
 # up's progress and errors reach the window directly (its stdout is ours); its stderr is kept for
 # the error's details. POSIX: file capture, not process substitution.
 _uperr=$(mktemp "${TMPDIR:-/tmp}/helium-up.XXXXXX")
@@ -146,6 +149,7 @@ case $_uprc in
   3) exit 1 ;;   # porthole up already told the window why (e.g. not enough disk space)
   *) die "couldn't start its Linux container." "$_tail" ;;
 esac
+[ "$PREPARE" = 1 ] && { say_prepared; exit 0; }
 
 check_container_staleness
 check_xpra_compat
@@ -280,7 +284,7 @@ if [ -x "$_root/bin/porthole-recover-watch" ] && [ -z "${HELIUM_NO_RECOVER:-}" ]
 fi
 
 if [ "${PORTHOLE_PROTOCOL:-}" = 1 ]; then
-  say_ready "$XPRA_SOCK" "${PORTHOLE_APP_ICON:-}"
+  say_ready "$XPRA_SOCK" "${PORTHOLE_APP_ICON:-}" "$(docker image inspect --format '{{.Id}}' "$IMAGE" 2>/dev/null || true)"
   exit 0
 fi
 echo "Linux Helium viewer: launching -> $XPRA_SOCK (container stops when you Quit the viewer)" >&2

@@ -13,7 +13,17 @@ say() { sh -c '. "$1"; shift; "$@"' _ "$REPO/bin/porthole-say.sh" "$@"; }
   [ "$(say say_step 'Downloading')" = '{"t":"step","text":"Downloading"}' ]
   [ "$(say say_progress 0.5)" = '{"t":"progress","fraction":0.5}' ]
   [ "$(say say_error 'No space' 'details here')" = '{"t":"error","text":"No space","detail":"details here"}' ]
-  [ "$(say say_ready /tmp/x.sock /tmp/i.icns)" = '{"t":"ready","socket":"/tmp/x.sock","icon":"/tmp/i.icns"}' ]
+  [ "$(say say_ready /tmp/x.sock /tmp/i.icns)" = '{"t":"ready","socket":"/tmp/x.sock","icon":"/tmp/i.icns","image":""}' ]
+}
+
+@test "say_ready carries the image the app is running" {
+  export PORTHOLE_PROTOCOL=1
+  [ "$(say say_ready /s /i sha256:x)" = '{"t":"ready","socket":"/s","icon":"/i","image":"sha256:x"}' ]
+}
+
+@test "say_prepared is one protocol line, and silent outside the viewer" {
+  [ "$(PORTHOLE_PROTOCOL=1 say say_prepared)" = '{"t":"prepared"}' ]
+  [ -z "$(say say_prepared 2>&1)" ]
 }
 
 @test "say_ask sends the question and returns the viewer's answer, whatever the key order" {

@@ -130,3 +130,26 @@ EOF
   [ "$(grep -c '^porthole describe-data oldapp-gui-data$' "$PORTHOLE_LOG")" -eq 1 ] || { cat "$PORTHOLE_LOG"; return 1; }
   [[ "$output" == *'Linux Old App was uninstalled; its data uses 1.2 GB.'* ]] || return 1
 }
+
+# An install prepares the app ahead of its launch: the VM, then the image, and nothing that needs the
+# app's window or an answer -- no xpra, no viewer, no questions.
+@test "--prepare checks the VM, builds the image only, and says prepared" {
+  app
+  printf 'oldapp-gui-data oldapp\n' > "$STUB_DIR/docker-volumes"
+  export PORTHOLE_LOG="$WORK/porthole.log"
+  run env PORTHOLE_PROTOCOL=1 DOCKER_HOST=tcp://192.0.2.1:2376 THUNDERBIRD_NO_RECOVER=1 \
+      PORTHOLE_READY_TRIES=1 "$R/bin/thunderbird" --prepare </dev/null
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q '^porthole up --image-only .*/Contents/Resources/thunderbird.container$' "$PORTHOLE_LOG" || { cat "$PORTHOLE_LOG"; return 1; }
+  [ "$(printf '%s\n' "$output" | grep '^{' | tail -n 1)" = '{"t":"prepared"}' ] || { echo "$output"; return 1; }
+  [[ "$output" != *'"t":"ask"'* ]] || return 1
+  [[ "$output" != *'"t":"ready"'* ]] || return 1
+  ! grep -q 'xpra\|socat' "$STUB_LOG" || { cat "$STUB_LOG"; return 1; }
+}
+
+@test "ready names the image the app is running" {
+  app; echo sha256:running > "$STUB_DIR/docker-image-id"
+  launch </dev/null
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *'"image":"sha256:running"}'* ]] || { echo "$output"; return 1; }
+}
