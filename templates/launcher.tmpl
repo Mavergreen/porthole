@@ -92,13 +92,6 @@ image_created_epoch() {   # $1 = image -> seconds since the epoch (UTC), or fail
   _created=${_created%%.*}; _created=${_created%Z}
   date -ju -f '%Y-%m-%dT%H:%M:%S' "$_created" '+%s' 2>/dev/null
 }
-check_container_staleness() {
-  _days=${@ENVPREFIX@_STALE_DAYS:-30}
-  _cepoch=$(image_created_epoch "$IMAGE") || return 0
-  _age=$(( ($(date -u '+%s') - _cepoch) / 86400 ))
-  [ "$_age" -gt "$_days" ] || return 0
-  nudge_once staleness "your $IMAGE container is ${_age} days old; rebuild to pick up updates: $0 --rebuild"
-}
 check_xpra_compat() {
   _raw=$(docker exec "$CONTAINER" xpra --version 2>/dev/null) || return 0
   _ver=${_raw##* }; _ver=${_ver#v}
@@ -150,7 +143,6 @@ case $_uprc in
 esac
 [ "$PREPARE" = 1 ] && { say_prepared; exit 0; }
 
-check_container_staleness
 check_xpra_compat
 say_step "Starting @NAME@"
 

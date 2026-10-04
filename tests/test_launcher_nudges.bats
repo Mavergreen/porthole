@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # platform: host-agnostic
-# Generated launcher: container-staleness + xpra-compat nudges (parity with op).
+# Generated launcher: the xpra-compat nudge, and no staleness nudge (releases rebuild apps at install).
 # Mavericks: no `env -u`; set empty vars. HOME points into the temp dir so the
 # once/day nudge marker is isolated per test (no cross-run suppression).
 load test_helper
@@ -25,17 +25,11 @@ EOF
   rm -rf "$d"
 }
 
-@test "launcher: old container nudges to rebuild" {
+# Each preset release rebuilds its app at install, so an old image is no reason to ask for --rebuild.
+@test "launcher: an old container is not nudged" {
   run_thunderbird "2000-01-01T00:00:00.000000000Z"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [[ "$output" == *"days old"* ]] || return 1
-  [[ "$output" == *"--rebuild"* ]] || return 1
-}
-
-@test "launcher: fresh container does not nudge" {
-  run_thunderbird "2999-01-01T00:00:00.000000000Z"
-  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [[ "$output" != *"days old"* ]] || return 1
+  [[ "$output" != *"days old"* ]] || { echo "$output"; return 1; }
 }
 
 @test "launcher --rebuild delegates a fresh build to porthole up --rebuild" {
