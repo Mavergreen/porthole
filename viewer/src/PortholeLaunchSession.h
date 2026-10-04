@@ -7,7 +7,10 @@
 - (void)launchSession:(PortholeLaunchSession *)s progress:(double)fraction;
 - (void)launchSession:(PortholeLaunchSession *)s ask:(NSString *)askId text:(NSString *)text choices:(NSArray *)choices;
 - (void)launchSession:(PortholeLaunchSession *)s failed:(NSString *)text detail:(NSString *)detail;
-- (void)launchSession:(PortholeLaunchSession *)s readyWithSocket:(NSString *)socket icon:(NSString *)icon;
+// image: the image the app's container runs ("" when the launcher didn't say).
+- (void)launchSession:(PortholeLaunchSession *)s readyWithSocket:(NSString *)socket icon:(NSString *)icon image:(NSString *)image;
+// --prepare finished: the app is built, and nothing was started.
+- (void)launchSessionPrepared:(PortholeLaunchSession *)s;
 @end
 
 @interface PortholeLaunchSession : NSObject

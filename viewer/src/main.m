@@ -57,6 +57,8 @@
     NSString *_lostMarker;         // written just before we exit on a lost backend
     PortholeLaunchSession *_launch;       // the launcher we run with --launch, until it says ready
     PortholeLaunchWindow *_launchWindow;  // its progress window, made on first need
+    BOOL _preparing;                      // --prepare: show setup, then quit; never connect
+    NSString *_runningImage;              // the image the app's container runs, from the launcher
     BOOL _appShownSomething;              // the app has put up a window or tray of its own
 }
 
@@ -135,8 +137,11 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     if (la.launcherPath) {
         _launch = [[PortholeLaunchSession alloc] initWithLauncher:la.launcherPath arguments:la.launcherArgs];
         _launch.delegate = self;
+        _preparing = la.prepare;
         [_launch start];
-        [self performSelector:@selector(showLaunchWindow) withObject:nil afterDelay:0.5];
+        // An install's prepare is why the window exists, so it shows at once.
+        if (_preparing) [self showLaunchWindow];
+        else [self performSelector:@selector(showLaunchWindow) withObject:nil afterDelay:0.5];
         return;
     }
     NSString *socketPath = la.socketPath;
@@ -187,12 +192,26 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     (void)s;
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(showLaunchWindow) object:nil];
     [self showLaunchWindow];
+    if (_preparing) {
+        NSString *again = [NSString stringWithFormat:@"Opening %@ will try again.", [self appName]];
+        detail = detail.length ? [detail stringByAppendingFormat:@"\n\n%@", again] : again;
+        [[self launchWindow] showError:text detail:detail quit:^{ exit(1); }];
+        return;
+    }
     [[self launchWindow] showError:text detail:detail quit:^{ [NSApp terminate:nil]; }];
 }
 
-// Setup is done: wear the icon the launcher found and connect as a plain socket launch would.
-- (void)launchSession:(PortholeLaunchSession *)s readyWithSocket:(NSString *)socket icon:(NSString *)icon {
+// --prepare finished: the app is ready for its next launch.
+- (void)launchSessionPrepared:(PortholeLaunchSession *)s {
     (void)s;
+    [self endLaunchWindow];
+    [NSApp terminate:nil];
+}
+
+// Setup is done: wear the icon the launcher found and connect as a plain socket launch would.
+- (void)launchSession:(PortholeLaunchSession *)s readyWithSocket:(NSString *)socket icon:(NSString *)icon image:(NSString *)image {
+    (void)s;
+    [_runningImage release]; _runningImage = [image copy];
     [self endLaunchWindow];
     [self wearIcon:icon];
     [self connectToSocket:socket];
@@ -800,6 +819,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     [_staticMenu release];
     [_remoteMenu release];
     [_lostMarker release];
+    [_runningImage release];
     [super dealloc];
 }
 @end

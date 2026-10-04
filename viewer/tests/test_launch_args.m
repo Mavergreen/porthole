@@ -13,6 +13,15 @@ int main(void) {
         assert(b.launcherPath == nil);
         assert([b.socketPath isEqualToString:@"/tmp/app-xpra.sock"]);
 
+        assert(!a.prepare);
+
+        // An install's prepare: the launcher runs with --prepare first, then whatever followed.
+        PortholeLaunchArgs *p = PortholeParseLaunchArgs(@[@"/x/Porthole", @"--prepare", @"/x/bin/sig", @"-v"]);
+        assert(p.prepare);
+        assert([p.launcherPath isEqualToString:@"/x/bin/sig"]);
+        assert([p.launcherArgs isEqualToArray:(@[@"--prepare", @"-v"])]);
+        assert(p.socketPath == nil);
+
         PortholeLaunchArgs *c = PortholeParseLaunchArgs(@[@"/x/Porthole"]);
         assert(c.launcherPath == nil && c.socketPath == nil);
         printf("test_launch_args: OK\n");

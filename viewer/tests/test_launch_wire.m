@@ -16,8 +16,9 @@
 - (void)launchSession:(id)s ask:(NSString *)i text:(NSString *)t choices:(NSArray *)c {
     [_events addObject:[NSString stringWithFormat:@"ask:%@:%lu", i, (unsigned long)c.count]]; }
 - (void)launchSession:(id)s failed:(NSString *)t detail:(NSString *)d { [_events addObject:[@"failed:" stringByAppendingString:t]]; }
-- (void)launchSession:(id)s readyWithSocket:(NSString *)k icon:(NSString *)i {
-    [_events addObject:[NSString stringWithFormat:@"ready:%@:%@", k, i]]; }
+- (void)launchSession:(id)s readyWithSocket:(NSString *)k icon:(NSString *)i image:(NSString *)m {
+    [_events addObject:[NSString stringWithFormat:@"ready:%@:%@:%@", k, i, m]]; }
+- (void)launchSessionPrepared:(id)s { [_events addObject:@"prepared"]; }
 @end
 
 static void pump(BOOL (^cond)(void)) {
@@ -53,9 +54,9 @@ int main(void) {
         char buf[256]; ssize_t n = read(toLauncher[0], buf, sizeof buf - 1); assert(n > 0); buf[n] = 0;
         assert(strstr(buf, "\"answer\"") && strstr(buf, "\"q1\"") && strstr(buf, "\"Delete\"") && buf[n-1] == '\n');
 
-        put(toViewer[1], "{\"t\":\"ready\",\"socket\":\"/tmp/x.sock\",\"icon\":\"\"}\n");
+        put(toViewer[1], "{\"t\":\"ready\",\"socket\":\"/tmp/x.sock\",\"icon\":\"\",\"image\":\"sha256:run\"}\n");
         pump(^BOOL{ return r.events.count >= 4; });
-        assert([r.events[3] isEqualToString:@"ready:/tmp/x.sock:"]);
+        assert([r.events[3] isEqualToString:@"ready:/tmp/x.sock::sha256:run"]);
 
         // A second session whose launcher dies without a word -> failed.
         int p2[2], q2[2]; assert(pipe(p2) == 0 && pipe(q2) == 0);
@@ -78,7 +79,7 @@ int main(void) {
             arguments:@[@"-c", @"echo '{\"t\":\"ready\",\"socket\":\"/tmp/y.sock\"}'"]] autorelease];
         Rec *r4 = [[[Rec alloc] init] autorelease]; s4.delegate = r4; [s4 start];
         pump(^BOOL{ return r4.events.count >= 1; });
-        assert([r4.events[0] hasPrefix:@"ready:/tmp/y.sock"]);
+        assert([r4.events[0] isEqualToString:@"ready:/tmp/y.sock::"]);   // no image named: empty
         struct rusage a, b; getrusage(RUSAGE_SELF, &a);
         sleep(1);   // the readers run on their own threads; this thread stays idle
         getrusage(RUSAGE_SELF, &b);
@@ -104,6 +105,14 @@ int main(void) {
         PortholeLaunchSession *s6 = [[[PortholeLaunchSession alloc] initWithReadFD:p6[0] writeFD:q6[1]] autorelease];
         close(q6[0]);
         [s6 answer:@"q" choice:@"Keep"];
+
+        // A prepare that finishes says so, and its clean exit afterwards is not a failure.
+        PortholeLaunchSession *s7 = [[[PortholeLaunchSession alloc] initWithLauncher:@"/bin/sh"
+            arguments:@[@"-c", @"echo '{\"t\":\"prepared\"}'"]] autorelease];
+        Rec *r7 = [[[Rec alloc] init] autorelease]; s7.delegate = r7; [s7 start];
+        pump(^BOOL{ return r7.events.count >= 1; });
+        pump(^BOOL{ return r7.events.count >= 2; });   // give a wrongful "stopped" report time to arrive
+        assert(r7.events.count == 1 && [r7.events[0] isEqualToString:@"prepared"]);
 
         printf("test_launch_wire: OK\n");
     }

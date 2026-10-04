@@ -54,7 +54,8 @@
     else if ([t isEqualToString:@"progress"]) [d launchSession:self progress:[m[@"fraction"] doubleValue]];
     else if ([t isEqualToString:@"ask"]) [d launchSession:self ask:m[@"id"] text:m[@"text"] ?: @"" choices:m[@"choices"] ?: @[]];
     else if ([t isEqualToString:@"error"]) { _finished = YES; [d launchSession:self failed:m[@"text"] ?: @"" detail:m[@"detail"] ?: @""]; }
-    else if ([t isEqualToString:@"ready"]) { _finished = YES; [d launchSession:self readyWithSocket:m[@"socket"] icon:m[@"icon"] ?: @""]; }
+    else if ([t isEqualToString:@"ready"]) { _finished = YES; [d launchSession:self readyWithSocket:m[@"socket"] icon:m[@"icon"] ?: @"" image:m[@"image"] ?: @""]; }
+    else if ([t isEqualToString:@"prepared"]) { _finished = YES; [d launchSessionPrepared:self]; }
 }
 
 - (void)start {
