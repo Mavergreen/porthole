@@ -13,3 +13,5 @@ build-*/
 # Default build root is $MAVERICKS_BUILD_ROOT (outside the tree); _build/ and dist/ are only the
 # deliberate-in-tree escape hatch (MAVERICKS_BUILD_ROOT="$PWD" shipyard-cmake ...).
 /porthole-cross/
+/.superpowers/
+/.idea/
