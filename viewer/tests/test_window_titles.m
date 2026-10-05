@@ -28,6 +28,12 @@ int main(void) {
         assert(!PortholeQuitsWhenWindowsClose(NO, 0));   // still starting: the launch window closing isn't the end
         assert(PortholeQuitsWhenWindowsClose(YES, 0));   // the app's windows are gone and nothing else holds it
         assert(!PortholeQuitsWhenWindowsClose(YES, 1));  // a menu-bar extra keeps it resident
+        // Closing a window on the Mac closes it in the app, as a Linux window manager would -- except
+        // the main window, which closes to the menu bar, and popups, which the app dismisses itself.
+        // Signal's About, once closed only on the Mac, stayed open in Signal and never came back.
+        assert(PortholeCloseTellsApp(NO, NO));     // a dialog: About, Settings, an approval prompt
+        assert(!PortholeCloseTellsApp(YES, NO));   // the main window: close to the menu bar
+        assert(!PortholeCloseTellsApp(NO, YES));   // a popup
         printf("test_window_titles: OK\n");
     }
     return 0;

@@ -6,4 +6,5 @@ int PortholeOnePasswordLockState(NSArray *titles);   // 1 locked, 0 unlocked, -1
 NSString *PortholeTrackedTitle(BOOL overrideRedirect, NSString *title);   // nil: not a window we track
 BOOL PortholeLockItemEnabled(NSArray *titles);                            // Lock grays out while locked
 BOOL PortholeWantsDockIcon(BOOL visibleAppWindow, NSUInteger trayCount);  // no tray to click -> keep the Dock
+BOOL PortholeCloseTellsApp(BOOL isMainWindow, BOOL overrideRedirect);       // a Mac close closes it in the app
 BOOL PortholeQuitsWhenWindowsClose(BOOL appHasShownSomething, NSUInteger trayCount);  // not while still starting

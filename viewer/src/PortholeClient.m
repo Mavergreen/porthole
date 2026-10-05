@@ -27,6 +27,7 @@
      modifiers:(NSArray *)mods pressed:(int)pressed;
 - (void)focusGained:(long)wid;
 - (void)focusLost:(long)wid;
+- (void)closeWindow:(long)wid;
 - (void)configureWid:(long)wid w:(int)w h:(int)h;
 - (void)clipboardChanged;
 - (void)provideClipboardText:(NSData *)utf8;
@@ -582,6 +583,7 @@
     if (getenv("PORTHOLE_KEYLOG")) NSLog(@"[FOCUS] gained wid=%ld (was %ld)", wid, (long)_focusedWid);
     if (_focusedWid != wid) { _focusedWid = wid; [self sendPacket:@[@"focus", @(wid), @[]]]; }
 }
+- (void)closeWindow:(long)wid { [self sendPacket:@[@"close-window", @(wid)]]; }
 - (void)focusLost:(long)wid {
     (void)wid;
     [self performSelector:@selector(sendLostFocus) withObject:nil afterDelay:0.05
@@ -654,6 +656,7 @@ void rds_key(rds_session *s, long wid, const char *keysym, uint32_t keyval,
 }
 void rds_window_focus_gained(rds_session *s, long wid) { [(PortholeClient *)s focusGained:wid]; }
 void rds_window_focus_lost(rds_session *s, long wid)   { [(PortholeClient *)s focusLost:wid]; }
+void rds_window_close(rds_session *s, long wid)        { [(PortholeClient *)s closeWindow:wid]; }
 void rds_configure_window(rds_session *s, long wid, int w, int h) {
     [(PortholeClient *)s configureWid:wid w:w h:h];
 }

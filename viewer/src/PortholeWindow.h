@@ -17,6 +17,8 @@
 // Bring this window back on screen and focus it (e.g. re-launching the app while
 // it sits resident in the menu bar with its window closed).
 - (void)showFront;
+// A user's close of this window also closes it in the app (dialogs; not the main window or popups).
+@property(assign, nonatomic) BOOL closeTellsApp;
 // Show this popup as the key window (used for the Quick Access panel, so it captures
 // the keyboard without the main window needing to be shown/focused).
 - (void)makeKeyPopup;

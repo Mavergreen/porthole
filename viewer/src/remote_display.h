@@ -126,6 +126,8 @@ void rds_key(rds_session *s, long wid, const char *keysym, uint32_t keyval,
  * focus (and any protocol-specific popup dismissal) from these. */
 void rds_window_focus_gained(rds_session *s, long wid);
 void rds_window_focus_lost(rds_session *s, long wid);
+/* The user closed a window; ask the remote app to close it, as a window manager would. */
+void rds_window_close(rds_session *s, long wid);
 /* The shell resized a window; ask the remote to reflow to (w,h). */
 void rds_configure_window(rds_session *s, long wid, int w, int h);
 

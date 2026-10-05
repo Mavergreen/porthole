@@ -594,6 +594,12 @@ static NSString *PortholeKeyname(unichar c) {
 // window loses key) dismisses them.
 - (void)windowDidBecomeKey:(NSNotification *)n { rds_window_focus_gained(_session, _wid); }
 - (void)windowDidResignKey:(NSNotification *)n { rds_window_focus_lost(_session, _wid); }
+// Only a user's close (close button, Cmd-W) asks; a window the app removed is already gone.
+- (BOOL)windowShouldClose:(id)sender {
+    (void)sender;
+    if (_closeTellsApp) rds_window_close(_session, _wid);
+    return YES;
+}
 - (NSPoint)contentTopLeftScreen {
     NSRect cf = [_window contentRectForFrameRect:[_window frame]];   // screen, bottom-left
     CGFloat screenH = [[NSScreen mainScreen] frame].size.height;

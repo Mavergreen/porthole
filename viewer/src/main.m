@@ -338,6 +338,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
                         overrideRedirect:overrideRedirect parentTopLeft:parentTopLeft title:title];
     _windows[@(wid)] = w;
     if (!overrideRedirect && !_mainWid) _mainWid = wid;   // first normal window
+    w.closeTellsApp = PortholeCloseTellsApp(wid == _mainWid, overrideRedirect);
     // A tray was just clicked/hotkeyed -> this OR window is 1Password's Quick
     // Access panel; show it centered (where modern 1Password puts it) rather than
     // at its remote position relative to the main window.
