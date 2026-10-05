@@ -11,6 +11,12 @@ set -u
 : "${XPRA_SOCKET:=/run/user/1000/porthole-xpra.sock}"
 : "${XPRA_DISPLAY:=:100}"
 
+# The Mac's time zone (porthole up passes it): apps read the zone once, at start, so set it first.
+if [ -n "${PORTHOLE_TZ:-}" ] && [ -f "/usr/share/zoneinfo/$PORTHOLE_TZ" ]; then
+  ln -sf "/usr/share/zoneinfo/$PORTHOLE_TZ" /etc/localtime
+  printf '%s\n' "$PORTHOLE_TZ" > /etc/timezone
+fi
+
 # Data volume (thunderbird-gui-data) mounts at /home/thunderbird/.thunderbird, arrives root-owned.
 mkdir -p /home/thunderbird/.thunderbird /run/user/1000
 chown -R thunderbird:thunderbird /home/thunderbird /run/user/1000

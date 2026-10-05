@@ -11,6 +11,12 @@ set -u
 : "${XPRA_SOCKET:=/run/user/1000/porthole-xpra.sock}"
 : "${XPRA_DISPLAY:=:100}"
 
+# The Mac's time zone (porthole up passes it): apps read the zone once, at start, so set it first.
+if [ -n "${PORTHOLE_TZ:-}" ] && [ -f "/usr/share/zoneinfo/$PORTHOLE_TZ" ]; then
+  ln -sf "/usr/share/zoneinfo/$PORTHOLE_TZ" /etc/localtime
+  printf '%s\n' "$PORTHOLE_TZ" > /etc/timezone
+fi
+
 # Data volume (clion-gui-data) mounts at /home/clion/.config/JetBrains, arrives root-owned.
 mkdir -p /home/clion/.config/JetBrains /run/user/1000
 chown -R clion:clion /home/clion/.config /run/user/1000

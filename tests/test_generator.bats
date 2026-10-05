@@ -257,3 +257,13 @@ version_conf() {  # $1 = dir, $2 = APP_VERSION line or empty
   [ "$(fp "$a/demo")" != "$(fp "$b/demo")" ] || { rm -rf "$a" "$b"; return 1; }
   rm -rf "$a" "$b"
 }
+
+# The container's zone is the Mac's (PORTHOLE_TZ, set by porthole up), applied before the app starts:
+# apps read it once, at start.
+@test "the generated entrypoint sets the time zone before starting xpra and the app" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  e=examples/thunderbird/start-thunderbird-gui.sh
+  tz=$(grep -n 'zoneinfo/\$PORTHOLE_TZ" /etc/localtime' "$e" | head -1 | cut -d: -f1)
+  xp=$(grep -n 'xpra start' "$e" | head -1 | cut -d: -f1)
+  [ -n "$tz" ] && [ -n "$xp" ] && [ "$tz" -lt "$xp" ] || { echo "tz=$tz xpra=$xp"; return 1; }
+}

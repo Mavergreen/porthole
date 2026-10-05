@@ -11,6 +11,12 @@ set -u
 : "${XPRA_SOCKET:=/run/user/1000/porthole-xpra.sock}"
 : "${XPRA_DISPLAY:=:100}"
 
+# The Mac's time zone (porthole up passes it): apps read the zone once, at start, so set it first.
+if [ -n "${PORTHOLE_TZ:-}" ] && [ -f "/usr/share/zoneinfo/$PORTHOLE_TZ" ]; then
+  ln -sf "/usr/share/zoneinfo/$PORTHOLE_TZ" /etc/localtime
+  printf '%s\n' "$PORTHOLE_TZ" > /etc/timezone
+fi
+
 # Data volume (helium-gui-data) mounts at /home/helium/.config/net.imput.helium, arrives root-owned.
 mkdir -p /home/helium/.config/net.imput.helium /run/user/1000
 chown -R helium:helium /home/helium/.config /run/user/1000

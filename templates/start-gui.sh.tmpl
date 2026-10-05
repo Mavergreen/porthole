@@ -10,6 +10,12 @@ set -u
 : "${XPRA_SOCKET:=/run/user/1000/porthole-xpra.sock}"
 : "${XPRA_DISPLAY:=:100}"
 
+# The Mac's time zone (porthole up passes it): apps read the zone once, at start, so set it first.
+if [ -n "${PORTHOLE_TZ:-}" ] && [ -f "/usr/share/zoneinfo/$PORTHOLE_TZ" ]; then
+  ln -sf "/usr/share/zoneinfo/$PORTHOLE_TZ" /etc/localtime
+  printf '%s\n' "$PORTHOLE_TZ" > /etc/timezone
+fi
+
 # Data volume (@VOLUME@) mounts at @DATADIR@, arrives root-owned.
 mkdir -p @DATADIR@ /run/user/1000
 chown -R @USER@:@USER@ @DATADIR_PARENT@ /run/user/1000

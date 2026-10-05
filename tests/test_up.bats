@@ -32,6 +32,7 @@ case "$1 $2" in
     case "$_fmt" in
       *Running*) echo true ;;
       *.Image*)  cat "$FAKE/container.$1" ;;
+      *.Config.Env*) cat "$FAKE/env.$1" 2>/dev/null ;;
     esac ;;
   "rm -f") rm -f "$FAKE/container.$3" ;;
   "images --format") cat "$FAKE/base-tags" 2>/dev/null ;;
@@ -66,11 +67,13 @@ case "$1 $2" in
           f=$(cat "$FAKE/free"); [ -f "$FAKE/pruned" ] && [ -f "$FAKE/free-after" ] && f=$(cat "$FAKE/free-after")
           printf 'Filesystem 1024-blocks Used Available Capacity Mounted\noverlay 18000000 1 %s 1%% /\n' "$f"; exit 0 ;;
         esac
-        _name=""; _img=""
+        _name=""; _img=""; _env=""
         while [ $# -gt 0 ]; do
-          case "$1" in --name) _name=$2; shift 2 ;; *) _img=$1; shift ;; esac
+          case "$1" in --name) _name=$2; shift 2 ;; -e) _env="$_env$2
+"; shift 2 ;; *) _img=$1; shift ;; esac
         done
-        sed -n 2p "$FAKE/image.$_img" > "$FAKE/container.$_name" ;;
+        sed -n 2p "$FAKE/image.$_img" > "$FAKE/container.$_name"
+        printf '%s' "$_env" > "$FAKE/env.$_name" ;;
     esac ;;
 esac
 exit 0
@@ -191,6 +194,42 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:0$' "$STUB_LOG" || { cat "$STUB_LOG"; return 1; }
   ! grep -q '^docker rmi ghcr.io/mavergreen/porthole-base:1$' "$STUB_LOG" || false
+}
+
+# Signal showed every message four hours ahead: its container ran UTC on a Mac in New York. A
+# container takes the Mac's time zone when it's created, and a launch after the Mac's zone has changed
+# (travel) recreates it -- apps read the zone only when they start.
+@test "a new container gets the Mac's time zone" {
+  fake_docker; make_spec
+  PORTHOLE_HOST_TZ=America/New_York "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  grep -qx 'PORTHOLE_TZ=America/New_York' "$FAKE/env.demo-gui" || { cat "$FAKE/env.demo-gui"; return 1; }
+}
+
+@test "a launch in a new time zone recreates the container, volumes kept" {
+  fake_docker; make_spec
+  PORTHOLE_HOST_TZ=America/New_York "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  : > "$STUB_LOG"
+  PORTHOLE_HOST_TZ=Europe/Berlin "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  grep -q '^docker rm -f demo-gui$' "$STUB_LOG" || { cat "$STUB_LOG"; return 1; }
+  grep -qx 'PORTHOLE_TZ=Europe/Berlin' "$FAKE/env.demo-gui" || return 1
+  ! grep -q '^docker volume rm' "$STUB_LOG" || false
+}
+
+@test "a launch in the same time zone keeps the container" {
+  fake_docker; make_spec
+  PORTHOLE_HOST_TZ=America/New_York "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  : > "$STUB_LOG"
+  PORTHOLE_HOST_TZ=America/New_York "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  ! grep -q '^docker rm -f' "$STUB_LOG" || false
+}
+
+# 10.9 links /etc/localtime into /usr/share/zoneinfo; newer macOS into /var/db/timezone/zoneinfo.
+@test "the Mac's time zone is read from its localtime link, wherever the zoneinfo lives" {
+  ln -s /usr/share/zoneinfo/America/New_York "$WORK/lt-old"
+  ln -s /var/db/timezone/zoneinfo/Europe/Berlin "$WORK/lt-new"
+  [ "$(lib host_tz "$WORK/lt-old")" = America/New_York ] || return 1
+  [ "$(lib host_tz "$WORK/lt-new")" = Europe/Berlin ] || return 1
+  [ -z "$(lib host_tz "$WORK/no-such-link")" ]
 }
 
 @test "up labels the image, the container and every data volume with the slug" {
