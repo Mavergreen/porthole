@@ -588,6 +588,13 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
             [upd setHidden:NO]; [upd setTitle:@"Restart to Update"]; [upd setAction:@selector(menuRestartToUpdate:)]; break;
     }
 }
+// The app's own About: its launcher opens it in the running container.
+- (void)menuAboutApp:(id)s {
+    (void)s;
+    NSString *launcher = [[[NSBundle mainBundle] resourcePath]
+                          stringByAppendingPathComponent:[@"bin" stringByAppendingPathComponent:[self appSlug]]];
+    PortholeRunDetached(@[launcher, @"--about"]);
+}
 // This preset's Sparkle updater, where shipyard installs it (its registry's updater-app).
 - (NSString *)updaterPath {
     return [NSString stringWithFormat:@"/Library/Application Support/Mavergreen/%@-updater.app", [self appSlug]];
@@ -671,8 +678,13 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     // App menu (AppKit names it from CFBundleName; first submenu is the app menu).
     NSMenuItem *appHolder = [main addItemWithTitle:@"" action:NULL keyEquivalent:@""];
     NSMenu *appMenu = [[[NSMenu alloc] initWithTitle:app] autorelease];
-    [self item:appMenu title:[@"About " stringByAppendingString:app]
-         action:@selector(orderFrontStandardAboutPanel:) key:@"" target:nil];
+    // An app whose own About can be opened directly (its conf's ABOUT_CMD) shows that one.
+    if ([[[NSBundle mainBundle] objectForInfoDictionaryKey:@"PortholeHasAbout"] boolValue])
+        [self item:appMenu title:[@"About " stringByAppendingString:app]
+             action:@selector(menuAboutApp:) key:@"" target:self];
+    else
+        [self item:appMenu title:[@"About " stringByAppendingString:app]
+             action:@selector(orderFrontStandardAboutPanel:) key:@"" target:nil];
     // Check for Updates… / Restart to Update; menuNeedsUpdate: decides which, as the menu opens.
     [[self item:appMenu title:@"Check for Updates\u2026" action:@selector(menuCheckForUpdates:) key:@"" target:self] setTag:2];
     [appMenu setDelegate:self];

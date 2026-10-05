@@ -193,3 +193,35 @@ icon_w() { sips -g pixelWidth "$1" | awk '/pixelWidth/{print $2}'; }
   [ "$(cat "$(R)/AppIcon.width")" = 0 ]
   cmp -s "$(R)/AppIcon.icns" "$ENGINE/packaging/macos/penguin.icns"
 }
+
+# An app whose own About can be opened directly (1Password: a settings link handed to the running app)
+# names the command; its About menu item runs it in the container instead of the generic panel.
+about_conf() {
+  mkdir -p "$APPS/conf"
+  sed '/^ABOUT_CMD=/d' "$ENGINE/examples/thunderbird.conf" > "$APPS/conf/thunderbird.conf"
+  printf "ABOUT_CMD='/usr/bin/demo-app --show about'\n" >> "$APPS/conf/thunderbird.conf"
+}
+
+@test "an ABOUT_CMD app's launcher opens its About in the container, and nothing more" {
+  about_conf
+  "$ENGINE/bin/porthole" materialize "$APPS/conf/thunderbird.conf" --apps-dir "$APPS" >/dev/null
+  B="$APPS/Linux Thunderbird.app/Contents"
+  [ "$(/usr/libexec/PlistBuddy -c 'Print :PortholeHasAbout' "$B/Info.plist")" = true ] || return 1
+  d="$APPS/stubs"; mkdir -p "$d"
+  printf '#!/bin/sh\necho "docker $*" >> "%s/log"\n' "$APPS" > "$d/docker"
+  printf '#!/bin/sh\n[ "$1" = status ] && echo running\nexit 0\n' > "$d/docker-machine-ctl"
+  printf '#!/bin/sh\nexit 0\n' > "$d/docker-machine"
+  printf '#!/bin/sh\necho "porthole $*" >> "%s/log"\n' "$APPS" > "$d/porthole"
+  chmod +x "$d"/*
+  run env PATH="$d:/usr/bin:/bin" PORTHOLE_BIN="$d/porthole" DOCKER_HOST= DOCKER_CONTEXT= "$B/Resources/bin/thunderbird" --about
+  [ "$status" -eq 0 ] || { echo "$output"; cat "$APPS/log"; return 1; }
+  grep -q "^docker exec -d -u thunderbird -e DISPLAY=:100 -e HOME=/home/thunderbird -e XDG_RUNTIME_DIR=/run/user/1000 thunderbird-gui sh -c /usr/bin/demo-app --show about$" "$APPS/log" || { cat "$APPS/log"; return 1; }
+  ! grep -q '^porthole ' "$APPS/log" || { cat "$APPS/log"; return 1; }
+}
+
+@test "an app without ABOUT_CMD keeps the generic About" {
+  "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
+  B="$APPS/Linux Thunderbird.app/Contents"
+  ! /usr/libexec/PlistBuddy -c 'Print :PortholeHasAbout' "$B/Info.plist" >/dev/null 2>&1 || return 1
+  ! grep -q -- '--about' "$B/Resources/bin/thunderbird"
+}

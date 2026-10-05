@@ -489,7 +489,7 @@ CONF=$(cd "$(dirname "$CONF_ARG")" && pwd)/$(basename "$CONF_ARG")
 [ -f "$CONF" ] || { echo "porthole materialize: no such conf: $CONF" >&2; exit 1; }
 
 # Load the conf for NAME + ICON_GLOB, using the same defaults the generator applies.
-APP= NAME= ICON_GLOB= ICON_URL=
+APP= NAME= ICON_GLOB= ICON_URL= ABOUT_CMD=
 # shellcheck disable=SC1090
 . "$CONF"
 # The conf's basename is authoritative for the slug -- a manifest SLUG= is ignored, exactly as
@@ -616,7 +616,8 @@ cat > "$BUNDLE/Contents/Info.plist" <<EOF
 	<key>CFBundleDisplayName</key><string>$NAME</string>
 	<key>CFBundleIdentifier</key><string>$BUNDLEID</string>
 	<key>CFBundleIconFile</key><string>$ICON_FILE</string>
-	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundlePackageType</key><string>APPL</string>${ABOUT_CMD:+
+	<key>PortholeHasAbout</key><true/>}
 	<key>NSPrincipalClass</key><string>NSApplication</string>
 	<key>LSMinimumSystemVersion</key><string>10.9</string>
 </dict>
