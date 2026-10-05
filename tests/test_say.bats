@@ -55,3 +55,18 @@ say() { sh -c '. "$1"; shift; "$@"' _ "$REPO/bin/porthole-say.sh" "$@"; }
   py=$(command -v python3 || command -v python) || skip "needs a python to parse JSON"
   printf '%s' "$out" | "$py" -c 'import json,sys; m=json.loads(sys.stdin.read()); assert m["t"]=="error" and "red" in m["text"] and "end" in m["detail"], m'
 }
+
+@test "say_mark puts a line in the system log under the app's name, and never fails" {
+  export STUB_LOG="$BATS_TEST_TMPDIR/log" PATH="$BATS_TEST_DIRNAME/stubs:$PATH" PORTHOLE_LOG_NAME=demo
+  run say say_mark 'up: start'
+  [ "$status" -eq 0 ]
+  grep -qx 'logger -t porthole demo: up: start' "$STUB_LOG"
+  run env PATH=/nonexistent /bin/sh -c '. "$1"; say_mark x' _ "$REPO/bin/porthole-say.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "each step a launch shows is also in the system log" {
+  export STUB_LOG="$BATS_TEST_TMPDIR/log" PATH="$BATS_TEST_DIRNAME/stubs:$PATH" PORTHOLE_LOG_NAME=demo
+  say say_step 'Downloading' 2>/dev/null
+  grep -qx 'logger -t porthole demo: step: Downloading' "$STUB_LOG"
+}

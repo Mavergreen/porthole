@@ -23,7 +23,12 @@ exec 7>&1
 # launch waiting for that build can show where it has got to.
 _say_keep() { [ -z "${PORTHOLE_PROGRESS_FILE:-}" ] || printf '%s\n' "$1" >> "$PORTHOLE_PROGRESS_FILE" 2>/dev/null || true; }
 
+# A line in the system log naming the app ($PORTHOLE_LOG_NAME), so a slow launch can be timed
+# afterwards from the log's timestamps. Every step shown is marked too.
+say_mark() { logger -t porthole "${PORTHOLE_LOG_NAME:-porthole}: $1" 2>/dev/null || true; }
+
 say_step() {
+  say_mark "step: $1"
   _ss_line=$(printf '{"t":"step","text":%s}' "$(json_str "$1")")
   _say_keep "$_ss_line"
   if _say_json; then printf '%s\n' "$_ss_line" >&7; else printf '%s\n' "$1" >&2; fi
@@ -42,6 +47,7 @@ say_quiet() {
 }
 
 say_error() {
+  say_mark "error: $1"
   if _say_json; then
     printf '{"t":"error","text":%s,"detail":%s}\n' "$(json_str "$1")" "$(json_str "${2:-}")" >&7
   else
@@ -50,6 +56,7 @@ say_error() {
 }
 
 say_ready() {  # SOCKET ICON IMAGE (the image the app's container runs)
+  say_mark ready
   _say_json && printf '{"t":"ready","socket":%s,"icon":%s,"image":%s}\n' \
     "$(json_str "$1")" "$(json_str "${2:-}")" "$(json_str "${3:-}")" >&7
   return 0
@@ -57,6 +64,7 @@ say_ready() {  # SOCKET ICON IMAGE (the image the app's container runs)
 
 # The app is ready to launch (--prepare): built, and nothing started.
 say_prepared() {
+  say_mark prepared
   _say_json && printf '{"t":"prepared"}\n' >&7
   return 0
 }

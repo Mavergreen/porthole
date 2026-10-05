@@ -227,7 +227,9 @@ cmd_up() {
   [ -n "$CONTAINER" ] && [ -n "$IMAGE" ] \
     || { echo "porthole up: spec missing CONTAINER/IMAGE: $_spec" >&2; exit 1; }
   _cache="${PORTHOLE_CACHE_DIR:-$HOME/Library/Caches/Porthole}"
+  : "${PORTHOLE_LOG_NAME:=$SLUG}"
   up_lock "$_cache/$SLUG.lock"
+  say_mark "up: locked"
   _ctx="$_specdir/$BUILD_CONTEXT"
   # Progress for the app's launch window (plain text on stderr outside it). Build steps come from
   # docker's classic "Step N/M" lines; the build log itself goes to stderr.
@@ -265,6 +267,7 @@ cmd_up() {
   _have=$(docker image inspect --format "{{ index .Config.Labels \"$RECIPE_LABEL\" }}" "$IMAGE" 2>/dev/null || true)
   if [ "$_rebuild" = 1 ] || [ "$_have" != "$_fp" ]; then
     echo "porthole up: building $IMAGE (can take a few minutes)..." >&2
+    say_mark "up: building image"
     _from=$(sed -n 's/^FROM[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' "$_ctx/Dockerfile" | head -1)
     if _need=$(space_needed_kb "$_from") && _free=$(space_free_kb) && [ -n "$_free" ] \
        && [ "$_free" -lt "$_need" ]; then
@@ -292,6 +295,9 @@ cmd_up() {
     # Older bases go with the build, wherever it runs: after an install-time build the launch finds
     # nothing to rebuild. A container still on an old image keeps its layers.
     drop_superseded "" "$_ctx"
+    say_mark "up: image built"
+  else
+    say_mark "up: image current"
   fi
   _image_id=$(docker image inspect --format '{{.Id}}' "$IMAGE")
   # The newest image for this app, which an open app compares with its own to offer Restart to Update.
@@ -310,9 +316,11 @@ cmd_up() {
        && [ "$_ctz" = "$_tz" ]; then
       docker container inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -q true \
         || docker start "$CONTAINER" >/dev/null || { echo "porthole up: cannot start $CONTAINER" >&2; exit 1; }
+      say_mark "up: container current"
       return 0
     fi
     echo "porthole up: recreating $CONTAINER on its current image and the Mac's time zone (volumes kept)" >&2
+    say_mark "up: recreating container"
     docker rm -f "$CONTAINER" >/dev/null || { echo "porthole up: cannot remove $CONTAINER" >&2; exit 1; }
   fi
 
@@ -344,8 +352,10 @@ cmd_up() {
     $_cap_args \
     -v "$VOLUME:$DATADIR" $_mount_args $_vol_args \
     "$IMAGE" >/dev/null || { echo "porthole up: cannot create container $CONTAINER" >&2; exit 1; }
+  say_mark "up: container running"
   [ "$_image_id" != "$_old_id" ] && drop_superseded "$_old_id" "$_ctx"
   porthole_cleanup
+  say_mark "up: cleaned up"
   return 0
 }
 

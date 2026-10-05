@@ -153,3 +153,15 @@ EOF
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [[ "$output" == *'"image":"sha256:running"}'* ]] || { echo "$output"; return 1; }
 }
+
+@test "a launch logs its stages, so a slow one can be timed afterwards" {
+  app; launch </dev/null
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  marks=$(sed -n 's/^logger -t porthole thunderbird: //p' "$STUB_LOG")
+  for m in 'launch: start' 'step: Checking Container Tools' 'docker: ready' 'up: start' 'up: done (0)' \
+           'xpra: accepting' 'ready'; do
+    printf '%s\n' "$marks" | grep -qx "$m" || { echo "missing: $m"; echo "$marks"; return 1; }
+  done
+  [ "$(printf '%s\n' "$marks" | head -n 1)" = 'launch: start' ] || { echo "$marks"; return 1; }
+  [ "$(printf '%s\n' "$marks" | tail -n 1)" = 'ready' ] || { echo "$marks"; return 1; }
+}

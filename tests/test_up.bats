@@ -486,3 +486,19 @@ manifest_1gb() {
   run "$REPO/bin/porthole" up "$SPEC"
   grep -q 'manifest inspect ghcr.io/mavergreen/porthole-base@sha256:bbb$' "$STUB_LOG" || { grep manifest "$STUB_LOG"; return 1; }
 }
+
+@test "up logs each stage under the app's name, so a slow launch can be timed afterwards" {
+  fake_docker; make_spec
+  "$REPO/bin/porthole" up "$SPEC" 2>/dev/null
+  echo "sha256:other" > "$FAKE/container.demo-gui"   # left on an older image: recreated
+  : > "$STUB_LOG"
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  marks=$(sed -n 's/^logger -t porthole demo: //p' "$STUB_LOG")
+  expected='up: locked
+up: image current
+up: recreating container
+up: container running
+up: cleaned up'
+  [ "$marks" = "$expected" ] || { echo "$marks"; return 1; }
+}

@@ -36,7 +36,10 @@ else
   say_prepared() { :; }
   say_error() { printf '%s\n' "$1" >&2; [ -z "${2:-}" ] || printf '%s\n' "$2" >&2; }
   say_ask() { printf '%s' "$3"; }
+  say_mark() { :; }
 fi
+PORTHOLE_LOG_NAME=helium; export PORTHOLE_LOG_NAME   # this launch's lines in the system log, and up's
+say_mark "launch: start${1:+ $1}"
 
 # Fatal error: to the app's launch window under the viewer, else to stderr. No modal dialog: the
 # window shows it, and a dialog in a context with no human (CI, ssh) hangs instead of failing.
@@ -79,6 +82,7 @@ preflight_host() {
 }
 say_step "Checking Container Tools"   # first, so a window that appears is never blank
 preflight_host
+say_mark "vm: running"
 
 nudge_once() {   # $1 = key, $2 = message; advisory, once per day
   mkdir -p "$CONFIG_DIR" 2>/dev/null || return 0
@@ -103,6 +107,7 @@ check_xpra_compat() {
 }
 
 eval "$(docker-machine env "$MACHINE" 2>/dev/null)" || true
+say_mark "docker: ready"
 
 # Bring the container up via Porthole's SINGLE creator. The whole container spec (name, image,
 # caps, volumes, host mounts) was resolved once at materialize into helium.container beside this
@@ -133,8 +138,10 @@ _up_flag=""; [ "$REBUILD" = 1 ] && _up_flag="--rebuild"; [ "$PREPARE" = 1 ] && _
 # the error's details. POSIX: file capture, not process substitution.
 _uperr=$(mktemp "${TMPDIR:-/tmp}/helium-up.XXXXXX")
 _uprc=0
+say_mark "up: start"
 # shellcheck disable=SC2086  # $_up_flag is intentionally unquoted (empty -> no arg)
 PORTHOLE_EXTRA_MOUNTS="${HELIUM_MOUNTS:-}" "$PORTHOLE" up $_up_flag "$SPEC" 2>"$_uperr" || _uprc=$?
+say_mark "up: done ($_uprc)"
 cat "$_uperr" >&2
 _tail=$(tail -n 6 "$_uperr" 2>/dev/null) || true; rm -f "$_uperr"
 case $_uprc in
@@ -158,6 +165,7 @@ while [ "$_i" -lt "$_tries" ] && ! docker exec "$CONTAINER" \
     python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(1); sys.exit(s.connect_ex("/run/user/1000/porthole-xpra.sock"))' 2>/dev/null; do
   sleep 0.2; _i=$((_i + 1))
 done
+if [ "$_i" -lt "$_tries" ]; then say_mark "xpra: accepting"; else say_mark "xpra: not accepting after $_tries tries"; fi
 # A container restarting on a full disk never opens its socket; name that, not a silent reconnect loop.
 if [ "$_i" -ge "$_tries" ] && docker logs --tail 50 "$CONTAINER" 2>&1 | grep -q 'No space left on device'; then
   die "can't start: the Docker VM is out of disk space." "Free space in Docker, or enlarge the VM with Container Tools."
@@ -190,6 +198,7 @@ if ! { [ -f "$MENU_TUNNEL_PID" ] && ps -p "$(cat "$MENU_TUNNEL_PID")" >/dev/null
     docker exec -i "$CONTAINER" socat STDIO UNIX-CONNECT:/run/user/1000/porthole-menu.sock </dev/null >/dev/null 7>&- &
   echo $! > "$MENU_TUNNEL_PID"
 fi
+say_mark "bridges: up"
 
 # Data left behind by an uninstalled app: a Porthole-labeled volume whose slug has no installed preset.
 # Asked once per volume per launch until answered Keep (remembered) or Delete; never deleted otherwise.
@@ -220,6 +229,7 @@ while read -r _vol _vslug <&4; do
 done 4<<EOF
 $_vols
 EOF
+say_mark "data: checked"
 
 # App icon. Keep the per-user cache holding the app's own icon from its container (Porthole never
 # ships a vendor icon): extract when no cached icon is at least 512 px, or the user's copy predates
@@ -248,6 +258,7 @@ if [ -f "$_root/bin/porthole-icon-lib.sh" ]; then
   if [ -n "$_best" ] && [ "$(icon_width_cached "$_best")" -gt "${_have:-0}" ]; then
     PORTHOLE_APP_ICON="$_best"; export PORTHOLE_APP_ICON
   fi
+  say_mark "icon: done"
 fi
 
 # This viewer runs its OWN copy of the Porthole engine binary, IN PLACE (exec, not `open` of a shared
