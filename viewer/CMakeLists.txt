@@ -60,6 +60,7 @@ add_executable(Porthole MACOSX_BUNDLE
   src/PortholeLaunchSession.m
   src/PortholeLaunchArgs.m
   src/PortholeLaunchWindow.m
+  src/PortholeLaunchFeedback.m
   ${RDS_XPRA_SOURCES})
 target_include_directories(Porthole PRIVATE src)
 target_link_libraries(Porthole PRIVATE ${COCOA_LIBRARY} ${CARBON_LIBRARY} ${AUDIOTOOLBOX_LIBRARY}
@@ -153,6 +154,11 @@ add_executable(test_launch_window tests/test_launch_window.m src/PortholeLaunchW
 target_include_directories(test_launch_window PRIVATE src)
 target_link_libraries(test_launch_window PRIVATE ${COCOA_LIBRARY})
 add_test(NAME launch_window COMMAND test_launch_window)
+
+add_executable(test_launch_feedback tests/test_launch_feedback.m src/PortholeLaunchFeedback.m)
+target_include_directories(test_launch_feedback PRIVATE src)
+target_link_libraries(test_launch_feedback PRIVATE ${FOUNDATION_LIBRARY})
+add_test(NAME launch_feedback COMMAND test_launch_feedback)
 
 # --- transport disconnect unit test (AF_UNIX listener; no container) ---
 add_executable(test_transport_disconnect tests/test_transport_disconnect.m
