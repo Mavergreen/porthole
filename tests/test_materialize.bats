@@ -223,5 +223,5 @@ about_conf() {
   "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
   B="$APPS/Linux Thunderbird.app/Contents"
   ! /usr/libexec/PlistBuddy -c 'Print :PortholeHasAbout' "$B/Info.plist" >/dev/null 2>&1 || return 1
-  ! grep -q -- '--about' "$B/Resources/bin/thunderbird"
+  ! grep -q -- '--about' "$B/Resources/bin/thunderbird" || false
 }
