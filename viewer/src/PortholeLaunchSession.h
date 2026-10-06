@@ -3,7 +3,8 @@
 
 @class PortholeLaunchSession;
 @protocol PortholeLaunchSessionDelegate <NSObject>
-- (void)launchSession:(PortholeLaunchSession *)s step:(NSString *)text;
+// routine: a step every launch takes ("routine":true), which needn't show the launch window.
+- (void)launchSession:(PortholeLaunchSession *)s step:(NSString *)text routine:(BOOL)routine;
 - (void)launchSession:(PortholeLaunchSession *)s progress:(double)fraction;
 - (void)launchSession:(PortholeLaunchSession *)s ask:(NSString *)askId text:(NSString *)text choices:(NSArray *)choices;
 - (void)launchSession:(PortholeLaunchSession *)s failed:(NSString *)text detail:(NSString *)detail;

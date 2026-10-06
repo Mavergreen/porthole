@@ -11,7 +11,8 @@
 @implementation Rec
 - (id)init { if ((self = [super init])) _events = [[NSMutableArray alloc] init]; return self; }
 - (void)dealloc { [_events release]; [super dealloc]; }
-- (void)launchSession:(id)s step:(NSString *)t { [_events addObject:[@"step:" stringByAppendingString:t]]; }
+- (void)launchSession:(id)s step:(NSString *)t routine:(BOOL)routine {
+    [_events addObject:[(routine ? @"routine:" : @"step:") stringByAppendingString:t]]; }
 - (void)launchSession:(id)s progress:(double)f { [_events addObject:[NSString stringWithFormat:@"progress:%.2f", f]]; }
 - (void)launchSession:(id)s ask:(NSString *)i text:(NSString *)t choices:(NSArray *)c {
     [_events addObject:[NSString stringWithFormat:@"ask:%@:%lu", i, (unsigned long)c.count]]; }
@@ -118,6 +119,17 @@ int main(void) {
         pump(^BOOL{ return r7.events.count >= 1; });
         pump(^BOOL{ return r7.events.count >= 2; });   // give a wrongful "stopped" report time to arrive
         assert(r7.events.count == 1 && [r7.events[0] isEqualToString:@"prepared"]);
+
+        // A routine step says so; a step without the flag, or with a flag that isn't a boolean, is not routine.
+        int p8[2], q8[2]; assert(pipe(p8) == 0 && pipe(q8) == 0);
+        PortholeLaunchSession *s8 = [[[PortholeLaunchSession alloc] initWithReadFD:p8[0] writeFD:q8[1]] autorelease];
+        Rec *r8 = [[[Rec alloc] init] autorelease]; s8.delegate = r8; [s8 start];
+        put(p8[1], "{\"t\":\"step\",\"text\":\"Checking\",\"routine\":true}\n{\"t\":\"step\",\"text\":\"Downloading\"}\n");
+        put(p8[1], "{\"t\":\"step\",\"text\":\"Odd\",\"routine\":\"yes\"}\n");
+        pump(^BOOL{ return r8.events.count >= 3; });
+        assert([r8.events[0] isEqualToString:@"routine:Checking"]);
+        assert([r8.events[1] isEqualToString:@"step:Downloading"]);
+        assert([r8.events[2] isEqualToString:@"step:Odd"]);
 
         printf("test_launch_wire: OK\n");
     }

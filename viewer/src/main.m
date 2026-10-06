@@ -177,8 +177,8 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     [_launchWindow close];
 }
 
-- (void)launchSession:(PortholeLaunchSession *)s step:(NSString *)text {
-    (void)s; [[self launchWindow] setStep:text]; [[self launchWindow] setProgress:-1];
+- (void)launchSession:(PortholeLaunchSession *)s step:(NSString *)text routine:(BOOL)routine {
+    (void)s; (void)routine; [[self launchWindow] setStep:text]; [[self launchWindow] setProgress:-1];
     // The build we waited on is done and this launch goes on: show its window if it takes a while.
     if (_quietLaunch) {
         _quietLaunch = NO;

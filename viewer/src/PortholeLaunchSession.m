@@ -50,7 +50,10 @@
 - (void)deliver:(NSDictionary *)m {
     NSString *t = m[@"t"];
     id<PortholeLaunchSessionDelegate> d = _delegate;
-    if ([t isEqualToString:@"step"]) [d launchSession:self step:m[@"text"] ?: @""];
+    if ([t isEqualToString:@"step"]) {
+        id r = m[@"routine"];
+        [d launchSession:self step:m[@"text"] ?: @"" routine:[r isKindOfClass:[NSNumber class]] && [r boolValue]];
+    }
     else if ([t isEqualToString:@"progress"]) [d launchSession:self progress:[m[@"fraction"] doubleValue]];
     else if ([t isEqualToString:@"ask"]) [d launchSession:self ask:m[@"id"] text:m[@"text"] ?: @"" choices:m[@"choices"] ?: @[]];
     else if ([t isEqualToString:@"error"]) { _finished = YES; [d launchSession:self failed:m[@"text"] ?: @"" detail:m[@"detail"] ?: @""]; }
