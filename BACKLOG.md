@@ -120,3 +120,18 @@ the image, rather than falling through to the build's generic failure.
 `81125ee` removed the launcher's staleness nudge, but mavergreen-1password still talks about it:
 `1password.conf:18` ("staleness nudge is the honest policy") and `bin/op`'s header comment ("nudges
 about staleness/xpra"). Correct them in that repo.
+
+## 13. CI never runs the viewer's unit tests
+
+**What happens:** `release.yml` builds only the `Porthole`, `porthole-updater` and `transport`
+targets, and runs `run-repo-tests.sh`, which runs `tests/*.bats` and `tests/*.sh`. So none of
+`viewer/tests/*.m`, registered with CTest in `viewer/CMakeLists.txt`, are built or run in CI. That
+covers `launch_feedback`, `dock_progress`, `launch_wire`, `launch_window`, `protocol`, the menu
+tests and the others. Seen in run 37504866218 (2026-10-06): its log has no CTest step, and only the
+app's objects get compiled. Since then they have run only on a developer's Mac. Here, CMake can't
+configure, so they're compiled by hand with the system clang.
+
+**Direction:** build everything (or the test targets) and run `shipyard-ctest` in the build job,
+for example `run-repo-tests.sh <ctest-preset>` or a separate step after the build. Check that each
+test runs headless on the arm64 runner under Rosetta: they're x86_64 binaries, and some create
+`NSApplication`.
