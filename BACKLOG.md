@@ -34,3 +34,26 @@ in points too.
 GDK_SCALE/Electron device scale), and have the viewer map pixels to points by that scale for windows,
 input coordinates, resizes, and tray images (`PortholeTrayArtSize` already divides by scale, per the
 menu-bar plan). Needs a Retina Mac to verify; this dev box's display is 1×.
+
+## 7. A routine launch bounces in the Dock until the app is open, like a Mac app
+
+**Want:** opening a prepared app looks like opening a native one that's slow to start: its Dock icon
+keeps bouncing until the app's window appears, with no progress bar on the icon.
+
+**Why (2026-10-06):** since `711f2af` a routine launch shows no launch window, just an indeterminate
+bar sweeping across the Dock icon (`PortholeDockProgress`) until the first app window maps: about
+4 s for 1Password, 8 s for Signal. It works, and the user called it decent, but bouncing is what a
+Mac user expects there.
+
+**Direction:** macOS stops the bounce when the app finishes launching. That happens early in
+`applicationDidFinishLaunching:`, long before the launcher says ready. Find out on 10.9 what can keep
+it going:
+- Delay finishing launching until `ready`. Maybe run the launcher from `main()` before
+  `NSApplicationMain`, or override `-[NSApplication finishLaunching]`. A question or an error still
+  needs the launch window, so the app has to come up for those.
+- `-[NSApp requestUserAttention:NSCriticalRequest]` bounces until cancelled, but only while the app
+  is inactive, and a launched app is active.
+
+Keep the window rules in `PortholeLaunchFeedback` unchanged. The sink's `feedbackDockProgress:` is
+the one place to swap the bar for a bounce, and the bar is the fallback if bouncing can't be made
+reliable.
