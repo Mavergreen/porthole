@@ -34,6 +34,7 @@ if [ -f "$_root/bin/porthole-say.sh" ]; then
   . "$_root/bin/porthole-say.sh"
 else
   say_step() { printf '%s\n' "$1" >&2; }
+  say_routine() { printf '%s\n' "$1" >&2; }
   say_progress() { :; }
   say_ready() { :; }
   say_prepared() { :; }
@@ -83,7 +84,7 @@ preflight_host() {
     sleep 1; _vm_waited=$((_vm_waited + 1))
   done
 }
-say_step "Checking Container Tools"   # first, so a window that appears is never blank
+say_routine "Checking Container Tools"   # first, so a window that appears is never blank
 preflight_host
 say_mark "vm: running"
 
@@ -161,7 +162,7 @@ esac
 [ "$PREPARE" = 1 ] && { say_prepared; exit 0; }
 
 check_xpra_compat
-say_step "Starting @NAME@"
+say_routine "Starting @NAME@"
 
 # Wait until xpra is actually ACCEPTING CONNECTIONS on its Unix socket inside the
 # container -- not merely that the process exists. On a cold start the socket is bound a

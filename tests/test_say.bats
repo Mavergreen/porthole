@@ -70,3 +70,20 @@ say() { sh -c '. "$1"; shift; "$@"' _ "$REPO/bin/porthole-say.sh" "$@"; }
   say say_step 'Downloading' 2>/dev/null
   grep -qx 'logger -t porthole demo: step: Downloading' "$STUB_LOG"
 }
+
+@test "say_routine is a step marked routine under the viewer" {
+  export PORTHOLE_PROTOCOL=1
+  [ "$(say say_routine 'Checking')" = '{"t":"step","text":"Checking","routine":true}' ]
+}
+
+@test "outside the viewer say_routine prints like say_step" {
+  unset PORTHOLE_PROTOCOL
+  run sh -c '. "$1"; say_routine Hello 2>&1 >/dev/null' _ "$REPO/bin/porthole-say.sh"
+  [ "$output" = Hello ]
+}
+
+@test "say_routine is marked in the system log" {
+  export STUB_LOG="$BATS_TEST_TMPDIR/log" PATH="$BATS_TEST_DIRNAME/stubs:$PATH" PORTHOLE_LOG_NAME=demo
+  say say_routine 'Checking' 2>/dev/null
+  grep -qx 'logger -t porthole demo: step: Checking' "$STUB_LOG"
+}

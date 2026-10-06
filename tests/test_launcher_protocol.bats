@@ -28,8 +28,8 @@ launch() {  # stdin = answers
   app; launch </dev/null
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   first=$(printf '%s\n' "$output" | grep '^{' | head -n 1)
-  [[ "$first" == '{"t":"step","text":"Checking Container Tools"}' ]] || { echo "$output"; return 1; }
-  [[ "$output" == *'{"t":"step","text":"Starting Linux Thunderbird"}'*'"t":"ready"'* ]] || { echo "$output"; return 1; }
+  [[ "$first" == '{"t":"step","text":"Checking Container Tools","routine":true}' ]] || { echo "$output"; return 1; }
+  [[ "$output" == *'{"t":"step","text":"Starting Linux Thunderbird","routine":true}'*'"t":"ready"'* ]] || { echo "$output"; return 1; }
 }
 
 @test "a healthy launch doesn't go looking for a full disk" {
@@ -164,4 +164,22 @@ EOF
   done
   [ "$(printf '%s\n' "$marks" | head -n 1)" = 'launch: start' ] || { echo "$marks"; return 1; }
   [ "$(printf '%s\n' "$marks" | tail -n 1)" = 'ready' ] || { echo "$marks"; return 1; }
+}
+
+@test "only the launcher's own two steps are routine" {
+  app; launch </dev/null
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  routine=$(printf '%s\n' "$output" | grep '"routine":true')
+  [ "$(printf '%s\n' "$routine" | wc -l | tr -d ' ')" = 2 ] || { echo "$output"; return 1; }
+  ! printf '%s\n' "$routine" | grep -v -e '"text":"Checking Container Tools"' -e '"text":"Starting Linux Thunderbird"' || false
+}
+
+@test "starting the Docker VM is real work, not a routine step" {
+  app; mkdir -p "$WORK/vm"
+  printf '#!/bin/sh\ncase "$1" in status) [ -f "%s/up" ] && echo running || echo stopped ;; start) touch "%s/up" ;; esac\n' \
+    "$WORK/vm" "$WORK/vm" > "$WORK/vm/docker-machine-ctl"; chmod +x "$WORK/vm/docker-machine-ctl"
+  run env DOCKER_HOST= PATH="$WORK/vm:$PATH" PORTHOLE_PROTOCOL=1 THUNDERBIRD_NO_RECOVER=1 \
+      PORTHOLE_READY_TRIES=1 "$R/bin/thunderbird" </dev/null
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *'{"t":"step","text":"Starting the Docker VM"}'* ]] || { echo "$output"; return 1; }
 }

@@ -27,12 +27,15 @@ _say_keep() { [ -z "${PORTHOLE_PROGRESS_FILE:-}" ] || printf '%s\n' "$1" >> "$PO
 # afterwards from the log's timestamps. Every step shown is marked too.
 say_mark() { logger -t porthole "${PORTHOLE_LOG_NAME:-porthole}: $1" 2>/dev/null || true; }
 
-say_step() {
+_say_step() {  # TEXT EXTRA (more JSON fields, each led by a comma)
   say_mark "step: $1"
-  _ss_line=$(printf '{"t":"step","text":%s}' "$(json_str "$1")")
+  _ss_line=$(printf '{"t":"step","text":%s%s}' "$(json_str "$1")" "$2")
   _say_keep "$_ss_line"
   if _say_json; then printf '%s\n' "$_ss_line" >&7; else printf '%s\n' "$1" >&2; fi
 }
+say_step() { _say_step "$1" ""; }
+# A step every launch takes: the app's window shows it only if the launch is taking too long.
+say_routine() { _say_step "$1" ',"routine":true'; }
 
 say_progress() {
   _say_keep "{\"t\":\"progress\",\"fraction\":$1}"

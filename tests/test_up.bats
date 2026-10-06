@@ -502,3 +502,10 @@ up: container running
 up: cleaned up'
   [ "$marks" = "$expected" ] || { echo "$marks"; return 1; }
 }
+
+@test "up's steps are never routine" {
+  fake_docker; make_spec
+  output=$(PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC" 2>/dev/null) || { echo "$output"; return 1; }
+  [[ "$output" == *'"Building Linux Demo (1/2)"'* ]] || { echo "$output"; return 1; }
+  [[ "$output" != *'"routine"'* ]] || { echo "$output"; return 1; }
+}
