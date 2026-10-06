@@ -13,13 +13,15 @@
 #import "PortholeLaunchArgs.h"
 #import "PortholeLaunchSession.h"
 #import "PortholeLaunchWindow.h"
+#import "PortholeLaunchFeedback.h"
+#import "PortholeDockProgress.h"
 #import "PortholeUpdateItem.h"
 
 // The native (Cocoa) shell. It drives a remote-display session through the
 // remote_display C interface and renders/handles input via NSWindow/NSEvent/
 // NSPasteboard. It knows nothing about Xpra beyond asking for that backend.
 @interface PortholeAppDelegate : NSObject <NSApplicationDelegate, NSMenuDelegate, PortholeMenuStaticInvoker,
-                                           PortholeLaunchSessionDelegate>
+                                           PortholeLaunchSessionDelegate, PortholeLaunchFeedbackSink>
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title;
 - (void)windowWid:(long)wid retitled:(NSString *)title;
 - (void)drawWid:(long)wid rect:(NSRect)rect encoding:(NSString *)enc
@@ -59,7 +61,8 @@
     PortholeLaunchSession *_launch;       // the launcher we run with --launch, until it says ready
     PortholeLaunchWindow *_launchWindow;  // its progress window, made on first need
     BOOL _preparing;                      // --prepare: show setup, then quit; never connect
-    BOOL _quietLaunch;                    // waiting on a build whose own window shows its progress
+    PortholeLaunchFeedback *_feedback;    // when the launch window shows, and when the Dock shows progress
+    PortholeDockProgress *_dockProgress;
     BOOL _openAfterPrepare;               // opened while preparing: open the app once the build is done
     NSString *_runningImage;              // the image the app's container runs, from the launcher
     BOOL _appShownSomething;              // the app has put up a window or tray of its own
@@ -133,18 +136,18 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     _titles = [[NSMutableDictionary alloc] init];
     [NSApp setMainMenu:[self buildMainMenu]];   // real App/Edit/Window menus
     [self setUpMenuBridge];
-    // Started with --launch: run the app's launcher and show its progress (only if setup takes
-    // a while, or it has a question or an error) until it says which socket to connect.
+    // Started with --launch: run the app's launcher until it says which socket to connect. Its window
+    // shows for real work, a question or an error; a routine launch shows Dock progress instead.
     // Otherwise connect straight away: a socket path argument > PORTHOLE_SOCKET > a temp default.
     PortholeLaunchArgs *la = PortholeParseLaunchArgs([[NSProcessInfo processInfo] arguments]);
     if (la.launcherPath) {
         _launch = [[PortholeLaunchSession alloc] initWithLauncher:la.launcherPath arguments:la.launcherArgs];
         _launch.delegate = self;
         _preparing = la.prepare;
+        _dockProgress = [[PortholeDockProgress alloc] init];
+        _feedback = [[PortholeLaunchFeedback alloc] initWithSink:self preparing:_preparing];
         [_launch start];
-        // An install's prepare is why the window exists, so it shows at once.
-        if (_preparing) [self showLaunchWindow];
-        else [self performSelector:@selector(showLaunchWindow) withObject:nil afterDelay:0.5];
+        [_feedback start];   // an install's prepare is why the window exists, so it shows at once
         return;
     }
     NSString *socketPath = la.socketPath;
@@ -167,30 +170,30 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     return _launchWindow;
 }
 
-- (void)showLaunchWindow {
+// PortholeLaunchFeedbackSink: what the launch shows, as the feedback policy decides.
+- (void)feedbackShowWindow {
     [[self launchWindow] show];
     [NSApp activateIgnoringOtherApps:YES];
 }
-
-- (void)endLaunchWindow {
-    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(showLaunchWindow) object:nil];
-    [_launchWindow close];
+- (void)feedbackCloseWindow { [_launchWindow close]; }
+- (void)feedbackDockProgress:(BOOL)on { if (on) [_dockProgress start]; else [_dockProgress stop]; }
+- (void)feedbackSchedule:(PortholeFeedbackTimer)timer after:(NSTimeInterval)seconds {
+    [self performSelector:@selector(feedbackTimer:) withObject:@(timer) afterDelay:seconds];
 }
+- (void)feedbackCancel:(PortholeFeedbackTimer)timer {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(feedbackTimer:) object:@(timer)];
+}
+- (void)feedbackTimer:(NSNumber *)timer { [_feedback timerFired:(PortholeFeedbackTimer)[timer integerValue]]; }
 
 - (void)launchSession:(PortholeLaunchSession *)s step:(NSString *)text routine:(BOOL)routine {
-    (void)s; (void)routine; [[self launchWindow] setStep:text]; [[self launchWindow] setProgress:-1];
-    // The build we waited on is done and this launch goes on: show its window if it takes a while.
-    if (_quietLaunch) {
-        _quietLaunch = NO;
-        [self performSelector:@selector(showLaunchWindow) withObject:nil afterDelay:0.5];
-    }
+    (void)s; [[self launchWindow] setStep:text]; [[self launchWindow] setProgress:-1];
+    if (routine) [_feedback routineStep]; else [_feedback workStep];
 }
 
 // An install's window is already showing this app's build: don't put a second window over it.
 - (void)launchSessionQuiet:(PortholeLaunchSession *)s {
     (void)s;
-    _quietLaunch = YES;
-    [self endLaunchWindow];
+    [_feedback quiet];
 }
 
 - (void)launchSession:(PortholeLaunchSession *)s progress:(double)fraction {
@@ -198,15 +201,13 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 }
 
 - (void)launchSession:(PortholeLaunchSession *)s ask:(NSString *)askId text:(NSString *)text choices:(NSArray *)choices {
-    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(showLaunchWindow) object:nil];
-    [self showLaunchWindow];
+    [_feedback ask];
     [[self launchWindow] askText:text choices:choices reply:^(NSString *choice) { [s answer:askId choice:choice]; }];
 }
 
 - (void)launchSession:(PortholeLaunchSession *)s failed:(NSString *)text detail:(NSString *)detail {
     (void)s;
-    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(showLaunchWindow) object:nil];
-    [self showLaunchWindow];
+    [_feedback error];
     if (_preparing) {
         NSString *again = [NSString stringWithFormat:@"Opening %@ will try again.", [self appName]];
         detail = detail.length ? [detail stringByAppendingFormat:@"\n\n%@", again] : again;
@@ -221,7 +222,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 - (void)launchSessionPrepared:(PortholeLaunchSession *)s {
     (void)s;
     if (_openAfterPrepare) PortholeRunDetached(PortholeRestartCommand(getpid(), [[NSBundle mainBundle] bundlePath]));
-    [self endLaunchWindow];
+    [_launchWindow close];
     [NSApp terminate:nil];
 }
 
@@ -230,7 +231,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 - (void)launchSession:(PortholeLaunchSession *)s readyWithSocket:(NSString *)socket icon:(NSString *)icon image:(NSString *)image {
     (void)s;
     [_runningImage release]; _runningImage = [image copy];
-    [self endLaunchWindow];
+    [_feedback ready];
     [self wearIcon:icon];
     [self connectToSocket:socket];
 }
@@ -325,7 +326,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     [_staticMenu setAppLocked:!PortholeLockItemEnabled([_titles allValues])];
 }
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title {
-    if (!overrideRedirect) _appShownSomething = YES;
+    if (!overrideRedirect) { _appShownSomething = YES; [_feedback firstWindow]; }
     NSString *tracked = PortholeTrackedTitle(overrideRedirect, title);
     if (tracked) { _titles[@(wid)] = tracked; [self titlesChanged]; }
     // Every window after the main one is positioned at its server (root) position
