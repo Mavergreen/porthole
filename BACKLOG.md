@@ -135,3 +135,33 @@ configure, so they're compiled by hand with the system clang.
 for example `run-repo-tests.sh <ctest-preset>` or a separate step after the build. Check that each
 test runs headless on the arm64 runner under Rosetta: they're x86_64 binaries, and some create
 `NSApplication`.
+
+## 14. Signal's real menus in the Mac menu bar (an Electron menu producer)
+
+**Want:** Linux Signal Desktop shows Signal's own menus (File/Edit/View/Window/Help, every item,
+grayed out by context) in the Mac menu bar; its in-window Linux menu bar is hidden; and About runs
+Signal's real Help → About.
+
+**Why:** Signal's About is still Porthole's generic panel, by the user's choice on 2026-10-05.
+Signal has no direct About trigger: `showAbout()` is reachable only from its Help menu, with no
+`sgnl://` route, IPC or argv. The keystroke route (alt+h, Down, Up, Return) works, but the user
+rejected it as janky. Neither live-menu channel reaches Electron's items. The 2026-07-14 spike found
+that AT-SPI shows only Signal's five menu titles, and Electron never registers with an
+AppMenu.Registrar, so there's no DBusMenu either. Thunderbird's AT-SPI producer (`menu-daemon.py`)
+already feeds the same wire, which is the model to follow.
+
+**Direction:** reach Electron's main process through Node's inspector and read
+`Menu.getApplicationMenu()`, then stream it as a producer and invoke items by id. Signal ships with
+its `EnableNodeCliInspectArguments` fuse off, but its asar-integrity check is off too, so the
+signal-desktop image build can flip the fuse. Don't do this for 1Password, for security. Needs
+brainstorming → spec → plan.
+
+## 15. Linux 1Password's Mac menus match modern Mac 1Password's (in mavergreen-1password)
+
+**Want:** the menus Linux 1Password puts in the Mac menu bar (its static `1password.menu.json`,
+which has no live channel: Chromium with a hamburger UI) match what 1Password for Mac shows today:
+the same menus, items, order, names and shortcuts, where the Linux app can carry them out.
+
+**Direction:** first record modern Mac 1Password's menus (from a current Mac, or from screenshots
+the user provides), then compare them with `1password.menu.json` and fill the gaps with what the
+Linux app supports (keystrokes, `onepassword://` routes, like About's `onepassword://settings/about`).
