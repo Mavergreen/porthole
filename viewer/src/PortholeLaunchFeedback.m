@@ -11,6 +11,7 @@ static const NSTimeInterval kWindowless = 10;
     BOOL _dockOn;
     BOOL _quiet;          // waiting on an install's build, whose own window shows it
     BOOL _sawWindow;
+    BOOL _ready;          // the launcher is done: nothing may put its window up any more
 }
 
 - (instancetype)initWithSink:(id<PortholeLaunchFeedbackSink>)sink preparing:(BOOL)preparing {
@@ -76,6 +77,7 @@ static const NSTimeInterval kWindowless = 10;
 }
 
 - (void)ready {
+    _ready = YES;
     [self hide];
     if (_dockOn) [_sink feedbackSchedule:PortholeFeedbackWindowless after:kWindowless];
 }
@@ -91,10 +93,10 @@ static const NSTimeInterval kWindowless = 10;
     switch (timer) {
         case PortholeFeedbackShowDelay:
             _showPending = NO;
-            if (!_windowShowing) [self show];
+            if (!_windowShowing && !_ready) [self show];
             break;
         case PortholeFeedbackFallback:
-            if (!_windowShowing) [self show];
+            if (!_windowShowing && !_ready) [self show];
             break;
         case PortholeFeedbackWindowless:
             [self dock:NO];

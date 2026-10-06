@@ -95,6 +95,15 @@ static void windowless_start_stops_progress(void) {
     assert([sink has:@"dock:off"]);
 }
 
+// A late timer can't put the launch window over an app that's already up.
+static void ready_ends_the_launch(void) {
+    PortholeLaunchFeedback *f = fresh(NO);
+    [f start]; [f routineStep]; [f workStep]; [f ready];
+    [f timerFired:PortholeFeedbackFallback];
+    [f timerFired:PortholeFeedbackShowDelay];
+    assert(![sink has:@"show"] && !f.windowShowing);
+}
+
 static void preparing_shows_at_once_never_dock(void) {
     PortholeLaunchFeedback *f = fresh(YES);
     [f start];
@@ -113,6 +122,7 @@ int main(void) {
         fallback_armed_before_first_message();
         quiet_cancels_and_rearms();
         windowless_start_stops_progress();
+        ready_ends_the_launch();
         preparing_shows_at_once_never_dock();
         printf("test_launch_feedback: OK\n");
     }
