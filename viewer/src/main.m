@@ -370,7 +370,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
             BOOL mono = ([enc hasPrefix:@"rgb"] && (bpp == 3 || bpp == 4))
                 && PortholeTrayArtIsMonochrome(pixels, (int)rect.size.width, (int)rect.size.height,
                                                (size_t)rowstride, bpp);
-            [icon setSize:PortholeTrayArtSize(NSMakeSize(rect.size.width, rect.size.height), 1 /* the app renders at 1x until BACKLOG #6 */, 22)];
+            [icon setSize:PortholeTrayArtSize(NSMakeSize(rect.size.width, rect.size.height), 1 /* the container renders at 1x: it is not yet told the Mac's backing scale */, 22)];
             [icon setTemplate:mono];
             [tray setImage:icon];
         }
