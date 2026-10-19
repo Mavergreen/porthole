@@ -66,3 +66,10 @@ test to catch a regression.
 - rosetta:.github/workflows/release.yml: the release job runs on an Apple Silicon (arm64) runner and primes + uses Rosetta ("Ensure this runner can run x86_64 (Rosetta)") so the `transport` CMake target's `build/check-transport.sh` can execute the cross-built x86_64/10.9 skalibs/s6 binaries before they ship. It cannot run natively: the binaries under test are the shipped x86_64 ones, and the release runner is arm64 with no Intel runner to use instead. Native 10.9 users run these binaries natively; only this arm64 CI leg is translated. Reconsider when the check can move to an x86_64 host (the 10.9 box or an Intel runner), or when check-transport.sh is made to SKIP without Rosetta; at the latest before macOS 28 removes it.
 - unpinned:examples/*/Dockerfile: bin/generate-viewer writes these examples for a user to build on their own Mac, FROM the newest porthole-base so a copied example starts current; Porthole itself builds each app FROM the base tag its own release pins. Reconsider if CI ever builds an example as a gate.
 - on-target: no 10.9 acceptance job yet; exit: a release.yml job on Mavergreen/mavericks-vm@v1 that installs this run's pkg in the guest and runs what it ships, which publish needs
+- self-upstream-exclude:XPRA_VERSION: an ingredient pin; Porthole has no Declared state section to name it
+- self-upstream-exclude:S6_REF: an ingredient pin; Porthole has no Declared state section to name it
+- self-upstream-exclude:SKALIBS_REF: an ingredient pin; Porthole has no Declared state section to name it
+- self-upstream-exclude:examples/**: samples a user builds from the repo; not in the pkg
+- self-upstream-exclude:menu-daemon-tests: menu-daemon's tests; not in the pkg
+- self-upstream-exclude:release-notes/**: release-note sources; not in the pkg
+- self-upstream-exclude:.claude/**: an agent's settings for working in this repo; not in the pkg

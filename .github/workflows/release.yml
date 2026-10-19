@@ -1,9 +1,9 @@
 name: release
 
 # Porthole is a Mavericks app that IS its own upstream, so it is versioned by DATE with no
-# -mavericks suffix: UPSTREAM_VERSION is the date YYYYMMDD, and a release is YYYYMMDD.N (N counts
-# the releases cut that day, starting at .1). push/PR to main build + test only; a manual
-# workflow_dispatch cuts + publishes a release stamped with today's next .N. Build -> signed .pkg +
+# -mavericks suffix: a release is YYYYMMDD.N, from shipyard's self-upstream-version.sh (the date is
+# the day Porthole's own code last changed). push/PR to main build + test only; a manual
+# workflow_dispatch cuts + publishes a release. Build -> signed .pkg +
 # Sparkle appcast -> the shared publish-release.yml (which mints the tag, checksums, notes body).
 # No 10.9 runner; artifacts re-validated on a real 10.9 box.
 
@@ -49,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0   # the .N counter reads existing <date>.* tags
+          fetch-depth: 0   # self-upstream-version.sh reads history and the <date>.N tags
 
       - name: Install mavericks-shipyard
         uses: Mavergreen/shipyard/.github/actions/install@v1
@@ -66,14 +66,7 @@ jobs:
         id: ver
         run: |
           set -eu
-          base="$(tr -d '[:space:]' < UPSTREAM_VERSION)"   # the date, e.g. 20260802
-          # N = 1 + the highest existing <base>.N among the shipped tags (first release of a day = .1).
-          maxn=0
-          for t in $(git tag --list "$base.*"); do
-            n="${t##*.}"
-            case "$n" in ''|*[!0-9]*) : ;; *) [ "$n" -gt "$maxn" ] && maxn="$n" ;; esac
-          done
-          ver="$base.$((maxn + 1))"
+          ver="$(sh "$SHIPYARD_SCRIPTS/self-upstream-version.sh")"
           pub=no
           [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && pub=yes
           printf '%s\n' "$ver" > VERSION
