@@ -358,10 +358,14 @@
         if (p.count < 4) return;
         long wid=[p[1] integerValue]; int w=[p[2] intValue], h=[p[3] intValue];
         NSLog(@"[TRAY] new-tray wid=%ld %dx%d", wid, w, h);
+        // Xpra parks the XEmbed corral at (-200,-200) until configured. XTest
+        // cannot click off-screen, so even a window-relative tray click misses.
+        // Place it on the virtual screen BEFORE exposing it to the shell.
+        [self configureWid:wid w:w h:h];
         if (_cb.new_tray) _cb.new_tray(_cb.ctx, wid, w, h);
-        // Do NOT map a tray: the server sends its icon draws itself (new-tray +
-        // damage), and it refuses client map/configure for trays -- a map-window
-        // here makes the server raise on the tray's missing `client-geometry`.
+        // Do NOT map a tray: icon draws arrive automatically, and map-window
+        // requires the client-geometry property that trays do not have.
+        // configure-window, unlike map-window, explicitly supports trays.
     }
     else if ([type isEqualToString:@"draw"]) {
         // draw: [ "draw", wid, x, y, w, h, coding, pixels, seq, rowstride, opts ]

@@ -178,6 +178,12 @@ add_executable(test_iosurface_blit tests/test_iosurface_blit.m src/PortholeBlit.
 target_include_directories(test_iosurface_blit PRIVATE src)
 add_test(NAME iosurface_blit COMMAND test_iosurface_blit)
 
+# --- tray input contract (real packet handler; capture outgoing packets) ---
+add_executable(test_tray_input tests/test_tray_input.m ${RDS_XPRA_SOURCES})
+target_include_directories(test_tray_input PRIVATE src)
+target_link_libraries(test_tray_input PRIVATE ${COCOA_LIBRARY})
+add_test(NAME tray_input COMMAND test_tray_input)
+
 # --- tray art unit test (pure C over pixel buffers) ---
 add_executable(test_tray_art tests/test_tray_art.m src/PortholeTrayArt.m)
 target_include_directories(test_tray_art PRIVATE src)
