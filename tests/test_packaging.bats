@@ -10,7 +10,23 @@ setup() {
   FAKEAPP="$WORK/Porthole.app"
   mkdir -p "$FAKEAPP/Contents/MacOS" "$FAKEAPP/Contents/Resources"
   printf '#!/bin/sh\n' > "$FAKEAPP/Contents/MacOS/Porthole"; chmod 755 "$FAKEAPP/Contents/MacOS/Porthole"
-  printf '<plist></plist>\n' > "$FAKEAPP/Contents/Info.plist"
+  # stevedore parses a bundle component's Info.plist, so the fake must be a well-formed one.
+  cat > "$FAKEAPP/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>org.mavergreen.porthole</string>
+	<key>CFBundleExecutable</key>
+	<string>Porthole</string>
+	<key>CFBundleShortVersionString</key>
+	<string>9.9.9</string>
+	<key>CFBundleVersion</key>
+	<string>9.9.9</string>
+</dict>
+</plist>
+PLIST
 }
 teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
 
