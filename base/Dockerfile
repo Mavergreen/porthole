@@ -8,6 +8,27 @@
 # Both third-party inputs are pinned where Renovate can see them: this FROM (the built-in dockerfile
 # manager -- digest AND a numeric tag, so the next Debian major is proposed and not just a digest
 # refresh) and XPRA_VERSION at the repo root (a custom manager on the deb datasource).
+
+# The container side of every Porthole bridge: s6-ipcclient connects a Unix socket and s6-ioconnect
+# relays it to stdin/stdout, so `docker exec -i <c> s6-ipcclient <sock> s6-ioconnect` is the whole
+# relay. Built from the SAME skalibs/s6 commits as the Mac transport (SKALIBS_REF, S6_REF, passed
+# by build/build-base-image.sh), so one Renovate PR moves both ends. Fetched by commit: git verifies
+# the checkout hashes to it, so no separate checksum. Static, like the Mac build (build/fetch-s6.sh).
+FROM debian:13-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS s6
+ARG SKALIBS_REF
+ARG S6_REF
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential git ca-certificates \
+    && fetch() { git init -q "$1" && cd "$1" && git fetch -q --depth 1 "$2" "$3" \
+         && git -c advice.detachedHead=false checkout -q "$3"; } \
+    && fetch /src/skalibs https://github.com/skarnet/skalibs.git "${SKALIBS_REF:?the skalibs commit: build via build/build-base-image.sh}" \
+    && ./configure --disable-shared --enable-static --prefix=/stage \
+    && make -j"$(nproc)" && make install \
+    && fetch /src/s6 https://github.com/skarnet/s6.git "${S6_REF:?the s6 commit: build via build/build-base-image.sh}" \
+    && ./configure --enable-static --disable-shared --enable-allstatic --disable-execline \
+         --with-include=/stage/include --with-lib=/stage/lib \
+         --with-sysdeps=/stage/lib/skalibs/sysdeps --prefix=/stage \
+    && make -j"$(nproc)" && make install
+
 FROM debian:13-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
 
 # The xpra pin, passed from XPRA_VERSION by build/build-base-image.sh. Deliberately no default:
@@ -18,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg \
       dbus dbus-x11 util-linux \
       python3-dbus python3-lz4 \
-      gnome-keyring libsecret-1-0 socat \
+      gnome-keyring libsecret-1-0 \
       at-spi2-core python3-pyatspi \
     # xpra (the display server the Porthole client speaks to) is not in Debian; pull from xpra.org
     # and PIN it -- the native client is written against a specific xpra wire protocol, so an
@@ -47,3 +68,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY porthole-menu-daemon.py /usr/local/bin/porthole-menu-daemon.py
 RUN chmod 755 /usr/local/bin/porthole-menu-daemon.py
 COPY mac-fonts.conf /etc/fonts/conf.d/09-mac-fonts.conf
+COPY --from=s6 /stage/bin/s6-ipcclient /stage/bin/s6-ioconnect /usr/local/bin/
