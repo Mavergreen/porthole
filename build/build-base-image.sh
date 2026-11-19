@@ -55,9 +55,10 @@ got=$(docker run --rm "$1" dpkg-query -W -f '${Version}' xpra)
 echo "base image OK: xpra $got"
 
 # Prove the bridges' relay, in the image: binary bytes (a NUL, a 0xff) through a real Unix socket and
-# back, and the client exiting once the far side closes (the server echoes only after the client's
-# EOF, then closes). A relay that compiled but mangles bytes or hangs would otherwise ship.
-want='p   i   n   g  \0 377   p   o   n   g'
+# back, and the relay EXITING (status 0, not timeout's 124) once the far side closes -- the server
+# echoes only after the client's EOF, then closes. A relay that compiled but mangles bytes or hangs
+# would otherwise ship. The relay's status is checked on its own: in a pipeline it would be lost.
+want='rc=0 p i n g \0 377 p o n g'
 got=$(docker run --rm "$1" sh -c '
   python3 -c "
 import socket
@@ -68,8 +69,12 @@ while True:
     if not b: break
     d += b
 c.sendall(d); c.close()" &
-  while [ ! -S /tmp/echo.sock ]; do sleep 0.1; done
-  printf "ping\000\377pong" | timeout 5 s6-ipcclient /tmp/echo.sock s6-ioconnect | od -An -c' | tr -s ' ' | sed 's/^ //;s/ $//')
-[ "$got" = "$(printf '%s' "$want" | tr -s ' ')" ] \
-  || { echo "$0: base image: s6 relay smoke failed (got: $got)" >&2; exit 1; }
+  n=0; while [ ! -S /tmp/echo.sock ]; do
+    n=$((n + 1)); [ "$n" -le 50 ] || { echo "echo server never listened"; exit 1; }; sleep 0.1
+  done
+  printf "ping\000\377pong" > /tmp/in
+  timeout 5 s6-ipcclient /tmp/echo.sock s6-ioconnect < /tmp/in > /tmp/out
+  echo "rc=$?"; od -An -c /tmp/out' | tr -s ' \n' '  ' | sed 's/^ //;s/ $//')
+[ "$got" = "$want" ] \
+  || { echo "$0: base image: s6 relay smoke failed (want: $want; got: $got)" >&2; exit 1; }
 echo "base image OK: s6 relay"

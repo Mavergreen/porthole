@@ -42,3 +42,58 @@ EOF
   grep -qF 'docker exec -i "$CONTAINER" s6-ipcclient /run/user/1000/porthole-menu.sock s6-ioconnect' "$l" || return 1
   ! grep -v '^[[:space:]]*#' "$l" | grep -qw socat || { echo "launcher.tmpl still runs socat"; return 1; }
 }
+
+# Runs the thunderbird launcher with host stubs, TMPDIR=$1 and port 4999, so its pidfiles are known.
+# The real /bin/ps (the suite's ps stub reports every pid dead) and no recovery watcher (the stub
+# viewer exits at once, and an ondemand watcher would then stop the bridges itself).
+run_launcher_in() {
+  e="$(mktemp -d -t plte)"
+  printf '#!/bin/sh\nexit 0\n' > "$e/porthole"
+  printf '#!/bin/sh\necho "ENGINE-IPC $*" >> "%s"\nsleep 2\n' "$STUB_LOG" > "$e/s6-ipcserver"
+  d="$(mktemp -d -t plt)"
+  printf '#!/bin/sh\n[ "$1" = status ] && echo running\n' > "$d/docker-machine-ctl"
+  printf '#!/bin/sh\nexit 0\n' > "$d/docker-machine"
+  printf '#!/bin/sh\ncase "$*" in *"inspect -f"*) echo true ;; %s esac\nexit 0\n' "${2:-}" > "$d/docker"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"
+  chmod +x "$e"/* "$d"/*
+  env DOCKER_HOST= DOCKER_CONTEXT= PATH="$d:/bin:$PATH" TMPDIR="$1" THUNDERBIRD_XPRA_PORT=4999 THUNDERBIRD_NO_RECOVER=1 \
+      PORTHOLE_BIN="$e/porthole" THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird" >"$1/out" 2>&1 || true
+  sleep 0.5
+  rm -rf "$e" "$d"
+}
+
+# After an update the container's base has no socat, but a bridge started by the old launcher can
+# still be alive (bridges outlive the launcher, and Quit for stayup apps). Reusing it means every
+# connection fails; it must be replaced.
+@test "launcher: a live bridge from before s6 is replaced, not reused" {
+  t="$(mktemp -d -t pltt)"
+  sleep 30 & stale=$!
+  echo "$stale" > "$t/thunderbird-xpra-tunnel.4999.pid"
+  run_launcher_in "$t"
+  /bin/ps -p "$stale" >/dev/null 2>&1 && { kill "$stale"; rm -rf "$t"; echo "stale bridge left running"; return 1; }
+  rm -rf "$t"
+  grep -q 'ENGINE-IPC .*porthole-xpra.sock' "$STUB_LOG" || { echo "no new xpra bridge: $(cat "$STUB_LOG")"; return 1; }
+}
+
+@test "launcher: a live s6 bridge is reused" {
+  t="$(mktemp -d -t pltt)"
+  sh -c 'sleep 30; :' s6-ipcclient & cur=$!   # two commands, so sh keeps its argv
+  echo "$cur" > "$t/thunderbird-xpra-tunnel.4999.pid"
+  run_launcher_in "$t"
+  alive=; /bin/ps -p "$cur" >/dev/null 2>&1 && alive=1
+  kill "$cur" 2>/dev/null || true; rm -rf "$t"
+  [ -n "$alive" ] || { echo "current bridge was killed"; return 1; }
+  ! grep -q 'ENGINE-IPC .*porthole-xpra.sock' "$STUB_LOG" || { echo "a second xpra bridge started"; return 1; }
+}
+
+# A container built on a base from before s6 (a dev checkout on a cached :latest, or a recipe that
+# didn't change) can't be relayed into at all. Say so, and how to fix it, instead of opening a
+# viewer that never connects.
+@test "launcher: a container without the s6 relay stops the launch and says to rebuild" {
+  t="$(mktemp -d -t pltt)"
+  run_launcher_in "$t" '*"command -v s6-ipcclient"*) exit 1 ;;'
+  out="$(cat "$t/out")"; rm -rf "$t"
+  [[ "$out" == *"--rebuild"* ]] || { echo "no rebuild advice: $out"; return 1; }
+  ! grep -q 'ENGINE-IPC .*porthole-xpra.sock' "$STUB_LOG" || { echo "bridge started anyway"; return 1; }
+}

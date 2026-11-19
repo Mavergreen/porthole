@@ -13,7 +13,9 @@
 # relays it to stdin/stdout, so `docker exec -i <c> s6-ipcclient <sock> s6-ioconnect` is the whole
 # relay. Built from the SAME skalibs/s6 commits as the Mac transport (SKALIBS_REF, S6_REF, passed
 # by build/build-base-image.sh), so one Renovate PR moves both ends. Fetched by commit: git verifies
-# the checkout hashes to it, so no separate checksum. Static, like the Mac build (build/fetch-s6.sh).
+# the checkout hashes to it, so no separate checksum. Configured like the Mac build (build/fetch-s6.sh):
+# libskarnet is linked in statically; glibc stays dynamic, and both stages FROM the same pinned
+# Debian, so the copied binaries always meet the glibc they were built against.
 FROM debian:13-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS s6
 ARG SKALIBS_REF
 ARG S6_REF

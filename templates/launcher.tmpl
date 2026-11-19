@@ -184,7 +184,23 @@ fi
 # Local bridge to the container's xpra Unix socket (s6-ipcserver over `docker exec -i`), Unix on
 # BOTH ends -- no TCP port to allocate, nothing network-exposed. The container side (s6-ipcclient +
 # s6-ioconnect, from the base image) runs as root and connects the app user's socket by path.
-if ! { [ -f "$TUNNEL_PID" ] && ps -p "$(cat "$TUNNEL_PID")" >/dev/null 2>&1; }; then
+# A bridge is reused only while it is alive AND relays the way this launcher would (s6-ipcclient).
+# Bridges outlive the launcher -- and, for stayup apps, Quit -- so one started by an older Porthole
+# can still be running after an update, relaying with socat into a base that no longer has it: every
+# connection would fail. Such a bridge is stopped and replaced.
+bridge_current() {
+  [ -f "$1" ] || return 1
+  _bp=$(cat "$1")
+  ps -p "$_bp" >/dev/null 2>&1 || return 1
+  ps -o command= -p "$_bp" 2>/dev/null | grep -q s6-ipcclient && return 0
+  kill "$_bp" 2>/dev/null
+  return 1
+}
+if ! bridge_current "$TUNNEL_PID"; then
+  # The relay's container side ships in the base image; a container built on an older base (no s6)
+  # can't be relayed into at all, so stop here rather than open a viewer that never connects.
+  docker exec "$CONTAINER" sh -c 'command -v s6-ipcclient && command -v s6-ioconnect' >/dev/null 2>&1 \
+    || die "its Linux container predates Porthole's s6 relay." "Relaunch it with $0 --rebuild."
   rm -f "$XPRA_SOCK"
   # s6-ipcserver binds $XPRA_SOCK, forks per connection, and runs the child with the connection on
   # stdin/stdout; docker exec -i pipes that to the container's s6-ipcclient, which connects the app
@@ -203,7 +219,7 @@ fi
 # lowercased). Its own pidfile so it tears down independently of the xpra tunnel.
 MENU_SOCK="${TMPDIR:-/tmp}/@SLUG@-menu.sock"
 MENU_TUNNEL_PID="${TMPDIR:-/tmp}/@SLUG@-menu-sock.$PORT.pid"
-if ! { [ -f "$MENU_TUNNEL_PID" ] && ps -p "$(cat "$MENU_TUNNEL_PID")" >/dev/null 2>&1; }; then
+if ! bridge_current "$MENU_TUNNEL_PID"; then
   rm -f "$MENU_SOCK"
   PATH="$ENGINE_BIN_DIR:$PATH" "$IPCSERVER" "$MENU_SOCK" \
     docker exec -i "$CONTAINER" s6-ipcclient /run/user/1000/porthole-menu.sock s6-ioconnect </dev/null >/dev/null 7>&- &
