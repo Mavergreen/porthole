@@ -36,7 +36,7 @@
 
 - (void)connect {
     // AF_UNIX: the launcher forwards the container's xpra Unix socket to this
-    // Mac-side socket path (socat over `docker exec -i`). Connect a POSIX socket
+    // Mac-side socket path (s6 over `docker exec -i`). Connect a POSIX socket
     // and wrap its fd in CFStreams (there is no CFStream unix-path convenience).
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) { [self.delegate transport:self didFailWithError:@"socket() failed"]; return; }

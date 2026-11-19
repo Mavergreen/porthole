@@ -2,7 +2,7 @@
 FROM ghcr.io/mavergreen/porthole-base:latest
 
 # Linux Thunderbird's own package(s), from the vendor's apt repo -- installed here on YOUR Mac, so Porthole
-# never redistributes vendor software. The common runtime (xpra + Xvfb, dbus, keyring, socat, the
+# never redistributes vendor software. The common runtime (xpra + Xvfb, dbus, keyring, s6 relay, the
 # menu daemon, the Mac-font alias) is already in the pre-built shared base ghcr.io/mavergreen/porthole-base:latest.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends thunderbird \

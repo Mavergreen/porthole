@@ -267,3 +267,20 @@ version_conf() {  # $1 = dir, $2 = APP_VERSION line or empty
   xp=$(grep -n 'xpra start' "$e" | head -1 | cut -d: -f1)
   [ -n "$tz" ] && [ -n "$xp" ] && [ "$tz" -lt "$xp" ] || { echo "tz=$tz xpra=$xp"; return 1; }
 }
+
+# The launcher's bridges run s6 inside the container, which only the base of the SAME Porthole
+# version is sure to carry; an installed engine must never render FROM …:latest.
+@test "an installed engine (with a VERSION) renders FROM the base of exactly that version" {
+  e="$(mktemp -d -t phver)"
+  ( cd "${BATS_TEST_DIRNAME}/.." && cp -R bin templates build viewer XPRA_VERSION menu-daemon.py "$e/" ) 2>/dev/null || true
+  [ -x "$e/bin/generate-viewer" ] || skip "generator not built yet"
+  printf '20991231.1\n' > "$e/VERSION"
+  out="$(mktemp -d -t phout)"
+  env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" \
+    "$e/bin/generate-viewer" "${BATS_TEST_DIRNAME}/../examples/thunderbird.conf" --out "$out" >/dev/null
+  df="$(find "$out" -name Dockerfile | head -1)"
+  from="$(grep -m1 '^FROM ' "$df")"
+  [ "$from" = "FROM ghcr.io/mavergreen/porthole-base:20991231.1" ] \
+    || { echo "rendered: $from"; rm -rf "$e" "$out"; return 1; }
+  rm -rf "$e" "$out"
+}

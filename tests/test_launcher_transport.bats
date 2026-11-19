@@ -35,3 +35,10 @@ EOF
   rm -rf "$e" "$d"
   [ -n "$ok" ] || { echo "engine s6-ipcserver not used: $(cat "$STUB_LOG")"; return 1; }
 }
+
+@test "launcher: the container side of both bridges is s6-ipcclient + s6-ioconnect, never socat" {
+  l="${BATS_TEST_DIRNAME}/../templates/launcher.tmpl"
+  grep -qF 'docker exec -i "$CONTAINER" s6-ipcclient /run/user/1000/porthole-xpra.sock s6-ioconnect' "$l" || return 1
+  grep -qF 'docker exec -i "$CONTAINER" s6-ipcclient /run/user/1000/porthole-menu.sock s6-ioconnect' "$l" || return 1
+  ! grep -v '^[[:space:]]*#' "$l" | grep -qw socat || { echo "launcher.tmpl still runs socat"; return 1; }
+}

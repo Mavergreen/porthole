@@ -122,7 +122,7 @@ PORTHOLE="${PORTHOLE_BIN:-/Applications/Porthole.app/Contents/Resources/engine/b
 [ -x "$PORTHOLE" ] || PORTHOLE="$(command -v porthole 2>/dev/null || true)"
 [ -n "$PORTHOLE" ] && [ -x "$PORTHOLE" ] || die "the Porthole engine CLI is missing -- reinstall Porthole"
 # s6-ipcserver is Porthole's viewer transport (a UCSPI-unix superserver): it listens on a Mac Unix
-# socket and runs `docker exec … socat …` per connection, connection on stdin/stdout. It ships in
+# socket and runs `docker exec … s6-ipcclient …` per connection, connection on stdin/stdout. It ships in
 # the engine beside the porthole CLI; prefer that, fall back to PATH (dev). Its bin dir goes on PATH
 # so the wrapper's chain-loaded components (s6-ipcserver-socketbinder, s6-ipcserverd) resolve.
 ENGINE_BIN_DIR="${PORTHOLE%/porthole}"
@@ -173,20 +173,21 @@ if [ "$_i" -ge "$_tries" ] && docker logs --tail 50 "$CONTAINER" 2>&1 | grep -q 
 fi
 
 # Local bridge to the container's xpra Unix socket (s6-ipcserver over `docker exec -i`), Unix on
-# BOTH ends -- no TCP port to allocate, nothing network-exposed. The container-side socat
-# runs as root and connects the app user's socket by path.
+# BOTH ends -- no TCP port to allocate, nothing network-exposed. The container side (s6-ipcclient +
+# s6-ioconnect, from the base image) runs as root and connects the app user's socket by path.
 if ! { [ -f "$TUNNEL_PID" ] && ps -p "$(cat "$TUNNEL_PID")" >/dev/null 2>&1; }; then
   rm -f "$XPRA_SOCK"
   # s6-ipcserver binds $XPRA_SOCK, forks per connection, and runs the child with the connection on
-  # stdin/stdout; docker exec -i pipes that to the container's socat, which connects the app socket.
+  # stdin/stdout; docker exec -i pipes that to the container's s6-ipcclient, which connects the app
+  # socket and hands it to s6-ioconnect to relay.
   # It outlives us, so it must not hold our output open: the viewer reads its end as "setup is over".
   PATH="$ENGINE_BIN_DIR:$PATH" "$IPCSERVER" "$XPRA_SOCK" \
-    docker exec -i "$CONTAINER" socat STDIO UNIX-CONNECT:/run/user/1000/porthole-xpra.sock </dev/null >/dev/null 7>&- &
+    docker exec -i "$CONTAINER" s6-ipcclient /run/user/1000/porthole-xpra.sock s6-ioconnect </dev/null >/dev/null 7>&- &
   echo $! > "$TUNNEL_PID"
 fi
 
 # Second bridge: the live-menu channel. A Unix-domain socket, forwarded the same way as
-# the xpra port (socat over `docker exec -i`), Unix on BOTH ends -- no TCP port to
+# the xpra port (s6 over `docker exec -i`), Unix on BOTH ends -- no TCP port to
 # allocate and nothing network-exposed. The container-side menu daemon (a later
 # sub-project) listens on /run/user/1000/porthole-menu.sock; here we only stand up the bridge. The
 # Mac end MUST match what the viewer dials: $TMPDIR/thunderbird-menu.sock (== appDisplayName
@@ -196,7 +197,7 @@ MENU_TUNNEL_PID="${TMPDIR:-/tmp}/thunderbird-menu-sock.$PORT.pid"
 if ! { [ -f "$MENU_TUNNEL_PID" ] && ps -p "$(cat "$MENU_TUNNEL_PID")" >/dev/null 2>&1; }; then
   rm -f "$MENU_SOCK"
   PATH="$ENGINE_BIN_DIR:$PATH" "$IPCSERVER" "$MENU_SOCK" \
-    docker exec -i "$CONTAINER" socat STDIO UNIX-CONNECT:/run/user/1000/porthole-menu.sock </dev/null >/dev/null 7>&- &
+    docker exec -i "$CONTAINER" s6-ipcclient /run/user/1000/porthole-menu.sock s6-ioconnect </dev/null >/dev/null 7>&- &
   echo $! > "$MENU_TUNNEL_PID"
 fi
 say_mark "bridges: up"

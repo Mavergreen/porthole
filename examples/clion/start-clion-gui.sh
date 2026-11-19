@@ -6,7 +6,7 @@
 # bridges (printing/CUPS, CAP_SYS_PTRACE, audio, ...) are included below per the manifest.
 set -u
 # xpra binds a Unix-domain socket (not TCP). It lives in the app user's runtime dir
-# (created + chowned below); the launcher's socat bridge -- running as root via
+# (created + chowned below); the launcher's s6 bridge -- running as root via
 # `docker exec` -- connects to it by path. No TCP port, nothing network-exposed.
 : "${XPRA_SOCKET:=/run/user/1000/porthole-xpra.sock}"
 : "${XPRA_DISPLAY:=:100}"

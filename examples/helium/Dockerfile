@@ -2,7 +2,7 @@
 FROM ghcr.io/mavergreen/porthole-base:latest
 
 # Linux Helium's own package(s), from the vendor's apt repo -- installed here on YOUR Mac, so Porthole
-# never redistributes vendor software. The common runtime (xpra + Xvfb, dbus, keyring, socat, the
+# never redistributes vendor software. The common runtime (xpra + Xvfb, dbus, keyring, s6 relay, the
 # menu daemon, the Mac-font alias) is already in the pre-built shared base ghcr.io/mavergreen/porthole-base:latest.
 RUN curl -sS https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc \
        | gpg --dearmor -o /usr/share/keyrings/helium-desktop-keyring.gpg \
