@@ -5,7 +5,8 @@
 #
 #   place APP              (root)     hard-link the stand-in at APP's container path; print it
 #   alive SID              (uid 1000) exit 0 iff SID's stand-in is listening
-#   start SID TARGET PROG… (uid 1000) start TARGET as a child of xpra, serving PROG per connection
+#   start SID TARGET TO    (uid 1000) start TARGET as a child of xpra, relaying each connection to
+#                                     the Unix socket TO itself (so TO's server sees TARGET connect)
 #   stop SID                          stop SID's stand-in and remove its files
 #   list                              print each live SID, one per line
 #
@@ -57,12 +58,11 @@ place() {
 }
 
 start() {
-  sid=$1 target=$2; shift 2
-  [ $# -ge 1 ] || refuse "start: no PROG"
+  sid=$1 target=$2 to=$3
   alive "$sid" && exit 0
   rm -f "$D/$sid.sock" "$D/$sid.pid"
   mkdir -p "$D"; chmod 0700 "$D"
-  xpra control "socket://$XPRA_SOCKET" start "$target" "$D/$sid.sock" "$@" >/dev/null
+  xpra control "socket://$XPRA_SOCKET" start "$target" "$D/$sid.sock" "$to" >/dev/null 2>&1
   n=0
   until alive "$sid"; do
     n=$((n + 1))
@@ -86,12 +86,12 @@ list() {
   done
 }
 
-[ $# -ge 1 ] || refuse "usage: $me place APP | alive SID | start SID TARGET PROG... | stop SID | list"
+[ $# -ge 1 ] || refuse "usage: $me place APP | alive SID | start SID TARGET TO | stop SID | list"
 cmd=$1; shift
 case $cmd in
   place) [ $# -eq 1 ] || refuse "usage: $me place APP"; place "$1" ;;
   alive) [ $# -eq 1 ] || refuse "usage: $me alive SID"; check_sid "$1"; alive "$1" ;;
-  start) [ $# -ge 3 ] || refuse "usage: $me start SID TARGET PROG..."; check_sid "$1"; start "$@" ;;
+  start) [ $# -eq 3 ] || refuse "usage: $me start SID TARGET TO"; check_sid "$1"; start "$@" ;;
   stop) [ $# -eq 1 ] || refuse "usage: $me stop SID"; check_sid "$1"; stop "$1" ;;
   list) [ $# -eq 0 ] || refuse "usage: $me list"; list ;;
   *) refuse "unknown command: $cmd" ;;

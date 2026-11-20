@@ -82,20 +82,19 @@ c.sendall(d); c.close()" &
 echo "base image OK: s6 relay"
 
 # Prove the stand-in, in the image: three concurrent connections through a stand-in hard-linked at a
-# Mac application path WITH A SPACE all reach the agent as children of that one stand-in (the agent
-# names its caller by the peer's parent, as 1Password does), and the stand-in's executable is that
-# path; then placement rules, the control script's start/alive/list/stop (xpra stubbed: it only
+# Mac application path WITH A SPACE all reach the agent FROM that one stand-in process -- the agent
+# names its caller by the connecting peer's own executable, as 1Password does ("Allow <exe> to use
+# SSH key") -- and that executable is the Mac path; then placement rules, the control script's start/alive/list/stop (xpra stubbed: it only
 # starts the command), and SIGTERM removing the socket.
 got=$(docker run --rm "$1" sh -c '
   fail() { echo "FAIL: $*"; exit 1; }
   python3 -c "
 import socket, struct, threading
 s = socket.socket(socket.AF_UNIX); s.bind(\"/tmp/agent.sock\"); s.listen(8)
-out = open(\"/tmp/parents\", \"w\")
+out = open(\"/tmp/peers\", \"w\")
 def serve(c):
     pid = struct.unpack(\"3i\", c.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
-    ppid = open(\"/proc/%d/stat\" % pid).read().rsplit(\")\", 1)[1].split()[1]
-    out.write(ppid + \"\n\"); out.flush()
+    out.write(\"%d\n\" % pid); out.flush()
     c.recv(16); c.sendall(b\"ok\"); c.close()
 while True:
     c, _ = s.accept(); threading.Thread(target=serve, args=(c,)).start()" &
@@ -105,7 +104,7 @@ while True:
   T=$(porthole-standin-ctl place "/Applications/Google Chrome.app") || fail "place a .app"
   [ "$T" = "/Applications/Google Chrome.app" ] || fail "place a .app printed: $T"
   [ "$(stat -c %i "$T")" = "$(stat -c %i /usr/local/bin/porthole-standin)" ] || fail "not a hard link"
-  "$T" /tmp/x.sock s6-ipcclient /tmp/agent.sock s6-ioconnect &
+  "$T" /tmp/x.sock /tmp/agent.sock &
   n=0; while [ ! -f /tmp/x.pid ]; do
     n=$((n + 1)); [ "$n" -le 50 ] || fail "stand-in never wrote its pid"; sleep 0.1
   done
@@ -119,16 +118,37 @@ while True:
   done
   for p in $pids; do wait "$p" || fail "a client exited $?"; done
   for i in 1 2 3; do [ "$(cat /tmp/r$i)" = ok ] || fail "connection $i got: $(cat /tmp/r$i)"; done
-  [ "$(sort -u /tmp/parents)" = "$S" ] || fail "agent saw parents $(tr "\n" " " < /tmp/parents), not $S"
-  [ "$(wc -l < /tmp/parents)" = 3 ] || fail "agent saw $(wc -l < /tmp/parents) connections"
+  [ "$(sort -u /tmp/peers)" = "$S" ] || fail "agent saw peers $(tr "\n" " " < /tmp/peers), not $S"
+  [ "$(wc -l < /tmp/peers)" = 3 ] || fail "agent saw $(wc -l < /tmp/peers) connections"
   [ "$(porthole-standin-ctl place /usr/bin/ssh)" = /Mac/usr/bin/ssh ] || fail "place /usr/bin/ssh"
   porthole-standin-ctl place /Applications/../etc/x 2>/dev/null; [ $? = 2 ] || fail "place with .. not refused"
   porthole-standin-ctl place relative/x 2>/dev/null; [ $? = 2 ] || fail "place relative not refused"
+  python3 -c "
+import socket
+s = socket.socket(socket.AF_UNIX); s.bind(\"/tmp/echo.sock\"); s.listen(1)
+c, _ = s.accept(); d = b\"\"
+while True:
+    b = c.recv(65536)
+    if not b: break
+    d += b
+c.sendall(d); c.close()" &
+  n=0; while [ ! -S /tmp/echo.sock ]; do
+    n=$((n + 1)); [ "$n" -le 50 ] || fail "echo server never listened"; sleep 0.1
+  done
+  "$T" /tmp/e.sock /tmp/echo.sock &
+  n=0; while [ ! -f /tmp/e.pid ]; do
+    n=$((n + 1)); [ "$n" -le 50 ] || fail "echo stand-in never wrote its pid"; sleep 0.1
+  done
+  { printf "\000\377"; head -c 300000 /dev/urandom; printf end; } > /tmp/big
+  timeout 10 s6-ipcclient /tmp/e.sock s6-ioconnect < /tmp/big > /tmp/big.out \
+    || fail "relay through the stand-in exited $?"
+  cmp -s /tmp/big /tmp/big.out || fail "stand-in relay changed the bytes ($(wc -c < /tmp/big.out) of $(wc -c < /tmp/big))"
+  kill -TERM "$(cat /tmp/e.pid)"
   kill -TERM "$S"; sleep 0.3
   [ ! -e /tmp/x.sock ] && [ ! -e /tmp/x.pid ] || fail "SIGTERM left the socket or pid file"
   mkdir -p /tmp/stub && printf "#!/bin/sh\nshift 3\nsetsid \"\$@\" </dev/null >/dev/null 2>&1 &\n" \
     > /tmp/stub/xpra && chmod 755 /tmp/stub/xpra
-  PATH=/tmp/stub:$PATH porthole-standin-ctl start 42-7.ssh-agent "$T" s6-ipcclient /tmp/agent.sock s6-ioconnect \
+  PATH=/tmp/stub:$PATH porthole-standin-ctl start 42-7.ssh-agent "$T" /tmp/agent.sock \
     || fail "ctl start"
   porthole-standin-ctl alive 42-7.ssh-agent || fail "ctl alive after start"
   [ "$(porthole-standin-ctl list)" = 42-7.ssh-agent ] || fail "ctl list: $(porthole-standin-ctl list)"
