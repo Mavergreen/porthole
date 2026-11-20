@@ -10,3 +10,7 @@ mavericks_assert_binary_compatible(porthole-caller)
 add_executable(test_caller_walk "${PROJECT_SOURCE_DIR}/tests/standin/test_caller_walk.c")
 target_link_libraries(test_caller_walk PRIVATE porthole_caller_walk)
 add_test(NAME caller_walk COMMAND test_caller_walk)
+
+add_executable(porthole-watch-exit porthole-watch-exit.c)
+target_link_libraries(porthole-watch-exit PRIVATE porthole_caller_walk)
+mavericks_assert_binary_compatible(porthole-watch-exit)
