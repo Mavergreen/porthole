@@ -24,12 +24,27 @@ teardown() {
   true
 }
 
-@test "porthole configures as a standalone top-level project" {
+configure() {
   # A shipyard older than its toolchain file is found but cannot configure this project. That is a
   # stale install, not a platform limit, so say so and fail rather than skip.
   [ -f "$SHIPYARD_SCRIPTS/../MavericksToolchain.cmake" ] || {
     echo "the shipyard at $SHIPYARD_SCRIPTS predates MavericksToolchain.cmake -- install the current shipyard pkg"; return 1; }
   run shipyard-cmake -S "$REPO_ROOT" -B "$BUILD_DIR" \
-    -DCMAKE_TOOLCHAIN_FILE="$SHIPYARD_SCRIPTS/../MavericksToolchain.cmake"
+    -DCMAKE_TOOLCHAIN_FILE="$REPO_ROOT/cmake/MavericksClang22Toolchain.cmake" \
+    -DMAVERICKS_CLANG22_PIN="$REPO_ROOT/components/clang22" "$@"
+}
+
+@test "porthole configures as a standalone top-level project, with the pinned clang22" {
+  configure
   [ "$status" -eq 0 ] || { echo "shipyard-cmake configure failed (status $status):"; echo "$output"; return 1; }
+  root="$(sh "$SHIPYARD_SCRIPTS/fetch_clang22.sh" "$REPO_ROOT/components/clang22" 2>/dev/null)"
+  # A toolchain file's compiler is not cached; CMake records what detection ran here.
+  grep -qF "set(CMAKE_OBJC_COMPILER \"$root/bin/clang\")" "$BUILD_DIR"/CMakeFiles/*/CMakeOBJCCompiler.cmake \
+    || { echo "OBJC compiler is not the pinned clang22 ($root/bin/clang):"; grep -h 'set(CMAKE_OBJC_COMPILER ' "$BUILD_DIR"/CMakeFiles/*/CMakeOBJCCompiler.cmake; return 1; }
+}
+
+@test "a compiler other than the pinned clang22 is refused at configure" {
+  configure -DCMAKE_OBJC_COMPILER=/usr/bin/clang
+  [ "$status" -ne 0 ] || { echo "configure accepted /usr/bin/clang"; return 1; }
+  echo "$output" | grep -q "pinned clang22" || { echo "$output"; return 1; }
 }

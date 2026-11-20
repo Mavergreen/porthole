@@ -1,0 +1,22 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "include": ["/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/mavericks-presets.json"],
+  "configurePresets": [
+    { "name": "clang22", "hidden": true,
+      "toolchainFile": "${sourceDir}/cmake/MavericksClang22Toolchain.cmake",
+      "cacheVariables": { "MAVERICKS_CLANG22_PIN": "${sourceDir}/components/clang22" } },
+    { "name": "native", "inherits": ["clang22", "mavericks-native"],
+      "displayName": "native -- Porthole on Mavericks 10.9, with the pinned clang22" },
+    { "name": "cross", "inherits": ["clang22", "mavericks-cross"],
+      "displayName": "cross -- Porthole for 10.9 on a modern Mac, with the pinned clang22-cross" }
+  ],
+  "buildPresets": [
+    { "name": "native", "configurePreset": "native" },
+    { "name": "cross", "configurePreset": "cross" }
+  ],
+  "testPresets": [
+    { "name": "native", "configurePreset": "native" },
+    { "name": "cross", "configurePreset": "cross" }
+  ]
+}

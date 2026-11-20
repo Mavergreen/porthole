@@ -5,7 +5,7 @@
 
 // A trivial producer the test drives by hand.
 @interface FakeProducer : NSObject <PortholeMenuProducer>
-@property(assign) id<PortholeMenuProducerDelegate> delegate;
+@property(assign, nonatomic) id<PortholeMenuProducerDelegate> delegate;
 @property(retain) NSArray *snapshot;
 @property(assign) NSInteger lastInvoked;
 @end

@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
 # Porthole -- the app-agnostic viewer-generator ENGINE, built as its own top-level product:
-# `shipyard-cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$SHIPYARD_SCRIPTS/../MavericksToolchain.cmake"`
-# produces Porthole.app with no product repo and no container (the toolchain-file backstop
-# FATAL_ERRORs a configure with no pinned sysroot; `. build/msc.sh` sets SHIPYARD_SCRIPTS). Per-app
+# `shipyard-cmake --preset native` (on 10.9) or `--preset cross` (on a modern Mac) -- or, by hand,
+# `-DCMAKE_TOOLCHAIN_FILE=cmake/MavericksClang22Toolchain.cmake -DMAVERICKS_CLANG22_PIN=components/clang22`
+# -- produces Porthole.app with no product repo and no container, compiled by the pinned clang22. Per-app
 # name/icon are resolved at RUNTIME by `porthole materialize`, never baked here. Product repos
 # historically add_subdirectory(<porthole>/viewer) directly; this root is what porthole's OWN
 # build + CI use.
@@ -24,6 +24,20 @@ else()
 endif()
 project(porthole VERSION ${PORTHOLE_VERSION} LANGUAGES OBJC)
 
+# The family compiler, chosen by cmake/MavericksClang22Toolchain.cmake before project(); prove that is
+# what detection found (a configure without that toolchain file would silently take whatever clang is
+# on PATH -- Xcode's on a CI runner, clang22 at another release on a 10.9 box).
+if(NOT MAVERICKS_CLANG22_ROOT)
+  message(FATAL_ERROR "porthole compiles only with the pinned clang22: configure with a preset "
+    "(shipyard-cmake --preset native|cross), or -DCMAKE_TOOLCHAIN_FILE=cmake/MavericksClang22Toolchain.cmake "
+    "-DMAVERICKS_CLANG22_PIN=components/clang22")
+endif()
+string(REGEX REPLACE "-mavericks\\..*$" "" _porthole_llvm "${MAVERICKS_CLANG22_VERSION}")
+if(NOT CMAKE_OBJC_COMPILER_ID STREQUAL "Clang" OR NOT CMAKE_OBJC_COMPILER_VERSION VERSION_EQUAL _porthole_llvm)
+  message(FATAL_ERROR "${CMAKE_OBJC_COMPILER} identifies as ${CMAKE_OBJC_COMPILER_ID} "
+    "${CMAKE_OBJC_COMPILER_VERSION}, not the pinned clang22 ${MAVERICKS_CLANG22_VERSION}")
+endif()
+
 # Porthole's OWN identity (not a per-app viewer). The viewer sub-build defaults these to
 # 1Password for the legacy product-include path; setting them here first makes these win.
 set(PORTHOLE_APP_NAME "Porthole" CACHE STRING "Display name for the engine app")
@@ -40,7 +54,9 @@ set(MAVERICKS_ALLOW_GENERIC_ICON ON)
 # under -- it looks in its own prefix -- so configure with shipyard-cmake and pass no
 # CMAKE_PREFIX_PATH.
 find_package(MavericksShipyard REQUIRED)
-set(MAVERICKS_REQUIRE_LANGS OBJC)
+# platform: clang22 is not AppleClang, so only shipyard's AppleClang identity gate is off; the mode,
+#           pinned SDK and 10.9 compatibility gates stay, and the check above pins the compiler itself.
+set(MAVERICKS_REQUIRE_APPLECLANG OFF)
 include(Mavericks)
 
 enable_testing()
