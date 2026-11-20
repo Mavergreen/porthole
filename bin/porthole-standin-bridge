@@ -20,7 +20,7 @@
 # Siblings (porthole-caller, porthole-watch-exit, s6-setlock) are found beside this script first.
 set -eu
 me=porthole-standin-bridge
-here=$(cd "$(dirname "$0")" && pwd)
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 D=/run/user/1000/porthole-standin
 
 sib() {

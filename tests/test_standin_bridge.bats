@@ -143,3 +143,10 @@ EOF2
   grep -q NOISE "$BIN/docker"
   [ ! -s "$W/stdout" ]
 }
+
+@test "a relative path to it, with CDPATH set, still finds its sibling tools" {
+  : > "$STATE/alive.123-456.ssh-agent"
+  mkdir -p "$W/d"; ln -s "$BIN/docker" "$W/d/docker"
+  run sh -c 'cd "$1" && CDPATH="$1" PATH="$1/d:/usr/bin:/bin" bin/porthole-standin-bridge c1 ssh-agent "$2"' _ "$W" "$TO"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}

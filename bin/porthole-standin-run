@@ -13,7 +13,7 @@
 # Its sibling porthole-caller is found beside this script first.
 set -eu
 me=porthole-standin-run
-here=$(cd "$(dirname "$0")" && pwd)
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() { echo "usage: $me CONTAINER [-u USER] [-e VAR=VAL]... -- PROG [ARG...]" >&2; exit 100; }
 
 [ $# -ge 1 ] || usage

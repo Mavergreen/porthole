@@ -130,6 +130,14 @@ static int run(char **prog) {
   sigaction(SIGTERM, &sa, NULL);
   sigaction(SIGINT, &sa, NULL);
   sigaction(SIGHUP, &sa, NULL);
+  /* Held from fork until each side is ready: the parent until it knows the child to forward to, the
+   * child until its handlers are back to the defaults PROG expects. None is lost, only delayed. */
+  sigset_t held, prev;
+  sigemptyset(&held);
+  sigaddset(&held, SIGTERM);
+  sigaddset(&held, SIGINT);
+  sigaddset(&held, SIGHUP);
+  sigprocmask(SIG_BLOCK, &held, &prev);
   pid_t p = fork();
   if (p < 0) die("fork");
   if (p == 0) {
@@ -137,11 +145,13 @@ static int run(char **prog) {
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGHUP, &sa, NULL);
+    sigprocmask(SIG_SETMASK, &prev, NULL);
     execvp(prog[0], prog);
     fprintf(stderr, "porthole-standin: exec %s: %s\n", prog[0], strerror(errno));
     _exit(127);
   }
   run_child = p;
+  sigprocmask(SIG_SETMASK, &prev, NULL);
   int st;
   while (waitpid(p, &st, 0) < 0)
     if (errno != EINTR) die("waitpid");

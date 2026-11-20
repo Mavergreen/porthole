@@ -71,3 +71,9 @@ EOF2
   wait $pid || st=$?
   [ "${st:-0}" -eq 100 ]
 }
+
+@test "a relative path to it, with CDPATH set, still finds its sibling porthole-caller" {
+  mkdir -p "$W/d"; ln -s "$BIN/docker" "$W/d/docker"
+  out=$(cd "$W" && printf x | CDPATH="$W" PATH="$W/d:/usr/bin:/bin" bin/porthole-standin-run c1 -- /opt/x 2>&1)
+  [ "$out" = helper-output ] || { echo "$out"; return 1; }
+}
