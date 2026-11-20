@@ -43,6 +43,19 @@
       "datasourceTemplate": "deb",
       "versioningTemplate": "deb",
       "registryUrlTemplate": "https://xpra.org/?suite=trixie&components=main&binaryArch=amd64"
+    },
+    {
+      "customType": "regex",
+      "description": "clang22, the family compiler every Porthole Mac binary is built with (cmake/MavericksClang22Toolchain.cmake, build/fetch-s6.sh); one bare release tag.",
+      "managerFilePatterns": [
+        "/^components/clang22/version$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>\\S+)\\s*$"
+      ],
+      "depNameTemplate": "Mavergreen/clang-22",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
     }
   ],
   "packageRules": [
