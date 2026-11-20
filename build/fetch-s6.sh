@@ -61,11 +61,11 @@ make install AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
 # Prove them (10.9 compat guard + a real run) BEFORE staging: a failed check must leave nothing in
 # $OUTDIR, or the build would treat the stamp (s6-ipcserver) as done and never retry.
 CAND="$WORK/out"; mkdir -p "$CAND"
-for b in s6-ipcserver-socketbinder s6-ipcserverd s6-ipcserver; do
+for b in s6-setlock s6-ipcserver-socketbinder s6-ipcserverd s6-ipcserver; do
   cp "$STAGE/bin/$b" "$CAND/$b"; chmod 0755 "$CAND/$b"
 done
 sh "$REPO/build/check-transport.sh" "$CAND"
 mkdir -p "$OUTDIR"
 # s6-ipcserver last: it is the build's stamp, so it appears only once its siblings are in place.
-for b in s6-ipcserver-socketbinder s6-ipcserverd s6-ipcserver; do cp -p "$CAND/$b" "$OUTDIR/$b"; done
+for b in s6-setlock s6-ipcserver-socketbinder s6-ipcserverd s6-ipcserver; do cp -p "$CAND/$b" "$OUTDIR/$b"; done
 echo "fetch-s6: staged s6-ipcserver into $OUTDIR"

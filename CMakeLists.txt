@@ -138,10 +138,11 @@ add_custom_target(transport DEPENDS "${PORTHOLE_TRANSPORT_STAMP}")
 # Porthole.app (the shared viewer engine), with the engine CLI + templates staged inside it.
 add_custom_target(pkg
   COMMAND ${CMAKE_COMMAND} -E env "PORTHOLE_TRANSPORT_DIR=${PORTHOLE_TRANSPORT_DIR}"
+             "PORTHOLE_STANDIN_DIR=$<TARGET_FILE_DIR:porthole-caller>"
              sh "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/build_pkg.sh"
              "${PROJECT_VERSION}" "porthole-${PROJECT_VERSION}.pkg"
              "$<TARGET_BUNDLE_DIR:Porthole>"
-  DEPENDS Porthole transport
+  DEPENDS Porthole transport porthole-caller porthole-watch-exit
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   USES_TERMINAL
   COMMENT "Building porthole-${PROJECT_VERSION}.pkg")

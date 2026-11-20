@@ -1,0 +1,66 @@
+#!/bin/sh
+# porthole-standin-bridge CONTAINER NAME TO -- relay one bridged connection through the stand-in of
+# the Mac application that made it.
+#
+# Run by s6-ipcserver as the per-connection child (the connection on fds 0/1). A Linux app in the
+# container names its callers by the connecting process (1Password: "Allow <exe> to use SSH key"),
+# so each Mac application gets a stand-in there: porthole-standin, hard-linked at the application's
+# path and connecting to TO (a socket in the container) itself. Requests from one application then
+# share one approval, which lasts while that application runs.
+#
+#   1. porthole-caller peer names the application instance (ID) and its path (APP); unidentifiable
+#      -> refused, and the container is never touched.
+#   2. SID=ID.NAME; a live stand-in -> 4.
+#   3. Under a lock per SID: sweep stand-ins whose application has exited, place and start this one,
+#      and start its exit watcher (porthole-watch-exit), which stops it when the application exits.
+#   4. Relay the connection to the stand-in's socket.
+#
+# Siblings (porthole-caller, porthole-watch-exit, s6-setlock) are found beside this script first.
+set -eu
+me=porthole-standin-bridge
+here=$(cd "$(dirname "$0")" && pwd)
+D=/run/user/1000/porthole-standin
+
+sib() {
+  if [ -x "$here/$1" ]; then printf '%s\n' "$here/$1"; else command -v "$1" || {
+    echo "$me: no $1 beside $here or on PATH" >&2; exit 1; }; fi
+}
+ctl() { u=$1 c=$2; shift 2; docker exec -u "$u" "$c" porthole-standin-ctl "$@"; }
+
+if [ "${1:-}" = --create ]; then
+  # 3, under s6-setlock: CONTAINER SID ID APP TO
+  [ $# -eq 6 ] || { echo "$me: --create needs CONTAINER SID ID APP TO" >&2; exit 100; }
+  c=$2 sid=$3 id=$4 app=$5 to=$6
+  ctl 1000 "$c" alive "$sid" && exit 0
+  caller=$(sib porthole-caller)
+  ctl 1000 "$c" list | while IFS= read -r other; do
+    [ -n "$other" ] || continue
+    "$caller" alive "${other%%.*}" || ctl 1000 "$c" stop "$other" || :
+  done
+  target=$(ctl 0 "$c" place "$app") || { echo "$me: could not place a stand-in for $app" >&2; exit 1; }
+  ctl 1000 "$c" start "$sid" "$target" "$to" || { echo "$me: could not start $sid" >&2; exit 1; }
+  "$(sib porthole-watch-exit)" "$LOCKDIR/$sid.watch" "$id" -- \
+    docker exec -u 1000 "$c" porthole-standin-ctl stop "$sid"
+  exit 0
+fi
+
+[ $# -eq 3 ] || { echo "usage: $me CONTAINER NAME TO" >&2; exit 100; }
+c=$1 name=$2 to=$3
+case $name in '' | *[!a-z0-9-]*) echo "$me: not a bridge name: '$name'" >&2; exit 100 ;; esac
+
+who=$("$(sib porthole-caller)" peer 2>&1) || { echo "$me: refused: $who" >&2; exit 1; }
+tab=$(printf '\t')
+id=${who%%"$tab"*} app=${who#*"$tab"}
+[ -n "$id" ] && [ "$app" != "$who" ] || { echo "$me: refused: porthole-caller said '$who'" >&2; exit 1; }
+sid=$id.$name
+
+if ! ctl 1000 "$c" alive "$sid" >&2; then
+  tmp=${TMPDIR:-/tmp}; tmp=${tmp%/}
+  LOCKDIR=$tmp/porthole-standin/$c
+  mkdir -p "$LOCKDIR"; chmod 0700 "$tmp/porthole-standin" "$LOCKDIR"
+  export LOCKDIR
+  # stdout is the connection: whatever creating prints goes to stderr, never to the client.
+  "$(sib s6-setlock)" "$LOCKDIR/$sid.create" "$here/$me" --create "$c" "$sid" "$id" "$app" "$to" >&2 \
+    || exit 1
+fi
+exec docker exec -i -u 1000 "$c" s6-ipcclient "$D/$sid.sock" s6-ioconnect

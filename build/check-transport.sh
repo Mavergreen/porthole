@@ -21,7 +21,7 @@ if [ -z "$GUARD" ]; then
   GUARD="$SHIPYARD/assert_binary_compatible.sh"
 fi
 [ -f "$GUARD" ] || die "no compat guard to run ($GUARD) -- refusing to pass what was not measured"
-sh "$GUARD" "$BIN/s6-ipcserver" "$BIN/s6-ipcserver-socketbinder" "$BIN/s6-ipcserverd" \
+sh "$GUARD" "$BIN/s6-ipcserver" "$BIN/s6-ipcserver-socketbinder" "$BIN/s6-ipcserverd" "$BIN/s6-setlock" \
   || die "compat guard failed"
 
 # /tmp, not $TMPDIR: a Unix socket path must fit in sun_path (104 bytes on macOS).

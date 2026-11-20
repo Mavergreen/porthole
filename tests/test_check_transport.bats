@@ -48,6 +48,7 @@ while True:
 EOF
   printf '#!/bin/sh\nexit 0\n' > "$BIN/s6-ipcserver-socketbinder"
   printf '#!/bin/sh\nexit 0\n' > "$BIN/s6-ipcserverd"
+  printf '#!/bin/sh\nexit 0\n' > "$BIN/s6-setlock"
   chmod 755 "$BIN"/*
   export GUARD_LOG="$WORK/guard.log"
   printf '#!/bin/sh\necho "$@" >> "%s"\nexit "${GUARD_EXIT:-0}"\n' "$GUARD_LOG" > "$WORK/guard.sh"
@@ -61,10 +62,10 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
 
-@test "check-transport runs the compat guard on all three binaries" {
+@test "check-transport runs the compat guard on every shipped s6 binary" {
   run sh "$ENGINE/build/check-transport.sh" "$BIN"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  for b in s6-ipcserver s6-ipcserver-socketbinder s6-ipcserverd; do
+  for b in s6-ipcserver s6-ipcserver-socketbinder s6-ipcserverd s6-setlock; do
     grep -q "$BIN/$b" "$GUARD_LOG" || { echo "guard not run on $b: $(cat "$GUARD_LOG")"; return 1; }
   done
 }

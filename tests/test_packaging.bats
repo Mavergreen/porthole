@@ -58,7 +58,7 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   command -v pkgbuild >/dev/null 2>&1 || skip "pkgbuild not available"
   command -v pkgutil >/dev/null 2>&1 || skip "pkgutil not available"
   tdir="$WORK/transport"; mkdir -p "$tdir"
-  for b in s6-ipcserver s6-ipcserver-socketbinder s6-ipcserverd; do
+  for b in s6-ipcserver s6-ipcserver-socketbinder s6-ipcserverd s6-setlock; do
     printf 'fake\n' > "$tdir/$b"; chmod +x "$tdir/$b"
   done
   PORTHOLE_TRANSPORT_DIR="$tdir" run sh "$ENGINE/packaging/macos/build_pkg.sh" \
@@ -68,9 +68,27 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   files="$(lsbom "$d/porthole-component.pkg/Bom")"
   echo "$files" | grep -q 'engine/bin/s6-ipcserver' \
     || { echo "transport not in payload: $files"; return 1; }
-  for _b in s6-ipcserver-socketbinder s6-ipcserverd; do
+  for _b in s6-ipcserver-socketbinder s6-ipcserverd s6-setlock; do
     echo "$files" | grep -q "engine/bin/$_b" \
       || { echo "missing engine/bin/$_b in payload"; return 1; }
+  done
+}
+
+@test "build_pkg stages the stand-in tools: the bridge always, the Mac binaries when provided" {
+  command -v pkgbuild >/dev/null 2>&1 || skip "pkgbuild not available"
+  command -v pkgutil >/dev/null 2>&1 || skip "pkgutil not available"
+  sdir="$WORK/standin"; mkdir -p "$sdir"
+  for b in porthole-caller porthole-watch-exit; do
+    printf 'fake\n' > "$sdir/$b"; chmod +x "$sdir/$b"
+  done
+  PORTHOLE_STANDIN_DIR="$sdir" run sh "$ENGINE/packaging/macos/build_pkg.sh" \
+      9.9.9 "$WORK/out-standin.pkg" "$FAKEAPP"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  d="$WORK/expand-standin"; pkgutil --expand "$WORK/out-standin.pkg" "$d"
+  files="$(lsbom "$d/porthole-component.pkg/Bom")"
+  for _b in porthole-standin-bridge porthole-caller porthole-watch-exit; do
+    echo "$files" | grep -q "engine/bin/$_b" \
+      || { echo "missing engine/bin/$_b in payload: $files"; return 1; }
   done
 }
 

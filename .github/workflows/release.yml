@@ -102,12 +102,14 @@ jobs:
           shipyard-cmake --build "$PH_BUILD/_build" --target Porthole
           shipyard-cmake --build "$PH_BUILD/_build" --target porthole-updater
           shipyard-cmake --build "$PH_BUILD/_build" --target transport   # cross-build skalibs+s6 -> _build/engine-bin
+          shipyard-cmake --build "$PH_BUILD/_build" --target porthole-caller porthole-watch-exit   # -> _build/standin
 
       - name: Package the .pkg (Porthole.app + engine CLI + updater + LaunchAgent)
         run: |
           set -eu
           UPD_APP="$PH_BUILD/_build/porthole-updater.app" \
           PORTHOLE_TRANSPORT_DIR="$PH_BUILD/_build/engine-bin" \
+          PORTHOLE_STANDIN_DIR="$PH_BUILD/_build/standin" \
             sh packaging/macos/build_pkg.sh "${{ steps.ver.outputs.ver }}" \
                "$PH_BUILD/dist/porthole-${{ steps.ver.outputs.ver }}.pkg" \
                "$PH_BUILD/_build/viewer/Porthole.app"

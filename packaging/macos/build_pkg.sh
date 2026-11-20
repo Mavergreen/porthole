@@ -37,11 +37,23 @@ install -m 0755 "$REPO/bin/porthole"                     "$ENGDIR/bin/porthole"
 # target passes its dir. A dev build without it still packages -- the launcher then falls back to a
 # PATH s6-ipcserver -- mirroring the ENGINE_BIN handling elsewhere.
 if [ -n "${PORTHOLE_TRANSPORT_DIR:-}" ] && [ -x "$PORTHOLE_TRANSPORT_DIR/s6-ipcserver" ]; then
-  for _b in s6-ipcserver s6-ipcserver-socketbinder s6-ipcserverd; do
+  for _b in s6-ipcserver s6-ipcserver-socketbinder s6-ipcserverd s6-setlock; do
     install -m 0755 "$PORTHOLE_TRANSPORT_DIR/$_b" "$ENGDIR/bin/$_b"
   done
 else
   echo "build_pkg: no transport binaries (PORTHOLE_TRANSPORT_DIR unset) -- pkg relies on a PATH s6-ipcserver" >&2
+fi
+# Caller identity: porthole-standin-bridge (sh) names the Mac application behind each bridged
+# connection with porthole-caller and stops its container stand-in with porthole-watch-exit (C, the
+# CMake standin/ targets, whose dir is passed as PORTHOLE_STANDIN_DIR). Like the transport, a dev
+# build without them still packages; the bridge then finds them on PATH.
+install -m 0755 "$REPO/bin/porthole-standin-bridge"      "$ENGDIR/bin/porthole-standin-bridge"
+if [ -n "${PORTHOLE_STANDIN_DIR:-}" ] && [ -x "$PORTHOLE_STANDIN_DIR/porthole-caller" ]; then
+  for _b in porthole-caller porthole-watch-exit; do
+    install -m 0755 "$PORTHOLE_STANDIN_DIR/$_b" "$ENGDIR/bin/$_b"
+  done
+else
+  echo "build_pkg: no stand-in tools (PORTHOLE_STANDIN_DIR unset) -- the bridge relies on PATH" >&2
 fi
 install -m 0755 "$REPO/bin/generate-viewer"              "$ENGDIR/bin/generate-viewer"
 install -m 0755 "$REPO/bin/porthole-recover-watch"       "$ENGDIR/bin/porthole-recover-watch"
