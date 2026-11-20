@@ -144,6 +144,33 @@ c.sendall(d); c.close()" &
     || fail "relay through the stand-in exited $?"
   cmp -s /tmp/big /tmp/big.out || fail "stand-in relay changed the bytes ($(wc -c < /tmp/big.out) of $(wc -c < /tmp/big))"
   kill -TERM "$(cat /tmp/e.pid)"
+  # A far side that hangs up while the client stays open must not make the stand-in spin: its CPU
+  # time stays flat while the half-open connection lingers.
+  python3 -c "
+import socket
+s = socket.socket(socket.AF_UNIX); s.bind(\"/tmp/hup.sock\"); s.listen(8)
+while True:
+    c, _ = s.accept(); c.close()" &
+  n=0; while [ ! -S /tmp/hup.sock ]; do
+    n=$((n + 1)); [ "$n" -le 50 ] || fail "hangup server never listened"; sleep 0.1
+  done
+  "$T" /tmp/h.sock /tmp/hup.sock &
+  n=0; while [ ! -f /tmp/h.pid ]; do
+    n=$((n + 1)); [ "$n" -le 50 ] || fail "hangup stand-in never wrote its pid"; sleep 0.1
+  done
+  H=$(cat /tmp/h.pid)
+  (sleep 3 | s6-ipcclient /tmp/h.sock sh -c "cat >&7" ) &
+  sleep 0.5
+  t0=$(awk "{print \$14 + \$15}" /proc/$H/stat); sleep 1.5; t1=$(awk "{print \$14 + \$15}" /proc/$H/stat)
+  [ $((t1 - t0)) -le 10 ] || fail "stand-in spun with a half-open connection: $((t1 - t0)) ticks in 1.5 s"
+  kill -TERM "$H"
+  # alive trusts a pid only if it is that stand-in: a reused pid (here: sleep) is not alive.
+  mkdir -p /run/user/1000/porthole-standin
+  sleep 30 & Z=$!
+  python3 -c "import socket; socket.socket(socket.AF_UNIX).bind(\"/run/user/1000/porthole-standin/9-9.x.sock\")"
+  echo "$Z" > /run/user/1000/porthole-standin/9-9.x.pid
+  ! porthole-standin-ctl alive 9-9.x || fail "alive trusted a reused pid"
+  kill "$Z"; rm -f /run/user/1000/porthole-standin/9-9.x.*
   kill -TERM "$S"; sleep 0.3
   [ ! -e /tmp/x.sock ] && [ ! -e /tmp/x.pid ] || fail "SIGTERM left the socket or pid file"
   mkdir -p /tmp/stub && printf "#!/bin/sh\nshift 3\nsetsid \"\$@\" </dev/null >/dev/null 2>&1 &\n" \

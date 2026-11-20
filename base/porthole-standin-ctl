@@ -27,14 +27,18 @@ check_sid() {
   esac
 }
 
+# Alive: the socket is there and the pid file names a running stand-in serving it. A pid alone is
+# not enough: a stand-in killed outright leaves its files, and its pid may be reused.
 alive() {
   [ -S "$D/$1.sock" ] && [ -f "$D/$1.pid" ] || return 1
   pid=$(cat "$D/$1.pid" 2>/dev/null) || return 1
   case $pid in '' | *[!0-9]*) return 1 ;; esac
-  kill -0 "$pid" 2>/dev/null
+  kill -0 "$pid" 2>/dev/null || return 1
+  arg1=$(tr '\000' '\n' < "/proc/$pid/cmdline" 2>/dev/null | sed -n 2p)
+  [ "$arg1" = "$D/$1.sock" ]
 }
 
-device() { stat -c %d "$1"; }
+device() { stat -L -c %d "$1"; }
 
 place() {
   app=$1
@@ -62,7 +66,7 @@ start() {
   alive "$sid" && exit 0
   rm -f "$D/$sid.sock" "$D/$sid.pid"
   mkdir -p "$D"; chmod 0700 "$D"
-  xpra control "socket://$XPRA_SOCKET" start "$target" "$D/$sid.sock" "$to" >/dev/null 2>&1
+  xpra control "socket://$XPRA_SOCKET" start "$target" "$D/$sid.sock" "$to" >&2
   n=0
   until alive "$sid"; do
     n=$((n + 1))

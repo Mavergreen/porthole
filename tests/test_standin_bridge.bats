@@ -65,7 +65,7 @@ calls() { grep -c "$1" "$STATE/docker.log" 2>/dev/null || true; }
   [ ! -e "$STATE/docker.log" ]
 }
 
-@test "a live stand-in: only the alive check, then the relay" {
+@test "a live stand-in: only the alive check, then the relay (and its watcher is made sure of)" {
   : > "$STATE/alive.123-456.ssh-agent"
   run env PATH="$BIN:/usr/bin:/bin" "$BRIDGE" c1 ssh-agent "$TO"
   [ "$status" -eq 0 ]
@@ -73,7 +73,9 @@ calls() { grep -c "$1" "$STATE/docker.log" 2>/dev/null || true; }
 |exec|-u|1000|c1|porthole-standin-ctl|alive|123-456.ssh-agent
 |exec|-i|-u|1000|c1|s6-ipcclient|/run/user/1000/porthole-standin/123-456.ssh-agent.sock|s6-ioconnect
 EOF2
-  [ ! -e "$STATE/watch.log" ]
+  # A watcher that died (or never started) comes back with the next connection; a running one makes
+  # porthole-watch-exit return at once.
+  grep -q '/123-456.ssh-agent.watch|123-456|--|' "$STATE/watch.log"
 }
 
 @test "a first connection places, starts, watches, then relays -- the app path one argv element" {
@@ -83,7 +85,17 @@ EOF2
   grep -qxF '|exec|-u|0|c1|porthole-standin-ctl|place|/Applications/Google Chrome.app' "$STATE/docker.log"
   grep -qxF "|exec|-u|1000|c1|porthole-standin-ctl|start|123-456.ssh-agent|/Applications/Google Chrome.app|$TO" "$STATE/docker.log"
   tail -1 "$STATE/docker.log" | grep -qxF '|exec|-i|-u|1000|c1|s6-ipcclient|/run/user/1000/porthole-standin/123-456.ssh-agent.sock|s6-ioconnect'
-  grep -qxF "|$TMPDIR/porthole-standin/c1/123-456.ssh-agent.watch|123-456|--|docker|exec|-u|1000|c1|porthole-standin-ctl|stop|123-456.ssh-agent" "$STATE/watch.log"
+  L="$TMPDIR/porthole-standin/c1"
+  grep -qxF "|$L/123-456.ssh-agent.watch|123-456|--|sh|-c|rm -f \"\$0\"; exec \"\$@\"|$L/123-456.ssh-agent.create|docker|exec|-u|1000|c1|porthole-standin-ctl|stop|123-456.ssh-agent" "$STATE/watch.log" \
+    || { cat "$STATE/watch.log"; return 1; }
+}
+
+@test "without TMPDIR the locks go in a per-user directory, not a shared one" {
+  run env -i HOME="$HOME" STATE="$STATE" PATH="$BIN:/usr/bin:/bin" "$BRIDGE" c1 ssh-agent "$TO"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q "|/tmp/porthole-standin-$(id -u)/c1/123-456.ssh-agent.watch|" "$STATE/watch.log" \
+    || { cat "$STATE/watch.log"; return 1; }
+  rm -rf "/tmp/porthole-standin-$(id -u)/c1"
 }
 
 @test "place fails: refused, no start, no relay" {
@@ -112,7 +124,6 @@ EOF2
   [ "$(calls '|place|')" = 1 ]
   [ "$(calls '|start|')" = 1 ]
   [ "$(calls s6-ipcclient)" = 3 ]
-  [ "$(wc -l < "$STATE/watch.log" | tr -d ' ')" = 1 ]
 }
 
 @test "its siblings are found beside it before PATH" {

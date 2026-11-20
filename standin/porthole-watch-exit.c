@@ -92,9 +92,18 @@ int main(int argc, char **argv) {
   struct kevent ev;
   EV_SET(&ev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
   if (kq >= 0 && kevent(kq, &ev, 1, NULL, 0, NULL) == 0) {
-    struct kevent got;
-    while (kevent(kq, NULL, 0, &got, 1, NULL) < 0 && errno == EINTR) {}
-  } /* else ESRCH: it already exited */
+    /* The instance may have exited, and its pid been reused, between the check above and this
+     * registration: only wait if the pid still names this instance. */
+    if (proc_lookup_live(pid, &pi, NULL) == 0 && pi.start_sec == start) {
+      struct kevent got;
+      while (kevent(kq, NULL, 0, &got, 1, NULL) < 0 && errno == EINTR) {}
+    }
+  } else if (kq < 0 || errno != ESRCH) {
+    /* Cannot watch (not "it exited"): stopping a live application's stand-in would cost it a fresh
+     * prompt. Give up; the bridge starts a watcher again on the next connection. */
+    unlink(lockfile);
+    return 111;
+  }
   run(cmd);
   unlink(lockfile);
   return 0;

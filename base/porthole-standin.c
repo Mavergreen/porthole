@@ -21,6 +21,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -62,6 +63,10 @@ static void on_term(int sig) {
 
 static void add_conn(int c) {
   int u = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+  /* connect() blocks this one loop -- every relay of this application -- while TARGET's backlog is
+   * full: bound it. */
+  struct timeval tv = {2, 0};
+  if (u >= 0) setsockopt(u, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
   if (u < 0 || connect(u, (struct sockaddr *)&target, sizeof target) < 0) {
     fprintf(stderr, "porthole-standin: connect %s: %s\n", target.sun_path, strerror(errno));
     if (u >= 0) close(u);
@@ -159,6 +164,7 @@ int main(int argc, char **argv) {
 
   struct pollfd *pf = NULL;
   size_t cappf = 0;
+  int backoff = 0; /* accept failed for want of resources: leave the listener out for a moment */
   for (;;) {
     size_t need = 1 + 2 * nconns;
     if (need > cappf) {
@@ -166,7 +172,7 @@ int main(int argc, char **argv) {
       if (!np) die("realloc");
       pf = np; cappf = need * 2;
     }
-    pf[0].fd = s; pf[0].events = POLLIN; pf[0].revents = 0;
+    pf[0].fd = backoff ? -1 : s; pf[0].events = POLLIN; pf[0].revents = 0;
     for (size_t i = 0; i < nconns; i++) {
       struct conn *k = conns[i];
       for (int j = 0; j < 2; j++) {
@@ -175,9 +181,12 @@ int main(int argc, char **argv) {
         /* fd j is the source of h[j] and the sink of h[1-j]. */
         if (!k->h[j].done && !k->h[j].eof && k->h[j].len == 0) p->events |= POLLIN;
         if (k->h[1 - j].len > 0) p->events |= POLLOUT;
+        /* Nothing to wait for on this fd: leave it out. poll() reports POLLHUP whatever `events`
+         * says, so a peer that hung up while the other side lingers would otherwise spin the loop. */
+        if (p->events == 0) p->fd = -1;
       }
     }
-    if (poll(pf, need, -1) < 0) {
+    if (poll(pf, need, backoff ? 100 : -1) < 0) {
       if (errno == EINTR) continue;
       die("poll");
     }
@@ -188,16 +197,22 @@ int main(int argc, char **argv) {
       if (bad || (k->h[0].done && k->h[1].done)) {
         close(k->fd[0]); close(k->fd[1]); free(k);
         conns[i] = conns[--nconns];
-        /* the moved conn's revents belong to the old slot: handle it next round */
+        /* the last conn moves into this slot, revents and all: handle it in this same pass */
         pf[1 + 2 * i] = pf[1 + 2 * nconns]; pf[2 + 2 * i] = pf[2 + 2 * nconns];
         continue;
       }
       i++;
     }
+    backoff = 0;
     if (pf[0].revents & POLLIN) {
       for (;;) {
         int c = accept4(s, NULL, NULL, SOCK_CLOEXEC);
-        if (c < 0) break;
+        if (c < 0) {
+          /* EMFILE, ENFILE, ENOBUFS...: the listener stays readable, so retry after a pause */
+          if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR && errno != ECONNABORTED)
+            backoff = 1;
+          break;
+        }
         add_conn(c);
       }
     }

@@ -11,9 +11,11 @@
 #   1. porthole-caller peer names the application instance (ID) and its path (APP); unidentifiable
 #      -> refused, and the container is never touched.
 #   2. SID=ID.NAME; a live stand-in -> 4.
-#   3. Under a lock per SID: sweep stand-ins whose application has exited, place and start this one,
-#      and start its exit watcher (porthole-watch-exit), which stops it when the application exits.
-#   4. Relay the connection to the stand-in's socket.
+#   3. Under a lock per SID: sweep stand-ins whose application has exited, place and start this one.
+#   4. Make sure the application's exit watcher runs (porthole-watch-exit: one per instance, so this
+#      returns at once when it does), which stops the stand-in when the application exits. Checked
+#      on every connection, so a watcher that died comes back.
+#   5. Relay the connection to the stand-in's socket.
 #
 # Siblings (porthole-caller, porthole-watch-exit, s6-setlock) are found beside this script first.
 set -eu
@@ -39,8 +41,6 @@ if [ "${1:-}" = --create ]; then
   done
   target=$(ctl 0 "$c" place "$app") || { echo "$me: could not place a stand-in for $app" >&2; exit 1; }
   ctl 1000 "$c" start "$sid" "$target" "$to" || { echo "$me: could not start $sid" >&2; exit 1; }
-  "$(sib porthole-watch-exit)" "$LOCKDIR/$sid.watch" "$id" -- \
-    docker exec -u 1000 "$c" porthole-standin-ctl stop "$sid"
   exit 0
 fi
 
@@ -54,13 +54,20 @@ id=${who%%"$tab"*} app=${who#*"$tab"}
 [ -n "$id" ] && [ "$app" != "$who" ] || { echo "$me: refused: porthole-caller said '$who'" >&2; exit 1; }
 sid=$id.$name
 
+# Mac-side locks, per user: $TMPDIR is per-user on the Mac; /tmp is shared, so qualify it.
+if [ -n "${TMPDIR:-}" ]; then base=${TMPDIR%/}/porthole-standin; else base=/tmp/porthole-standin-$(id -u); fi
+LOCKDIR=$base/$c
+mkdir -p "$LOCKDIR" && chmod 0700 "$base" "$LOCKDIR" \
+  || { echo "$me: refused: cannot use $LOCKDIR" >&2; exit 1; }
+
+# stdout is the connection: whatever creating or watching prints goes to stderr, never to the client.
 if ! ctl 1000 "$c" alive "$sid" >&2; then
-  tmp=${TMPDIR:-/tmp}; tmp=${tmp%/}
-  LOCKDIR=$tmp/porthole-standin/$c
-  mkdir -p "$LOCKDIR"; chmod 0700 "$tmp/porthole-standin" "$LOCKDIR"
-  export LOCKDIR
-  # stdout is the connection: whatever creating prints goes to stderr, never to the client.
   "$(sib s6-setlock)" "$LOCKDIR/$sid.create" "$here/$me" --create "$c" "$sid" "$id" "$app" "$to" >&2 \
     || exit 1
 fi
+# When the instance exits: drop its create lock (instance ids are never reused) and stop its stand-in.
+"$(sib porthole-watch-exit)" "$LOCKDIR/$sid.watch" "$id" -- \
+  sh -c 'rm -f "$0"; exec "$@"' "$LOCKDIR/$sid.create" \
+  docker exec -u 1000 "$c" porthole-standin-ctl stop "$sid" >&2 \
+  || echo "$me: no exit watcher for $sid (the next connection retries)" >&2
 exec docker exec -i -u 1000 "$c" s6-ipcclient "$D/$sid.sock" s6-ioconnect
