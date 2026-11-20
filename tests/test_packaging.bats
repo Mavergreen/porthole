@@ -86,7 +86,7 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   d="$WORK/expand-standin"; pkgutil --expand "$WORK/out-standin.pkg" "$d"
   files="$(lsbom "$d/porthole-component.pkg/Bom")"
-  for _b in porthole-standin-bridge porthole-caller porthole-watch-exit; do
+  for _b in porthole-standin-bridge porthole-standin-run porthole-caller porthole-watch-exit; do
     echo "$files" | grep -q "engine/bin/$_b" \
       || { echo "missing engine/bin/$_b in payload: $files"; return 1; }
   done

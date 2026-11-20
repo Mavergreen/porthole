@@ -43,11 +43,12 @@ if [ -n "${PORTHOLE_TRANSPORT_DIR:-}" ] && [ -x "$PORTHOLE_TRANSPORT_DIR/s6-ipcs
 else
   echo "build_pkg: no transport binaries (PORTHOLE_TRANSPORT_DIR unset) -- pkg relies on a PATH s6-ipcserver" >&2
 fi
-# Caller identity: porthole-standin-bridge (sh) names the Mac application behind each bridged
-# connection with porthole-caller and stops its container stand-in with porthole-watch-exit (C, the
+# Caller identity: porthole-standin-bridge and porthole-standin-run (sh) name the Mac application
+# behind each bridged connection with porthole-caller and stops its container stand-in with porthole-watch-exit (C, the
 # CMake standin/ targets, whose dir is passed as PORTHOLE_STANDIN_DIR). Like the transport, a dev
 # build without them still packages; the bridge then finds them on PATH.
 install -m 0755 "$REPO/bin/porthole-standin-bridge"      "$ENGDIR/bin/porthole-standin-bridge"
+install -m 0755 "$REPO/bin/porthole-standin-run"         "$ENGDIR/bin/porthole-standin-run"
 if [ -n "${PORTHOLE_STANDIN_DIR:-}" ] && [ -x "$PORTHOLE_STANDIN_DIR/porthole-caller" ]; then
   for _b in porthole-caller porthole-watch-exit; do
     install -m 0755 "$PORTHOLE_STANDIN_DIR/$_b" "$ENGDIR/bin/$_b"

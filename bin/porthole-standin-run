@@ -1,0 +1,48 @@
+#!/bin/sh
+# porthole-standin-run CONTAINER [-u USER] [-e VAR=VAL]... -- PROG [ARG...]
+#
+# Run PROG in the container as the child of the stand-in for the Mac application that called this:
+# for a Linux program that names its caller by its PARENT (1Password's browser helper verifies its
+# parent's executable against its browser allowlist). stdin/stdout are PROG's, straight through.
+#
+#   1. porthole-caller names the calling application (this process's ancestry ends at it -- a
+#      browser starts its native-messaging host directly); unidentifiable -> refused, no docker call.
+#   2. The stand-in is hard-linked at the application's path in the container (as root).
+#   3. docker exec runs it with --run: it forks PROG as its child and exits with its status.
+#
+# Its sibling porthole-caller is found beside this script first.
+set -eu
+me=porthole-standin-run
+here=$(cd "$(dirname "$0")" && pwd)
+usage() { echo "usage: $me CONTAINER [-u USER] [-e VAR=VAL]... -- PROG [ARG...]" >&2; exit 100; }
+
+[ $# -ge 1 ] || usage
+c=$1; shift
+# The docker exec options move behind PROG ARG... as they are parsed.
+opts=0 sep=
+while [ $# -gt "$opts" ]; do   # only the arguments not yet moved
+  case $1 in
+    -u | -e) [ $# -ge $((opts + 2)) ] || usage; set -- "$@" "$1" "$2"; shift 2; opts=$((opts + 2)) ;;
+    --) shift; sep=1; break ;;
+    *) usage ;;
+  esac
+done
+[ -n "$sep" ] || usage
+[ $# -gt "$opts" ] || usage
+nprog=$(($# - opts))   # "$@" is now: PROG ARG... OPT...
+
+if [ -x "$here/porthole-caller" ]; then caller=$here/porthole-caller
+else caller=$(command -v porthole-caller) || { echo "$me: refused: no porthole-caller" >&2; exit 1; }; fi
+who=$("$caller" pid $$ 2>&1) || { echo "$me: refused: $who" >&2; exit 1; }
+tab=$(printf '\t')
+app=${who#*"$tab"}
+[ "$app" != "$who" ] && [ -n "$app" ] || { echo "$me: refused: porthole-caller said '$who'" >&2; exit 1; }
+
+target=$(docker exec -u 0 "$c" porthole-standin-ctl place "$app" </dev/null) \
+  || { echo "$me: could not place a stand-in for $app" >&2; exit 1; }
+
+# OPT... CONTAINER TARGET --run PROG ARG..., by rotation (POSIX sh has no arrays): append, then
+# move PROG ARG... from the front to the end.
+set -- "$@" "$c" "$target" --run
+i=0; while [ "$i" -lt "$nprog" ]; do set -- "$@" "$1"; shift; i=$((i + 1)); done
+exec docker exec -i "$@"
