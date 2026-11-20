@@ -22,7 +22,7 @@ elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/UPSTREAM_VERSION")
 else()
   set(PORTHOLE_VERSION "0.0.0")
 endif()
-project(porthole VERSION ${PORTHOLE_VERSION} LANGUAGES OBJC)
+project(porthole VERSION ${PORTHOLE_VERSION} LANGUAGES C OBJC)
 
 # The family compiler, chosen by cmake/MavericksClang22Toolchain.cmake before project(); prove that is
 # what detection found (a configure without that toolchain file would silently take whatever clang is
@@ -34,17 +34,21 @@ if(NOT MAVERICKS_CLANG22_ROOT)
 endif()
 # A reused build dir keeps the compiler it detected first, whatever the toolchain now says: a pin bump (or
 # an in-place update of the installed clang22) would otherwise go on compiling with the old one.
-if(NOT CMAKE_OBJC_COMPILER STREQUAL "${MAVERICKS_CLANG22_ROOT}/bin/clang")
-  message(FATAL_ERROR "this build directory compiles with ${CMAKE_OBJC_COMPILER}, but the pinned clang22 "
-    "${MAVERICKS_CLANG22_VERSION} is ${MAVERICKS_CLANG22_ROOT}/bin/clang (the pin or the installed clang22 "
-    "changed): delete the build directory and configure again")
-endif()
+foreach(_lang C OBJC)
+  if(NOT CMAKE_${_lang}_COMPILER STREQUAL "${MAVERICKS_CLANG22_ROOT}/bin/clang")
+    message(FATAL_ERROR "this build directory compiles with ${CMAKE_${_lang}_COMPILER}, but the pinned clang22 "
+      "${MAVERICKS_CLANG22_VERSION} is ${MAVERICKS_CLANG22_ROOT}/bin/clang (the pin or the installed clang22 "
+      "changed): delete the build directory and configure again")
+  endif()
+endforeach()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/components/clang22/version")
 string(REGEX REPLACE "-mavericks\\..*$" "" _porthole_llvm "${MAVERICKS_CLANG22_VERSION}")
-if(NOT CMAKE_OBJC_COMPILER_ID STREQUAL "Clang" OR NOT CMAKE_OBJC_COMPILER_VERSION VERSION_EQUAL _porthole_llvm)
-  message(FATAL_ERROR "${CMAKE_OBJC_COMPILER} identifies as ${CMAKE_OBJC_COMPILER_ID} "
-    "${CMAKE_OBJC_COMPILER_VERSION}, not the pinned clang22 ${MAVERICKS_CLANG22_VERSION}")
-endif()
+foreach(_lang C OBJC)
+  if(NOT CMAKE_${_lang}_COMPILER_ID STREQUAL "Clang" OR NOT CMAKE_${_lang}_COMPILER_VERSION VERSION_EQUAL _porthole_llvm)
+    message(FATAL_ERROR "${CMAKE_${_lang}_COMPILER} identifies as ${CMAKE_${_lang}_COMPILER_ID} "
+      "${CMAKE_${_lang}_COMPILER_VERSION}, not the pinned clang22 ${MAVERICKS_CLANG22_VERSION}")
+  endif()
+endforeach()
 
 # Porthole's OWN identity (not a per-app viewer). The viewer sub-build defaults these to
 # 1Password for the legacy product-include path; setting them here first makes these win.
@@ -72,6 +76,9 @@ find_program(BATS_EXECUTABLE bats)
 
 # The native Cocoa Xpra viewer (app bundle, headless probe, codec + unit ctests).
 add_subdirectory(viewer)
+
+# The Mac tools behind per-application stand-ins (porthole-caller, porthole-watch-exit).
+add_subdirectory(standin)
 
 # Engine BATS suites: the generator, the recovery watcher, the example launchers, and the
 # standalone-build guard. Registered per-suite so ctest reports them individually.

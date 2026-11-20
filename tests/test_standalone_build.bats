@@ -41,6 +41,8 @@ configure() {
   # A toolchain file's compiler is not cached; CMake records what detection ran here.
   grep -qF "set(CMAKE_OBJC_COMPILER \"$root/bin/clang\")" "$BUILD_DIR"/CMakeFiles/*/CMakeOBJCCompiler.cmake \
     || { echo "OBJC compiler is not the pinned clang22 ($root/bin/clang):"; grep -h 'set(CMAKE_OBJC_COMPILER ' "$BUILD_DIR"/CMakeFiles/*/CMakeOBJCCompiler.cmake; return 1; }
+  grep -qF "set(CMAKE_C_COMPILER \"$root/bin/clang\")" "$BUILD_DIR"/CMakeFiles/*/CMakeCCompiler.cmake \
+    || { echo "C compiler is not the pinned clang22 ($root/bin/clang):"; grep -h 'set(CMAKE_C_COMPILER ' "$BUILD_DIR"/CMakeFiles/*/CMakeCCompiler.cmake; return 1; }
 }
 
 @test "a compiler other than the pinned clang22 is refused at configure" {
