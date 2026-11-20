@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- names its caller with porthole-caller (LOCAL_PEERPID, proc_pidpath)
 # porthole-standin-run CONTAINER [-u USER] [-e VAR=VAL]... -- PROG [ARG...]
 #
 # Run PROG in the container as the child of the stand-in for the Mac application that called this:

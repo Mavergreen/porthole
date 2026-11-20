@@ -61,7 +61,7 @@ calls() { grep -c "$1" "$STATE/docker.log" 2>/dev/null || true; }
   : > "$STATE/refuse"
   run env PATH="/usr/bin:/bin" "$BRIDGE" c1 ssh-agent "$TO"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"porthole-standin-bridge: refused: porthole-caller: process 9: gone or unreadable"* ]]
+  [[ "$output" == *"porthole-standin-bridge: refused: porthole-caller: process 9: gone or unreadable"* ]] || false
   [ ! -e "$STATE/docker.log" ]
 }
 
@@ -132,7 +132,7 @@ EOF2
   chmod 755 "$W/other/porthole-caller"
   run env PATH="$W/other:$BIN:/usr/bin:/bin" "$BRIDGE" c1 ssh-agent "$TO"
   [ "$status" -eq 1 ]
-  [[ "$output" != *WRONG* ]]
+  [[ "$output" != *WRONG* ]] || false
 }
 
 @test "nothing but the relay writes to the connection (stdout)" {

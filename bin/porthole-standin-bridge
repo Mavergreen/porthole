@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- names its caller with porthole-caller (LOCAL_PEERPID, proc_pidpath)
 # porthole-standin-bridge CONTAINER NAME TO -- relay one bridged connection through the stand-in of
 # the Mac application that made it.
 #

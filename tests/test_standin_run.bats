@@ -37,7 +37,7 @@ teardown() { rm -rf "$W"; }
   : > "$STATE/refuse"
   run env PATH="/usr/bin:/bin" "$RUN" c1 -u 1000:0 -- /opt/x '{id}'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"porthole-standin-run: refused: porthole-caller: process 9: gone or unreadable"* ]]
+  [[ "$output" == *"porthole-standin-run: refused: porthole-caller: process 9: gone or unreadable"* ]] || false
   [ ! -e "$STATE/docker.log" ]
 }
 
@@ -55,7 +55,7 @@ EOF2
   : > "$STATE/place_fail"
   run env PATH="$BIN:/usr/bin:/bin" "$RUN" c1 -- /opt/x
   [ "$status" -eq 1 ]
-  ! grep -q -- '--run' "$STATE/docker.log"
+  ! grep -q -- '--run' "$STATE/docker.log" || false
 }
 
 @test "a usage error is refused before anything else" {

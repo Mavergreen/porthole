@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# platform: macOS-only
+# platform: macOS-only -- watches real processes with kqueue NOTE_EXIT
 # porthole-watch-exit: one watcher per application instance, which runs a command when that
 # instance exits (here: stops its container stand-in), and never holds the caller's fds.
 

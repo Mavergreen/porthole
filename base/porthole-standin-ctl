@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic -- runs inside the Linux container (Debian), never on the Mac
 # porthole-standin-ctl -- place, start, check and stop the per-application stand-ins
 # (porthole-standin) in a Porthole container. Driven from the Mac by porthole-standin-bridge, one
 # `docker exec` per call, every path an argv element of its own (Mac application paths have spaces).

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# platform: macOS-only
+# platform: macOS-only -- reads real processes with sysctl and proc_pidpath
 # porthole-caller names the Mac application behind a connection: the unit walk against a fake
 # process table, then the real tool against real processes and a real Unix connection.
 
@@ -39,7 +39,7 @@ setup() { OUT="$BATS_FILE_TMPDIR"; }
 @test "pid of a process that does not exist is refused with a reason" {
   run "$OUT/porthole-caller" pid 999999
   [ "$status" -eq 1 ]
-  [[ "$output" == porthole-caller:* ]]
+  [[ "$output" == porthole-caller:* ]] || false
 }
 
 @test "peer names the client on the other end of fd 0 as pid does" {
@@ -64,5 +64,5 @@ PY
 @test "peer with fd 0 not a socket is refused" {
   run "$OUT/porthole-caller" peer < /dev/null
   [ "$status" -eq 1 ]
-  [[ "$output" == porthole-caller:* ]]
+  [[ "$output" == porthole-caller:* ]] || false
 }
