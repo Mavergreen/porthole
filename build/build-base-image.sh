@@ -120,6 +120,13 @@ while True:
   for i in 1 2 3; do [ "$(cat /tmp/r$i)" = ok ] || fail "connection $i got: $(cat /tmp/r$i)"; done
   [ "$(sort -u /tmp/peers)" = "$S" ] || fail "agent saw peers $(tr "\n" " " < /tmp/peers), not $S"
   [ "$(wc -l < /tmp/peers)" = 3 ] || fail "agent saw $(wc -l < /tmp/peers) connections"
+  # --run: the stand-in runs one program as its own child (a browser helper checks the executable of
+  # its parent), stdin/stdout passed straight through, and exits with the status of the child.
+  got=$(printf ping | "$T" --run sh -c "readlink /proc/\$PPID/exe; cat; exit 7"); rc=$?
+  [ "$rc" = 7 ] || fail "--run exited $rc, not the 7 of the child"
+  [ "$got" = "$T
+ping" ] || fail "--run: child saw parent/stdin as: $got"
+  "$T" --run 2>/dev/null; [ $? = 100 ] || fail "--run with no program not refused"
   [ "$(porthole-standin-ctl place /usr/bin/ssh)" = /Mac/usr/bin/ssh ] || fail "place /usr/bin/ssh"
   porthole-standin-ctl place /Applications/../etc/x 2>/dev/null; [ $? = 2 ] || fail "place with .. not refused"
   porthole-standin-ctl place relative/x 2>/dev/null; [ $? = 2 ] || fail "place relative not refused"

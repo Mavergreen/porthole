@@ -1,4 +1,5 @@
 /* porthole-standin SOCK TARGET -- a container-side stand-in for one Mac application.
+ * porthole-standin --run PROG [ARG...] -- the same, for one program that names its PARENT.
  *
  * Installed as a hard link at the Mac application's path (/Applications/Google Chrome.app, or
  * /Mac/<path> for a plain program) and started as a child of xpra. A Linux app that names its
@@ -10,6 +11,11 @@
  *
  * Its pid goes to SOCK with ".sock" replaced by ".pid", written once it is listening, so a pid file
  * means "ready". SIGTERM/SIGINT/SIGHUP remove both files and exit 0.
+ *
+ * --run is for a program that names its caller by its parent instead (1Password's browser helper
+ * verifies its parent's executable against the browser allowlist): the stand-in runs PROG as its
+ * child with stdin, stdout and stderr passed straight through, forwards SIGTERM/SIGINT/SIGHUP to it,
+ * and exits with its status.
  */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -23,6 +29,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #define BUFSZ 65536
@@ -109,9 +116,48 @@ static int pump(struct half *h, short rev_from, short rev_to) {
   return 0;
 }
 
+static volatile pid_t run_child;
+
+static void forward(int sig) {
+  if (run_child > 0) kill(run_child, sig);
+}
+
+static int run(char **prog) {
+  struct sigaction sa;
+  memset(&sa, 0, sizeof sa);
+  sigemptyset(&sa.sa_mask);
+  sa.sa_handler = forward;
+  sigaction(SIGTERM, &sa, NULL);
+  sigaction(SIGINT, &sa, NULL);
+  sigaction(SIGHUP, &sa, NULL);
+  pid_t p = fork();
+  if (p < 0) die("fork");
+  if (p == 0) {
+    sa.sa_handler = SIG_DFL;
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGHUP, &sa, NULL);
+    execvp(prog[0], prog);
+    fprintf(stderr, "porthole-standin: exec %s: %s\n", prog[0], strerror(errno));
+    _exit(127);
+  }
+  run_child = p;
+  int st;
+  while (waitpid(p, &st, 0) < 0)
+    if (errno != EINTR) die("waitpid");
+  return WIFEXITED(st) ? WEXITSTATUS(st) : 128 + WTERMSIG(st);
+}
+
 int main(int argc, char **argv) {
+  if (argc >= 2 && strcmp(argv[1], "--run") == 0) {
+    if (argc < 3) {
+      fprintf(stderr, "usage: porthole-standin --run PROG [ARG...]\n");
+      return 100;
+    }
+    return run(argv + 2);
+  }
   if (argc != 3) {
-    fprintf(stderr, "usage: porthole-standin SOCK TARGET\n");
+    fprintf(stderr, "usage: porthole-standin SOCK TARGET | --run PROG [ARG...]\n");
     return 100;
   }
   size_t n = strlen(argv[1]);
