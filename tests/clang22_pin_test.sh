@@ -15,4 +15,12 @@ grep -qF '"Mavergreen/clang-22"' "$ROOT/.github/renovate.json" \
   || fail ".github/renovate.json: the clang22 pin must track Mavergreen/clang-22 releases"
 grep -qF 'components/clang22/version' "$ROOT/INGREDIENTS.md" \
   || fail "INGREDIENTS.md: does not declare clang22 (components/clang22/version)"
+# Everything Mac-side compiles with it: the s6 transport build and CI's configure.
+grep -q 'fetch_clang22.sh' "$ROOT/build/fetch-s6.sh" \
+  || fail "build/fetch-s6.sh: must compile with the pinned clang22 (fetch_clang22.sh), not a PATH clang"
+if grep -qE '^CC="clang ' "$ROOT/build/fetch-s6.sh"; then
+  fail "build/fetch-s6.sh: still compiles with a bare PATH clang"
+fi
+grep -qE -- '--preset (cross|native)|MavericksClang22Toolchain\.cmake' "$ROOT/.github/workflows/release.yml" \
+  || fail ".github/workflows/release.yml: configures without the clang22 toolchain (use --preset cross)"
 echo "clang22 pin: ok"

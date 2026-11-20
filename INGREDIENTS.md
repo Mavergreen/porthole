@@ -21,6 +21,15 @@ The `viewer/` sources, `templates/`, `bin/porthole`/`generate-viewer`, and packa
 repo's own recipe. The EdDSA public key (`updater/ed25519_key.pub`) is baked into the updater; the
 private half is the `SPARKLE_PRIVATE_KEY` CI secret.
 
+## The compiler
+
+Every Mac binary (the viewer, the updater, the s6 transport) is compiled by the pinned clang22, chosen by
+`cmake/MavericksClang22Toolchain.cmake` before `project()` and by `build/fetch-s6.sh`; configure with
+`shipyard-cmake --preset native` on 10.9 or `--preset cross` on a modern Mac. **Deviation:** that toolchain
+file lives here because shipyard has no shared way to select the pinned clang22 (each product rolls its own:
+make's `build/toolchain.sh`, iterm2's inputs file) and `include(Mavericks)` still defaults to the AppleClang
+gate. It is written to move into shipyard unchanged; once shipyard ships it, this copy goes.
+
 ## Upstream release notes
 
 No upstream release notes: porthole is its own upstream -- original Mavergreen code, versioned

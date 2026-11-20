@@ -13,7 +13,13 @@ REPO=$(cd "$(dirname "$0")/.." && pwd)
 SDK="$(sh "$SHIPYARD/fetch_sdk.sh" 2>/dev/null || true)"
 [ -d "$SDK" ] || { echo "fetch-s6: no 10.9 SDK from shipyard (SHIPYARD=$SHIPYARD)" >&2; exit 1; }
 
-CC="clang -arch x86_64 -isysroot $SDK -mmacosx-version-min=10.9"
+# The family compiler (components/clang22/version), as for every other Porthole Mac binary: on 10.9 the
+# installed native clang22 at that release, else that release fetched; clang22-cross on a modern Mac. Its
+# lld links and its llvm-ar/ranlib archive, so no Command Line Tools ld64/ar/ranlib are involved.
+CLANG22="$(sh "$SHIPYARD/fetch_clang22.sh" "$REPO/components/clang22")" \
+  || { echo "fetch-s6: no pinned clang22 (components/clang22/version)" >&2; exit 1; }
+CC="$CLANG22/bin/clang -arch x86_64 -isysroot $SDK -mmacosx-version-min=10.9 -fuse-ld=lld"
+AR="$CLANG22/bin/llvm-ar"; RANLIB="$CLANG22/bin/llvm-ranlib"; export AR RANLIB
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/s6-build.XXXXXX"); trap 'rm -rf "$WORK"' EXIT
 STAGE="$WORK/stage"; mkdir -p "$STAGE"
 

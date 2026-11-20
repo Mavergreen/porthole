@@ -85,11 +85,20 @@ jobs:
             || sudo softwareupdate --install-rosetta --agree-to-license
           arch -x86_64 /usr/bin/true
 
+      # The pinned clang22-cross (components/clang22/version), unpacked once by fetch_clang22.sh and kept.
+      - name: Cache the pinned clang22
+        uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavergreen-clang22
+          key: clang22-${{ runner.os }}-${{ hashFiles('components/clang22/version') }}
+
+      # Compiled by the pinned clang22, as on a developer's Mac or 10.9 box -- never the runner's Xcode clang.
       - name: Build Porthole.app + the Sparkle updater (x86_64 / min-10.9)
         run: |
           set -eu
           shipyard-cmake -S . -B "$PH_BUILD/_build" -DPORTHOLE_BUILD_UPDATER=ON \
-            -DCMAKE_TOOLCHAIN_FILE="$SHIPYARD_SCRIPTS/../MavericksToolchain.cmake"
+            -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/MavericksClang22Toolchain.cmake" \
+            -DMAVERICKS_CLANG22_PIN="$PWD/components/clang22"
           shipyard-cmake --build "$PH_BUILD/_build" --target Porthole
           shipyard-cmake --build "$PH_BUILD/_build" --target porthole-updater
           shipyard-cmake --build "$PH_BUILD/_build" --target transport   # cross-build skalibs+s6 -> _build/engine-bin
