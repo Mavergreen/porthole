@@ -30,6 +30,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
          --with-include=/stage/include --with-lib=/stage/lib \
          --with-sysdeps=/stage/lib/skalibs/sysdeps --prefix=/stage \
     && make -j"$(nproc)" && make install
+# The per-application stand-in (porthole-standin.c): plain C against glibc, built beside s6 so the
+# final image needs no compiler.
+COPY porthole-standin.c /src/porthole-standin.c
+RUN gcc -O2 -Wall -Werror -o /stage/bin/porthole-standin /src/porthole-standin.c
 
 FROM debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
@@ -70,4 +74,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY porthole-menu-daemon.py /usr/local/bin/porthole-menu-daemon.py
 RUN chmod 755 /usr/local/bin/porthole-menu-daemon.py
 COPY mac-fonts.conf /etc/fonts/conf.d/09-mac-fonts.conf
-COPY --from=s6 /stage/bin/s6-ipcclient /stage/bin/s6-ioconnect /usr/local/bin/
+COPY --from=s6 /stage/bin/s6-ipcclient /stage/bin/s6-ioconnect /stage/bin/porthole-standin /usr/local/bin/
+# Places, starts and stops the stand-ins; driven from the Mac by porthole-standin-bridge.
+COPY porthole-standin-ctl /usr/local/bin/porthole-standin-ctl
+RUN chmod 755 /usr/local/bin/porthole-standin-ctl

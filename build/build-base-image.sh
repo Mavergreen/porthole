@@ -32,12 +32,14 @@ ref() {
 SKALIBS_REF=$(ref SKALIBS_REF)
 S6_REF=$(ref S6_REF)
 
-# A clean context of exactly what the image needs -- the Dockerfile plus the two assets it COPYs.
+# A clean context of exactly what the image needs -- the Dockerfile plus the assets it COPYs.
 CTX=$(mktemp -d "${TMPDIR:-/tmp}/porthole-basectx.XXXXXX")
 trap 'rm -rf "$CTX"' EXIT
 cp "$ROOT/base/Dockerfile"          "$CTX/Dockerfile"
 cp "$ROOT/menu-daemon.py"           "$CTX/porthole-menu-daemon.py"
 cp "$ROOT/templates/mac-fonts.conf" "$CTX/mac-fonts.conf"
+cp "$ROOT/base/porthole-standin.c"  "$CTX/porthole-standin.c"
+cp "$ROOT/base/porthole-standin-ctl" "$CTX/porthole-standin-ctl"
 
 TAGS=""
 for t in "$@"; do TAGS="$TAGS -t $t"; done
@@ -78,3 +80,63 @@ c.sendall(d); c.close()" &
 [ "$got" = "$want" ] \
   || { echo "$0: base image: s6 relay smoke failed (want: $want; got: $got)" >&2; exit 1; }
 echo "base image OK: s6 relay"
+
+# Prove the stand-in, in the image: three concurrent connections through a stand-in hard-linked at a
+# Mac application path WITH A SPACE all reach the agent as children of that one stand-in (the agent
+# names its caller by the peer's parent, as 1Password does), and the stand-in's executable is that
+# path; then placement rules, the control script's start/alive/list/stop (xpra stubbed: it only
+# starts the command), and SIGTERM removing the socket.
+got=$(docker run --rm "$1" sh -c '
+  fail() { echo "FAIL: $*"; exit 1; }
+  python3 -c "
+import socket, struct, threading
+s = socket.socket(socket.AF_UNIX); s.bind(\"/tmp/agent.sock\"); s.listen(8)
+out = open(\"/tmp/parents\", \"w\")
+def serve(c):
+    pid = struct.unpack(\"3i\", c.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
+    ppid = open(\"/proc/%d/stat\" % pid).read().rsplit(\")\", 1)[1].split()[1]
+    out.write(ppid + \"\n\"); out.flush()
+    c.recv(16); c.sendall(b\"ok\"); c.close()
+while True:
+    c, _ = s.accept(); threading.Thread(target=serve, args=(c,)).start()" &
+  n=0; while [ ! -S /tmp/agent.sock ]; do
+    n=$((n + 1)); [ "$n" -le 50 ] || fail "agent never listened"; sleep 0.1
+  done
+  T=$(porthole-standin-ctl place "/Applications/Google Chrome.app") || fail "place a .app"
+  [ "$T" = "/Applications/Google Chrome.app" ] || fail "place a .app printed: $T"
+  [ "$(stat -c %i "$T")" = "$(stat -c %i /usr/local/bin/porthole-standin)" ] || fail "not a hard link"
+  "$T" /tmp/x.sock s6-ipcclient /tmp/agent.sock s6-ioconnect &
+  n=0; while [ ! -f /tmp/x.pid ]; do
+    n=$((n + 1)); [ "$n" -le 50 ] || fail "stand-in never wrote its pid"; sleep 0.1
+  done
+  S=$(cat /tmp/x.pid)
+  [ "$(stat -c %a /tmp/x.sock)" = 600 ] || fail "socket mode $(stat -c %a /tmp/x.sock)"
+  [ "$(readlink /proc/$S/exe)" = "$T" ] || fail "stand-in exe is $(readlink /proc/$S/exe)"
+  pids=
+  for i in 1 2 3; do
+    (printf hi | timeout 5 s6-ipcclient /tmp/x.sock sh -c "cat >&7; cat <&6" > /tmp/r$i) &
+    pids="$pids $!"
+  done
+  for p in $pids; do wait "$p" || fail "a client exited $?"; done
+  for i in 1 2 3; do [ "$(cat /tmp/r$i)" = ok ] || fail "connection $i got: $(cat /tmp/r$i)"; done
+  [ "$(sort -u /tmp/parents)" = "$S" ] || fail "agent saw parents $(tr "\n" " " < /tmp/parents), not $S"
+  [ "$(wc -l < /tmp/parents)" = 3 ] || fail "agent saw $(wc -l < /tmp/parents) connections"
+  [ "$(porthole-standin-ctl place /usr/bin/ssh)" = /Mac/usr/bin/ssh ] || fail "place /usr/bin/ssh"
+  porthole-standin-ctl place /Applications/../etc/x 2>/dev/null; [ $? = 2 ] || fail "place with .. not refused"
+  porthole-standin-ctl place relative/x 2>/dev/null; [ $? = 2 ] || fail "place relative not refused"
+  kill -TERM "$S"; sleep 0.3
+  [ ! -e /tmp/x.sock ] && [ ! -e /tmp/x.pid ] || fail "SIGTERM left the socket or pid file"
+  mkdir -p /tmp/stub && printf "#!/bin/sh\nshift 3\nsetsid \"\$@\" </dev/null >/dev/null 2>&1 &\n" \
+    > /tmp/stub/xpra && chmod 755 /tmp/stub/xpra
+  PATH=/tmp/stub:$PATH porthole-standin-ctl start 42-7.ssh-agent "$T" s6-ipcclient /tmp/agent.sock s6-ioconnect \
+    || fail "ctl start"
+  porthole-standin-ctl alive 42-7.ssh-agent || fail "ctl alive after start"
+  [ "$(porthole-standin-ctl list)" = 42-7.ssh-agent ] || fail "ctl list: $(porthole-standin-ctl list)"
+  porthole-standin-ctl stop 42-7.ssh-agent; sleep 0.3
+  ! porthole-standin-ctl alive 42-7.ssh-agent || fail "alive after stop"
+  [ -z "$(porthole-standin-ctl list)" ] || fail "list after stop"
+  porthole-standin-ctl alive ../x 2>/dev/null; [ $? = 2 ] || fail "a SID with / not refused"
+  echo standin-ok' 2>&1) || :
+[ "$got" = standin-ok ] \
+  || { echo "$0: base image: stand-in smoke failed: $got" >&2; exit 1; }
+echo "base image OK: stand-in"

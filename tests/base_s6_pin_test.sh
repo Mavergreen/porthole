@@ -28,6 +28,17 @@ for b in s6-ipcclient s6-ioconnect; do
   grep -qE "^COPY --from=[a-z0-9]+ .*/$b( |\$)" "$DFI" \
     || fail "base/Dockerfile: the final image does not COPY $b from the s6 build stage"
 done
+# The per-application stand-in (caller identity): built in the s6 stage, COPYed beside the relay.
+grep -qE 'gcc .*porthole-standin\.c' "$DFI" \
+  || fail "base/Dockerfile: does not compile porthole-standin.c in the s6 build stage"
+grep -qE "^COPY --from=[a-z0-9]+ .*/porthole-standin( |\$)" "$DFI" \
+  || fail "base/Dockerfile: the final image does not COPY porthole-standin from the s6 build stage"
+grep -qE '^COPY porthole-standin-ctl /usr/local/bin/' "$DFI" \
+  || fail "base/Dockerfile: the final image does not COPY porthole-standin-ctl into /usr/local/bin/"
+for f in porthole-standin.c porthole-standin-ctl; do
+  [ -f "$ROOT/base/$f" ] || fail "base/$f: missing"
+  grep -qF "base/$f" "$BUILD" || fail "build/build-base-image.sh: does not put base/$f in the context"
+done
 grep -qE '^COPY --from=[a-z0-9]+ .* /usr/local/bin/$' "$DFI" \
   || fail "base/Dockerfile: the s6 binaries must land in /usr/local/bin/"
 if grep -qw socat "$DFI"; then
