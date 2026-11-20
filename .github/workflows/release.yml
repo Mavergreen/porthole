@@ -73,6 +73,13 @@ jobs:
           { echo "ver=$ver"; echo "publish=$pub"; } >> "$GITHUB_OUTPUT"
           echo "version=$ver publish=$pub"
 
+      # The pinned clang22-cross (components/clang22/version), unpacked once by fetch_clang22.sh and kept.
+      - name: Cache the pinned clang22
+        uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavergreen-clang22
+          key: clang22-${{ runner.os }}-${{ hashFiles('components/clang22/version') }}
+
       - name: Run the repo's tests
         run: sh "$SHIPYARD_SCRIPTS/run-repo-tests.sh"
 
@@ -84,13 +91,6 @@ jobs:
           arch -x86_64 /usr/bin/true 2>/dev/null \
             || sudo softwareupdate --install-rosetta --agree-to-license
           arch -x86_64 /usr/bin/true
-
-      # The pinned clang22-cross (components/clang22/version), unpacked once by fetch_clang22.sh and kept.
-      - name: Cache the pinned clang22
-        uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/mavergreen-clang22
-          key: clang22-${{ runner.os }}-${{ hashFiles('components/clang22/version') }}
 
       # Compiled by the pinned clang22, as on a developer's Mac or 10.9 box -- never the runner's Xcode clang.
       - name: Build Porthole.app + the Sparkle updater (x86_64 / min-10.9)

@@ -48,3 +48,26 @@ configure() {
   [ "$status" -ne 0 ] || { echo "configure accepted /usr/bin/clang"; return 1; }
   echo "$output" | grep -q "pinned clang22" || { echo "$output"; return 1; }
 }
+
+@test "a relative MAVERICKS_CLANG22_PIN still configures (try_compile runs elsewhere)" {
+  cd "$REPO_ROOT"
+  run shipyard-cmake -S "$REPO_ROOT" -B "$BUILD_DIR" \
+    -DCMAKE_TOOLCHAIN_FILE="$REPO_ROOT/cmake/MavericksClang22Toolchain.cmake" \
+    -DMAVERICKS_CLANG22_PIN=components/clang22
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+@test "a build dir whose detected compiler is no longer the pinned clang22 refuses to reconfigure" {
+  configure
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  # Model a pin change on a reused build dir: CMake keeps the compiler it detected before (here the same
+  # binary under another path, as the installed clang22 vs the fetched pin would be).
+  root="$(sh "$SHIPYARD_SCRIPTS/fetch_clang22.sh" "$REPO_ROOT/components/clang22" 2>/dev/null)"
+  mkdir -p "$BUILD_DIR/other/bin"; ln -s "$root/bin/clang" "$BUILD_DIR/other/bin/clang"
+  for f in "$BUILD_DIR"/CMakeFiles/*/CMakeOBJCCompiler.cmake; do
+    sed -i.bak "s#set(CMAKE_OBJC_COMPILER \"$root/bin/clang\")#set(CMAKE_OBJC_COMPILER \"$BUILD_DIR/other/bin/clang\")#" "$f"
+  done
+  configure
+  [ "$status" -ne 0 ] || { echo "reconfigure accepted a compiler other than $root/bin/clang"; return 1; }
+  echo "$output" | grep -q "delete the build directory" || { echo "$output"; return 1; }
+}

@@ -18,8 +18,10 @@ SDK="$(sh "$SHIPYARD/fetch_sdk.sh" 2>/dev/null || true)"
 # lld links and its llvm-ar/ranlib archive, so no Command Line Tools ld64/ar/ranlib are involved.
 CLANG22="$(sh "$SHIPYARD/fetch_clang22.sh" "$REPO/components/clang22")" \
   || { echo "fetch-s6: no pinned clang22 (components/clang22/version)" >&2; exit 1; }
-CC="$CLANG22/bin/clang -arch x86_64 -isysroot $SDK -mmacosx-version-min=10.9 -fuse-ld=lld"
-AR="$CLANG22/bin/llvm-ar"; RANLIB="$CLANG22/bin/llvm-ranlib"; export AR RANLIB
+# skarnet's Makefiles assign AR/RANLIB/STRIP with :=, so they are passed on make's command line, not the env.
+CC="$CLANG22/bin/clang -arch x86_64 -isysroot $SDK -mmacosx-version-min=10.9"
+LDFLAGS="-fuse-ld=lld"; export LDFLAGS
+AR="$CLANG22/bin/llvm-ar"; RANLIB="$CLANG22/bin/llvm-ranlib"; STRIP="$CLANG22/bin/llvm-strip"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/s6-build.XXXXXX"); trap 'rm -rf "$WORK"' EXIT
 STAGE="$WORK/stage"; mkdir -p "$STAGE"
 
@@ -40,7 +42,8 @@ S6R=$(awk 'NR==1{print $1}' "$REPO/S6_REF")
 fetch skalibs "$SKR"
 cd "$WORK/skalibs"
 CC="$CC" ./configure --disable-shared --enable-static --prefix="$STAGE"
-make -j"$(sysctl -n hw.ncpu)"; make install
+make -j"$(sysctl -n hw.ncpu)" AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
+make install AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
 
 fetch s6 "$S6R"
 cd "$WORK/s6"
@@ -52,7 +55,8 @@ cd "$WORK/s6"
 CC="$CC" ./configure --enable-static --disable-shared --enable-allstatic --disable-execline \
   --with-include="$STAGE/include" --with-lib="$STAGE/lib" \
   --with-sysdeps="$STAGE/lib/skalibs/sysdeps" --prefix="$STAGE"
-make -j"$(sysctl -n hw.ncpu)"; make install
+make -j"$(sysctl -n hw.ncpu)" AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
+make install AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
 
 # Prove them (10.9 compat guard + a real run) BEFORE staging: a failed check must leave nothing in
 # $OUTDIR, or the build would treat the stamp (s6-ipcserver) as done and never retry.

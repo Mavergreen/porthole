@@ -32,6 +32,14 @@ if(NOT MAVERICKS_CLANG22_ROOT)
     "(shipyard-cmake --preset native|cross), or -DCMAKE_TOOLCHAIN_FILE=cmake/MavericksClang22Toolchain.cmake "
     "-DMAVERICKS_CLANG22_PIN=components/clang22")
 endif()
+# A reused build dir keeps the compiler it detected first, whatever the toolchain now says: a pin bump (or
+# an in-place update of the installed clang22) would otherwise go on compiling with the old one.
+if(NOT CMAKE_OBJC_COMPILER STREQUAL "${MAVERICKS_CLANG22_ROOT}/bin/clang")
+  message(FATAL_ERROR "this build directory compiles with ${CMAKE_OBJC_COMPILER}, but the pinned clang22 "
+    "${MAVERICKS_CLANG22_VERSION} is ${MAVERICKS_CLANG22_ROOT}/bin/clang (the pin or the installed clang22 "
+    "changed): delete the build directory and configure again")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/components/clang22/version")
 string(REGEX REPLACE "-mavericks\\..*$" "" _porthole_llvm "${MAVERICKS_CLANG22_VERSION}")
 if(NOT CMAKE_OBJC_COMPILER_ID STREQUAL "Clang" OR NOT CMAKE_OBJC_COMPILER_VERSION VERSION_EQUAL _porthole_llvm)
   message(FATAL_ERROR "${CMAKE_OBJC_COMPILER} identifies as ${CMAKE_OBJC_COMPILER_ID} "
@@ -112,6 +120,7 @@ add_custom_command(
   OUTPUT "${PORTHOLE_TRANSPORT_STAMP}"
   COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/build/fetch-s6.sh" "${PORTHOLE_TRANSPORT_DIR}"
   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/SKALIBS_REF" "${CMAKE_CURRENT_SOURCE_DIR}/S6_REF"
+          "${CMAKE_CURRENT_SOURCE_DIR}/components/clang22/version"
           "${CMAKE_CURRENT_SOURCE_DIR}/build/fetch-s6.sh"
           "${CMAKE_CURRENT_SOURCE_DIR}/build/check-transport.sh"
           "${CMAKE_CURRENT_SOURCE_DIR}/build/msc.sh"

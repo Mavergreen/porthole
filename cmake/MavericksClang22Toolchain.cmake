@@ -17,7 +17,12 @@ if(NOT MAVERICKS_CLANG22_PIN)
   message(FATAL_ERROR "MavericksClang22Toolchain.cmake: set MAVERICKS_CLANG22_PIN to the product's "
                       "components/clang22 directory (the pinned clang22 release)")
 endif()
-# try_compile projects re-read this file without the cache; forward the pin to them.
+# try_compile and regeneration run from other directories: make the pin absolute (relative to where the
+# configure was started) before anything uses it, and forward it to try_compile projects.
+if(NOT IS_ABSOLUTE "${MAVERICKS_CLANG22_PIN}")
+  get_filename_component(MAVERICKS_CLANG22_PIN "${MAVERICKS_CLANG22_PIN}" ABSOLUTE BASE_DIR "$ENV{PWD}")
+  set(MAVERICKS_CLANG22_PIN "${MAVERICKS_CLANG22_PIN}" CACHE PATH "the product's components/clang22 directory" FORCE)
+endif()
 list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES MAVERICKS_CLANG22_PIN)
 
 if(DEFINED ENV{SHIPYARD_SCRIPTS} AND EXISTS "$ENV{SHIPYARD_SCRIPTS}/fetch_clang22.sh")

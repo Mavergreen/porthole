@@ -23,4 +23,15 @@ if grep -qE '^CC="clang ' "$ROOT/build/fetch-s6.sh"; then
 fi
 grep -qE -- '--preset (cross|native)|MavericksClang22Toolchain\.cmake' "$ROOT/.github/workflows/release.yml" \
   || fail ".github/workflows/release.yml: configures without the clang22 toolchain (use --preset cross)"
+# skarnet's Makefiles assign AR/RANLIB/STRIP with :=, so only make's command line can set them.
+[ "$(grep -cE '^make .*AR="\$AR" RANLIB="\$RANLIB" STRIP=' "$ROOT/build/fetch-s6.sh")" -ge 4 ] \
+  || fail "build/fetch-s6.sh: every make (build and install, skalibs and s6) must pass clang22's AR/RANLIB/STRIP"
+# A clang22 bump must rebuild the transport.
+grep -A6 'OUTPUT "${PORTHOLE_TRANSPORT_STAMP}"' "$ROOT/CMakeLists.txt" | grep -qF 'components/clang22/version' \
+  || fail "CMakeLists.txt: the transport does not depend on components/clang22/version"
+# CI restores the clang22 cache before anything (the tests included) fetches it.
+WF="$ROOT/.github/workflows/release.yml"
+c=$(grep -n 'Cache the pinned clang22' "$WF" | cut -d: -f1); t=$(grep -n "Run the repo's tests" "$WF" | cut -d: -f1)
+[ -n "$c" ] && [ -n "$t" ] && [ "$c" -lt "$t" ] \
+  || fail "release.yml: restore the clang22 cache before 'Run the repo's tests' (which fetches clang22)"
 echo "clang22 pin: ok"
