@@ -344,6 +344,8 @@ cmd_up() {
     [ -e "$_mac" ] || { echo "porthole up: skipping mount, no such path: $_mac" >&2; continue; }
     _mount_args="$_mount_args -v $_mac:$_mc$_ro"
   done
+  # 512m is a tmpfs upper bound on /dev/shm, not preallocated RAM; reducing it (a 256-MiB
+  # experiment was tried) provided no measurable benefit and lowers headroom for GUI apps.
   # shellcheck disable=SC2086  # word-splitting is intentional (one arg per token)
   docker run -d --name "$CONTAINER" --label "$SLUG_LABEL=$SLUG" --hostname "${HOSTNAME:-$IMAGE}" \
     --restart unless-stopped --init --shm-size 512m \

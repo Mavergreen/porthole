@@ -123,6 +123,29 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   ! grep -q '^docker run' "$STUB_LOG" || false
 }
 
+@test "a new container uses exactly 512 MiB of shared memory, not 64 MiB or 256 MiB" {
+  fake_docker; make_spec
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q -- '--shm-size 512m' "$STUB_LOG" || { echo "missing --shm-size 512m"; cat "$STUB_LOG"; return 1; }
+  ! grep -q -- '--shm-size 64m' "$STUB_LOG" || return 1
+  ! grep -q -- '--shm-size 256m' "$STUB_LOG" || return 1
+}
+
+@test "a second up with the same image and time zone leaves named and extra volumes untouched" {
+  fake_docker; make_spec
+  "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
+  [ -f "$FAKE/volume.demo-gui-data" ] || return 1
+  [ -f "$FAKE/volume.demo-cli" ] || return 1
+  : > "$STUB_LOG"
+  run "$REPO/bin/porthole" up "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  ! grep -q '^docker rm' "$STUB_LOG" || return 1
+  ! grep -q '^docker run' "$STUB_LOG" || return 1
+  [ -f "$FAKE/volume.demo-gui-data" ] || { echo "data volume gone"; return 1; }
+  [ -f "$FAKE/volume.demo-cli" ] || { echo "extra volume gone"; return 1; }
+}
+
 @test "an unlabelled image already under the name (an older recipe) is rebuilt, not reused" {
   fake_docker; make_spec
   printf '<no value>\nsha256:legacy\n' > "$FAKE/image.mavericks-demo"
