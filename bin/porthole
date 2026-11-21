@@ -646,4 +646,10 @@ cat > "$BUNDLE/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
+# An app made by a postinstall isn't registered by Installer; until LaunchServices knows it, its URL
+# schemes have no handler. Register it now.
+if [ -n "$URL_SCHEMES" ]; then
+  "${PORTHOLE_LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}" \
+    -f "$BUNDLE" >/dev/null 2>&1 || echo "porthole: could not register $BUNDLE with LaunchServices; its links work after its first launch" >&2
+fi
 echo "porthole: materialized $BUNDLE"
