@@ -20,6 +20,7 @@ set(RDS_XPRA_SOURCES
   src/PortholeClient.m
   src/PortholeWindowTitles.m
   src/PortholeURLQueue.m
+  src/PortholeMenubarArt.m
   src/PortholeUpdateItem.m)
 
 # --- app identity ---
@@ -200,6 +201,11 @@ add_executable(test_window_titles tests/test_window_titles.m src/PortholeWindowT
 target_include_directories(test_window_titles PRIVATE src)
 target_link_libraries(test_window_titles PRIVATE ${FOUNDATION_LIBRARY})
 add_test(NAME window_titles COMMAND test_window_titles)
+add_executable(test_menubar_art tests/test_menubar_art.m src/PortholeMenubarArt.m)
+target_include_directories(test_menubar_art PRIVATE src)
+target_link_libraries(test_menubar_art PRIVATE ${COCOA_LIBRARY})
+add_test(NAME menubar_art COMMAND test_menubar_art)
+
 add_executable(test_url_queue tests/test_url_queue.m src/PortholeURLQueue.m)
 target_include_directories(test_url_queue PRIVATE src)
 target_link_libraries(test_url_queue PRIVATE ${FOUNDATION_LIBRARY})

@@ -9,6 +9,7 @@
 #import "PortholeRemoteMenuProducer.h"
 #import "PortholeMenuModel.h"
 #import "PortholeTrayArt.h"
+#import "PortholeMenubarArt.h"
 #import "PortholeWindowTitles.h"
 #import "PortholeURLQueue.h"
 #import "PortholeLaunchArgs.h"
@@ -48,6 +49,8 @@
     NSMutableDictionary *_windows;
     NSMutableDictionary *_trays;   // wid -> NSStatusItem (forwarded system-tray icons)
     NSMutableDictionary *_trayArt; // wid -> its last frame, to redraw when the menu bar's appearance changes
+    PortholeMenubarArt *_menubarArt; // the app's own Mac pictures for its tray art, if it has them
+    NSDate *_menubarArtDate;         // ...as of its cache's modification date
     NSMutableDictionary *_titles;  // wid -> current title of each normal window
     BOOL _trayPopupPending;        // Quick Access summoned -> center the next OR popup
     NSInteger _mainWid;        // first normal window; popups position relative to it
@@ -417,6 +420,10 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     if (!tray || !art) return;
     NSString *enc = art[@"enc"];
     int w = [art[@"w"] intValue], h = [art[@"h"] intValue], stride = [art[@"stride"] intValue];
+    // The app's own Mac picture for this art, when it ships one (1Password's menu-bar templates).
+    NSImage *mac = [[self menubarArt] macPictureFor:
+                    [self imageFromCoding:enc pixels:art[@"data"] w:w h:h stride:stride]];
+    if (mac) { [tray setImage:mac]; return; }
     NSMutableData *px = [[art[@"data"] mutableCopy] autorelease];
     int bpp = stride / MAX(1, w);
     BOOL raw = [enc hasPrefix:@"rgb"] && (bpp == 3 || bpp == 4) && px.length >= (NSUInteger)stride * h;
@@ -429,6 +436,19 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     [icon setSize:PortholeTrayArtSize(NSMakeSize(w, h), 1 /* the container renders at 1x: it is not yet told the Mac's backing scale */, 22)];
     [icon setTemplate:mono];
     [tray setImage:icon];
+}
+
+// The app's menu-bar art, which the launcher keeps in the per-user cache; reloaded when it changes.
+- (PortholeMenubarArt *)menubarArt {
+    NSString *cache = [[[NSProcessInfo processInfo] environment] objectForKey:@"PORTHOLE_USER_ICON_CACHE"];
+    if (![cache length]) cache = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Caches/dev.mavergreen.porthole"];
+    NSString *dir = [cache stringByAppendingPathComponent:[[self appSlug] stringByAppendingString:@".menubar"]];
+    NSDate *d = [[[NSFileManager defaultManager] attributesOfItemAtPath:dir error:NULL] fileModificationDate];
+    if (!(d == _menubarArtDate || [d isEqualToDate:_menubarArtDate])) {
+        [_menubarArt release]; _menubarArt = [[PortholeMenubarArt artInDirectory:dir] retain];
+        [_menubarArtDate release]; _menubarArtDate = [d retain];
+    }
+    return _menubarArt;
 }
 
 - (void)menuBarAppearanceChanged:(NSNotification *)n {
