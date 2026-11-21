@@ -46,6 +46,7 @@
     rds_session *_session;
     NSMutableDictionary *_windows;
     NSMutableDictionary *_trays;   // wid -> NSStatusItem (forwarded system-tray icons)
+    NSMutableDictionary *_trayArt; // wid -> its last frame, to redraw when the menu bar's appearance changes
     NSMutableDictionary *_titles;  // wid -> current title of each normal window
     BOOL _trayPopupPending;        // Quick Access summoned -> center the next OR popup
     NSInteger _mainWid;        // first normal window; popups position relative to it
@@ -133,6 +134,9 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 - (void)applicationDidFinishLaunching:(NSNotification *)n {
     _windows = [[NSMutableDictionary alloc] init];
     _trays = [[NSMutableDictionary alloc] init];
+    _trayArt = [[NSMutableDictionary alloc] init];
+    [[NSDistributedNotificationCenter defaultCenter] addObserver:self
+        selector:@selector(menuBarAppearanceChanged:) name:@"AppleInterfaceThemeChangedNotification" object:nil];
     _titles = [[NSMutableDictionary alloc] init];
     [NSApp setMainMenu:[self buildMainMenu]];   // real App/Edit/Window menus
     [self setUpMenuBridge];
@@ -363,26 +367,47 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     // lock, Signal's unread count), so show them as drawn. Draws are full frames.
     NSStatusItem *tray = _trays[@(wid)];
     if (tray) {
-        NSImage *icon = [self imageFromCoding:enc pixels:d w:(int)rect.size.width
-                                            h:(int)rect.size.height stride:rowstride];
-        if (icon) {
-            int bpp = (int)(rowstride / MAX(1, (int)rect.size.width));
-            BOOL mono = ([enc hasPrefix:@"rgb"] && (bpp == 3 || bpp == 4))
-                && PortholeTrayArtIsMonochrome(pixels, (int)rect.size.width, (int)rect.size.height,
-                                               (size_t)rowstride, bpp);
-            [icon setSize:PortholeTrayArtSize(NSMakeSize(rect.size.width, rect.size.height), 1 /* the container renders at 1x: it is not yet told the Mac's backing scale */, 22)];
-            [icon setTemplate:mono];
-            [tray setImage:icon];
-        }
+        _trayArt[@(wid)] = @{ @"data": [NSData dataWithBytes:pixels length:len], @"enc": enc,
+                              @"w": @((int)rect.size.width), @"h": @((int)rect.size.height), @"stride": @(rowstride) };
+        [self drawTray:wid];
         return;
     }
     [_windows[@(wid)] drawRGB:d rect:rect coding:enc rowstride:rowstride];
+}
+
+// A forwarded tray icon has to stand out against the menu bar it's on. Monochrome art becomes a
+// template, which AppKit recolours for either bar. Colour art is shown as drawn unless it would blend
+// into the bar (1Password's near-white disc, drawn for a dark Linux panel, on a light bar): then its
+// light or dark side is flipped, keeping its hues. Redrawn whenever the bar's appearance changes.
+- (void)drawTray:(long)wid {
+    NSStatusItem *tray = _trays[@(wid)];
+    NSDictionary *art = _trayArt[@(wid)];
+    if (!tray || !art) return;
+    NSString *enc = art[@"enc"];
+    int w = [art[@"w"] intValue], h = [art[@"h"] intValue], stride = [art[@"stride"] intValue];
+    NSMutableData *px = [[art[@"data"] mutableCopy] autorelease];
+    int bpp = stride / MAX(1, w);
+    BOOL raw = [enc hasPrefix:@"rgb"] && (bpp == 3 || bpp == 4) && px.length >= (NSUInteger)stride * h;
+    BOOL mono = raw && PortholeTrayArtIsMonochrome(px.bytes, w, h, (size_t)stride, bpp);
+    BOOL dark = PortholeMenuBarIsDark();
+    if (raw && !mono && PortholeTrayArtBlendsWithBar(px.bytes, w, h, (size_t)stride, bpp, dark))
+        PortholeTrayArtFlipForBar(px.mutableBytes, w, h, (size_t)stride, bpp, dark);
+    NSImage *icon = [self imageFromCoding:enc pixels:px w:w h:h stride:stride];
+    if (!icon) return;
+    [icon setSize:PortholeTrayArtSize(NSMakeSize(w, h), 1 /* the container renders at 1x: it is not yet told the Mac's backing scale */, 22)];
+    [icon setTemplate:mono];
+    [tray setImage:icon];
+}
+
+- (void)menuBarAppearanceChanged:(NSNotification *)n {
+    for (NSNumber *wid in [_trayArt allKeys]) [self drawTray:[wid longValue]];
 }
 
 - (void)lostWid:(long)wid {
     if (wid == _mainWid) _mainWid = 0;
     NSStatusItem *tray = _trays[@(wid)];
     if (tray) {
+        [_trayArt removeObjectForKey:@(wid)];
         [[NSStatusBar systemStatusBar] removeStatusItem:tray];
         [_trays removeObjectForKey:@(wid)];
         [self scheduleDockSync:nil];   // the last tray gone with no window open: back to the Dock, or nothing is left to click
@@ -874,6 +899,8 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 }
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [[NSDistributedNotificationCenter defaultCenter] removeObserver:self];
+    [_trayArt release];
     [NSObject cancelPreviousPerformRequestsWithTarget:self];
     [_audio release];
     if (_hotKeyRef) UnregisterEventHotKey(_hotKeyRef);

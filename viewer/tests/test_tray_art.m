@@ -50,7 +50,34 @@ int main(void) {
     NSSize c = PortholeTrayArtSize(NSMakeSize(44, 22), 1, 22);
     CHECK(c.width == 44 && c.height == 22, "22pt-tall art is left alone");
 
-    free(g); free(s); free(t); free(c3);
+    // spec: the art has to stand out against the bar it's on, judged each time the bar's appearance changes.
+    // 1Password-like: a near-white disc (drawn for a dark Linux panel) with a small blue keyhole.
+    uint8_t *op = fill(16, 16, 0, 0, 0, 0);
+    for (int i = 0; i < 200; i++) { op[i*4]=op[i*4+1]=op[i*4+2]=228; op[i*4+3]=255; }
+    for (int i = 200; i < 230; i++) { op[i*4]=242; op[i*4+1]=81; op[i*4+2]=34; op[i*4+3]=255; }
+    CHECK(PortholeTrayArtBlendsWithBar(op, 16, 16, 64, 4, NO), "light art blends into a light bar");
+    CHECK(!PortholeTrayArtBlendsWithBar(op, 16, 16, 64, 4, YES), "light art stands out on a dark bar");
+    CHECK(!PortholeTrayArtBlendsWithBar(s, 16, 16, 64, 4, NO), "Signal's blue stands out on a light bar");
+    CHECK(!PortholeTrayArtBlendsWithBar(s, 16, 16, 64, 4, YES), "Signal's blue stands out on a dark bar");
+    uint8_t *navy = fill(16, 16, 60, 30, 30, 255);
+    CHECK(PortholeTrayArtBlendsWithBar(navy, 16, 16, 64, 4, YES), "dark art blends into a dark bar");
+    CHECK(!PortholeTrayArtBlendsWithBar(navy, 16, 16, 64, 4, NO), "dark art stands out on a light bar");
+    CHECK(!PortholeTrayArtBlendsWithBar(t, 16, 16, 64, 4, NO), "an empty frame blends with nothing");
+
+    // Flipping keeps hue and alpha: the light disc goes dark, the blue keyhole stays blue.
+    PortholeTrayArtFlipForBar(op, 16, 16, 64, 4, NO);
+    CHECK(op[0] < 90 && op[0] == op[1] && op[1] == op[2], "light grey becomes dark grey on a light bar");
+    CHECK(op[0*4+3] == 255, "alpha is kept");
+    CHECK(op[210*4] > op[210*4+2] + 100, "the blue keyhole is still blue");
+    CHECK(!PortholeTrayArtBlendsWithBar(op, 16, 16, 64, 4, NO), "after flipping, it stands out on a light bar");
+    PortholeTrayArtFlipForBar(navy, 16, 16, 64, 4, YES);
+    CHECK(!PortholeTrayArtBlendsWithBar(navy, 16, 16, 64, 4, YES), "flipped dark art stands out on a dark bar");
+    CHECK(navy[0] > navy[2], "...and keeps its hue");
+    uint8_t *tc = fill(4, 4, 228, 228, 228, 0);
+    PortholeTrayArtFlipForBar(tc, 4, 4, 16, 4, NO);
+    CHECK(tc[0] == 228, "transparent pixels are left alone");
+
+    free(g); free(s); free(t); free(c3); free(op); free(navy); free(tc);
     if (failures) return 1;
     printf("ok tray_art\n");
     return 0;
