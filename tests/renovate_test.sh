@@ -32,6 +32,25 @@ for m in cfg.get("customManagers", []):
 sys.exit(1)
 EOF
 
+# skalibs >= 2.15 kills s6-ipcserverd on macOS ("trouble with socket": iopause_select reports POLLHUP
+# on every readable fd). Fixed upstream in skalibs 879e42b (2026-11-04), in no release yet. Until a
+# release carries it, skarnet stays below 2.15: 2.14.x is offered, 2.15/2.16 are not. Lift the cap
+# (and this check) when a fixed release ships -- queued in .superpowers/QUEUE.md.
+python3 - "$CFG" <<'EOF' || fail "renovate.json: skalibs/s6 are not held below 2.15 (macOS iopause_select bug)"
+import json, re, sys
+cfg = json.load(open(sys.argv[1]))
+for dep in ("skarnet/skalibs", "skarnet/s6"):
+    caps = [r["allowedVersions"] for r in cfg.get("packageRules", [])
+            if dep in r.get("matchDepNames", []) and "allowedVersions" in r]
+    if len(caps) != 1 or not (caps[0].startswith("/") and caps[0].endswith("/")):
+        sys.exit(1)
+    rx = re.compile(caps[0][1:-1])
+    if not (rx.search("v2.14.5.1") and rx.search("v2.13.2.0")):
+        sys.exit(1)
+    if rx.search("v2.15.1.1") or rx.search("v2.16.0.0") or rx.search("v3.0.0.0"):
+        sys.exit(1)
+EOF
+
 # xpra ships-if-green -- there must be NO local automerge exception for it. The concern that
 # justified one (a newer xpra silently changing the wire protocol the viewer speaks) is real but is
 # handled the way the org handles everything else: build it on the PR, fix forward in the next dated

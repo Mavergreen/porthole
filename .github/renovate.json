@@ -66,6 +66,14 @@
         "skarnet/s6"
       ],
       "groupName": "skarnet"
+    },
+    {
+      "description": "Held below 2.15 until skarnet releases skalibs 879e42b (2026-11-04, 'Only report POLLHUP on EOF/error in iopause_select'). Every released skalibs >= 2.15 uses select() on macOS and reports POLLHUP on every readable fd, so s6-ipcserverd dies on its first event ('trouble with socket'); build/check-transport.sh catches it. 2.14.x still flows. Remove this rule (and its check in tests/renovate_test.sh) once a release carries the fix.",
+      "matchDepNames": [
+        "skarnet/skalibs",
+        "skarnet/s6"
+      ],
+      "allowedVersions": "/^v2\\.([0-9]|1[0-4])\\./"
     }
   ]
 }
