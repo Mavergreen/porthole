@@ -8,8 +8,8 @@
 #
 #   1. porthole-caller names the calling application (this process's ancestry ends at it -- a
 #      browser starts its native-messaging host directly); unidentifiable -> refused, no docker call.
-#   2. The stand-in is hard-linked at the application's path in the container (as root).
-#   3. docker exec runs it with --run: it forks PROG as its child and exits with its status.
+#   2. docker exec runs the stand-in at the application's own path (porthole-standin-at, in its own
+#      namespace) with --run: it forks PROG as its child and exits with its status.
 #
 # Its sibling porthole-caller is found beside this script first.
 set -eu
@@ -39,11 +39,8 @@ tab=$(printf '\t')
 app=${who#*"$tab"}
 [ "$app" != "$who" ] && [ -n "$app" ] || { echo "$me: refused: porthole-caller said '$who'" >&2; exit 1; }
 
-target=$(docker exec -u 0 "$c" porthole-standin-ctl place "$app" </dev/null) \
-  || { echo "$me: could not place a stand-in for $app" >&2; exit 1; }
-
-# OPT... CONTAINER TARGET --run PROG ARG..., by rotation (POSIX sh has no arrays): append, then
-# move PROG ARG... from the front to the end.
-set -- "$@" "$c" "$target" --run
+# OPT... CONTAINER porthole-standin-at APP --run PROG ARG..., by rotation (POSIX sh has no arrays):
+# append, then move PROG ARG... from the front to the end.
+set -- "$@" "$c" porthole-standin-at "$app" --run
 i=0; while [ "$i" -lt "$nprog" ]; do set -- "$@" "$1"; shift; i=$((i + 1)); done
 exec docker exec -i "$@"

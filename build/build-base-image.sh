@@ -82,12 +82,13 @@ c.sendall(d); c.close()" &
   || { echo "$0: base image: s6 relay smoke failed (want: $want; got: $got)" >&2; exit 1; }
 echo "base image OK: s6 relay"
 
-# Prove the stand-in, in the image: three concurrent connections through a stand-in hard-linked at a
-# Mac application path WITH A SPACE all reach the agent FROM that one stand-in process -- the agent
+# Prove the stand-in, in the image: three concurrent connections through a stand-in at a Mac
+# application path WITH A SPACE all reach the agent FROM that one stand-in process -- the agent
 # names its caller by the connecting peer's own executable, as 1Password does ("Allow <exe> to use
-# SSH key") -- and that executable is the Mac path; then placement rules, the control script's start/alive/list/stop (xpra stubbed: it only
-# starts the command), and SIGTERM removing the socket.
-got=$(docker run --rm "$1" sh -c '
+# SSH key") -- and that executable is the Mac path; then the control script's start/alive/list/stop
+# (xpra stubbed: it only starts the command), and SIGTERM removing the socket. The container is
+# started the way `porthole up` starts one, so ctl start's porthole-standin-at can make its namespace.
+got=$(docker run --rm --init --security-opt seccomp=unconfined "$1" sh -c '
   fail() { echo "FAIL: $*"; exit 1; }
   python3 -c "
 import socket, struct, threading
@@ -102,9 +103,8 @@ while True:
   n=0; while [ ! -S /tmp/agent.sock ]; do
     n=$((n + 1)); [ "$n" -le 50 ] || fail "agent never listened"; sleep 0.1
   done
-  T=$(porthole-standin-ctl place "/Applications/Google Chrome.app") || fail "place a .app"
-  [ "$T" = "/Applications/Google Chrome.app" ] || fail "place a .app printed: $T"
-  [ "$(stat -c %i "$T")" = "$(stat -c %i /usr/local/bin/porthole-standin)" ] || fail "not a hard link"
+  T="/Applications/Google Chrome.app"
+  mkdir -p /Applications && ln /usr/local/bin/porthole-standin "$T" || fail "link the stand-in at $T"
   "$T" /tmp/x.sock /tmp/agent.sock &
   n=0; while [ ! -f /tmp/x.pid ]; do
     n=$((n + 1)); [ "$n" -le 50 ] || fail "stand-in never wrote its pid"; sleep 0.1
@@ -128,9 +128,6 @@ while True:
   [ "$got" = "$T
 ping" ] || fail "--run: child saw parent/stdin as: $got"
   "$T" --run 2>/dev/null; [ $? = 100 ] || fail "--run with no program not refused"
-  [ "$(porthole-standin-ctl place /usr/bin/ssh)" = /Mac/usr/bin/ssh ] || fail "place /usr/bin/ssh"
-  porthole-standin-ctl place /Applications/../etc/x 2>/dev/null; [ $? = 2 ] || fail "place with .. not refused"
-  porthole-standin-ctl place relative/x 2>/dev/null; [ $? = 2 ] || fail "place relative not refused"
   python3 -c "
 import socket
 s = socket.socket(socket.AF_UNIX); s.bind(\"/tmp/echo.sock\"); s.listen(1)
@@ -195,3 +192,8 @@ while True:
 [ "$got" = standin-ok ] \
   || { echo "$0: base image: stand-in smoke failed: $got" >&2; exit 1; }
 echo "base image OK: stand-in"
+
+# Prove porthole-standin-at, in the image: each stand-in seen at its Mac path from outside its
+# namespace, and a container that cannot make one says so.
+sh "$ROOT/tests/standin_ns_test.sh" "$1"
+echo "base image OK: stand-in at the Mac path"

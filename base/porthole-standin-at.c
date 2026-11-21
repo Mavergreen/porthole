@@ -77,7 +77,7 @@ static void enter(void) {
   snprintf(map, sizeof map, "%u %u 1", (unsigned)g, (unsigned)g);
   if (put("/proc/self/gid_map", map) != 0) unavailable("gid_map");
   if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) != 0) unavailable("private mounts");
-  if (mount("none", MNT, "tmpfs", 0, "size=1m,mode=755") != 0) unavailable("tmpfs");
+  if (mount("none", MNT, "tmpfs", 0, "size=1m,mode=755") != 0) failf(4, "mount a tmpfs on %s", MNT);
 }
 
 /* Splits PATH into its components (at most 64), refusing what a Mac application path never is. */

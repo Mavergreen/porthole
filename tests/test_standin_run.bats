@@ -15,10 +15,8 @@ setup() {
 line=""; for a in "$@"; do line="$line|$a"; done
 printf '%s\n' "$line" >> "$STATE/docker.log"
 case "$*" in
-  *" porthole-standin-ctl place "*)
-    [ -e "$STATE/place_fail" ] && { echo "place refused" >&2; exit 2; }
-    for a in "$@"; do last=$a; done; echo "$last" ;;
-  *" --run "*) in=$(cat); printf 'RUN-READ:%s\n' "$in" >> "$STATE/docker.log"; echo helper-output ;;
+  *" --run "*) [ -e "$STATE/start_fail" ] && { echo "porthole-standin-at: caller identity is unavailable" >&2; exit 3; }
+    in=$(cat); printf 'RUN-READ:%s\n' "$in" >> "$STATE/docker.log"; echo helper-output ;;
 esac
 SH
   cat > "$BIN/porthole-caller" <<'SH'
@@ -41,21 +39,20 @@ teardown() { rm -rf "$W"; }
   [ ! -e "$STATE/docker.log" ]
 }
 
-@test "places the stand-in as root, then runs the program under it -- every path one argv element" {
+@test "runs the program under the stand-in at the app path, in one docker call -- every path one argv element" {
   out=$(printf 'from-browser' | env PATH="$BIN:/usr/bin:/bin" "$RUN" c1 -u 1000:0 -e HOME=/h -e 'X=a b' -- /opt/x '{id}')
-  [ "$out" = helper-output ]   # place's output is the target, never the browser's stream
+  [ "$out" = helper-output ]
   diff -u - "$STATE/docker.log" <<'EOF2'
-|exec|-u|0|c1|porthole-standin-ctl|place|/Applications/Google Chrome.app
-|exec|-i|-u|1000:0|-e|HOME=/h|-e|X=a b|c1|/Applications/Google Chrome.app|--run|/opt/x|{id}
+|exec|-i|-u|1000:0|-e|HOME=/h|-e|X=a b|c1|porthole-standin-at|/Applications/Google Chrome.app|--run|/opt/x|{id}
 RUN-READ:from-browser
 EOF2
 }
 
-@test "place fails: exit 1 and nothing runs" {
-  : > "$STATE/place_fail"
+@test "a stand-in that cannot start: its status and reason come through" {
+  : > "$STATE/start_fail"
   run env PATH="$BIN:/usr/bin:/bin" "$RUN" c1 -- /opt/x
-  [ "$status" -eq 1 ]
-  ! grep -q -- '--run' "$STATE/docker.log" || false
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"caller identity is unavailable"* ]] || false
 }
 
 @test "a usage error is refused before anything else" {

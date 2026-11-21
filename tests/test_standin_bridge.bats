@@ -22,8 +22,8 @@ shift; [ "$1" = -i ] && shift; [ "$1" = -u ] && shift 2; shift
 case $2 in
   alive) [ -e "$STATE/alive.$3" ] ;;
   list) cat "$STATE/list" 2>/dev/null; exit 0 ;;
-  place) [ -e "$STATE/place_fail" ] && { echo "place refused" >&2; exit 2; }; echo "$3" ;;
-  start) sleep 0.2; : > "$STATE/alive.$3" ;;
+  start) [ -e "$STATE/start_fail" ] && { echo "porthole-standin-at: caller identity is unavailable" >&2; exit 3; }
+         sleep 0.2; : > "$STATE/alive.$3" ;;
   stop) rm -f "$STATE/alive.$3" ;;
 esac
 SH
@@ -78,11 +78,11 @@ EOF2
   grep -q '/123-456.ssh-agent.watch|123-456|--|' "$STATE/watch.log"
 }
 
-@test "a first connection places, starts, watches, then relays -- the app path one argv element" {
+@test "a first connection starts the stand-in at the app path, watches, then relays -- the path one argv element" {
   run env PATH="$BIN:/usr/bin:/bin" "$BRIDGE" c1 ssh-agent "$TO"
   echo "$output"
   [ "$status" -eq 0 ]
-  grep -qxF '|exec|-u|0|c1|porthole-standin-ctl|place|/Applications/Google Chrome.app' "$STATE/docker.log"
+  [ "$(calls '|place|')" = 0 ]   # the stand-in's launcher puts it there itself; nothing runs as root
   grep -qxF "|exec|-u|1000|c1|porthole-standin-ctl|start|123-456.ssh-agent|/Applications/Google Chrome.app|$TO" "$STATE/docker.log"
   tail -1 "$STATE/docker.log" | grep -qxF '|exec|-i|-u|1000|c1|s6-ipcclient|/run/user/1000/porthole-standin/123-456.ssh-agent.sock|s6-ioconnect'
   L="$TMPDIR/porthole-standin/c1"
@@ -98,11 +98,11 @@ EOF2
   rm -rf "/tmp/porthole-standin-$(id -u)/c1"
 }
 
-@test "place fails: refused, no start, no relay" {
-  : > "$STATE/place_fail"
+@test "start fails: refused with the reason, no relay, no watcher" {
+  : > "$STATE/start_fail"
   run env PATH="$BIN:/usr/bin:/bin" "$BRIDGE" c1 ssh-agent "$TO"
   [ "$status" -eq 1 ]
-  [ "$(calls '|start|')" = 0 ]
+  [[ "$output" == *"caller identity is unavailable"* ]] || false
   [ "$(calls s6-ipcclient)" = 0 ]
   [ ! -e "$STATE/watch.log" ]
 }
@@ -121,7 +121,6 @@ EOF2
     env PATH="$BIN:/usr/bin:/bin" "$BRIDGE" c1 ssh-agent "$TO" > "$W/out$i" 2>&1 &
   done
   wait
-  [ "$(calls '|place|')" = 1 ]
   [ "$(calls '|start|')" = 1 ]
   [ "$(calls s6-ipcclient)" = 3 ]
 }
@@ -137,7 +136,7 @@ EOF2
 
 @test "nothing but the relay writes to the connection (stdout)" {
   : > "$STATE/noisy"
-  sed -i.bak 's/^  start) sleep 0.2;/  start) [ -e "$STATE\/noisy" ] \&\& echo NOISE; sleep 0.2;/' "$BIN/docker"
+  sed -i.bak 's/^         sleep 0.2;/         [ -e "$STATE\/noisy" ] \&\& echo NOISE; sleep 0.2;/' "$BIN/docker"
   printf '#!/bin/sh\necho WATCHNOISE\n' > "$BIN/porthole-watch-exit"
   env PATH="$BIN:/usr/bin:/bin" "$BRIDGE" c1 ssh-agent "$TO" > "$W/stdout" 2> "$W/stderr"
   grep -q NOISE "$BIN/docker"

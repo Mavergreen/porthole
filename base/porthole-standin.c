@@ -1,8 +1,8 @@
 /* porthole-standin SOCK TARGET -- a container-side stand-in for one Mac application.
  * porthole-standin --run PROG [ARG...] -- the same, for one program that names its PARENT.
  *
- * Installed as a hard link at the Mac application's path (/Applications/Google Chrome.app, or
- * /Mac/<path> for a plain program) and started as a child of xpra. A Linux app that names its
+ * Run as the Mac application's own path (/Applications/Google Chrome.app, /opt/pkg/bin/tmux) by
+ * porthole-standin-at, and started as a child of xpra. A Linux app that names its
  * callers by the connecting process's executable (1Password: "Allow <exe> to use SSH key") then sees
  * that Mac application: this one process listens on SOCK (mode 0600), connects to TARGET once per
  * accepted connection, and relays both directions itself, so every request the Mac application makes

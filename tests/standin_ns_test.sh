@@ -92,6 +92,11 @@ rc=0; msg=$(docker exec -u 1000:1001 "$C2" porthole-standin-at --check 2>&1) || 
 [ "$rc" = 3 ] || fail "--check under Docker's default seccomp exited $rc: $msg"
 case $msg in "porthole-standin-at: caller identity is unavailable: this container cannot create user namespaces ("*")") ;;
   *) fail "--check under Docker's default seccomp said: $msg" ;; esac
+x rmdir /usr/local/lib/porthole-standin/mnt                                                             # (g)
+rc=0; msg=$(docker exec -u 1000:1001 "$C" porthole-standin-at --check 2>&1) || rc=$?
+x mkdir /usr/local/lib/porthole-standin/mnt
+[ "$rc" = 4 ] || fail "--check without its mount point exited $rc: $msg"
+case $msg in *"caller identity is unavailable"*) fail "a missing mount point blamed user namespaces: $msg" ;; esac
 echo "ok: --check"
 
 pid=$(at 1000:0 "/Applications/Google Chrome.app")                                                     # (j)
