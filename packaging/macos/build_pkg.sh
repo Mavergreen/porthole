@@ -61,6 +61,7 @@ install -m 0755 "$REPO/bin/porthole-recover-watch"       "$ENGDIR/bin/porthole-r
 install -m 0644 "$REPO/bin/porthole-icon-lib.sh"          "$ENGDIR/bin/porthole-icon-lib.sh"
 # The runtime tools that give each app native behaviour, from its spec (porthole-spec-lib.sh).
 install -m 0644 "$REPO/bin/porthole-spec-lib.sh"          "$ENGDIR/bin/porthole-spec-lib.sh"
+install -m 0755 "$REPO/bin/porthole-cli"                 "$ENGDIR/bin/porthole-cli"
 install -m 0644 "$REPO/bin/porthole-say.sh"               "$ENGDIR/bin/porthole-say.sh"
 install -m 0644 "$REPO/menu-daemon.py"                   "$ENGDIR/menu-daemon.py"
 # What the VIEWER speaks, read out of its sources (which do not ship). generate-viewer runs on the
