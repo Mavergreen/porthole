@@ -36,6 +36,7 @@ APP_BIN= APP_FLAGS= USER= USER_GROUP= DATADIR= ICON_GLOB= LIFECYCLE=
 AUDIO= PRINTING= PTRACE= DARK_THEME= OPEN_URL= FILE_TRANSFER= NOTIFICATIONS=
 EXTRA_SETUP= ENCODINGS=rgb APT_LIST= EXTRA_ENV= HOST_MOUNTS= TARBALL_URL= TARBALL_BIN= MENU_PRODUCER=
 UPDATE= PACKAGING= CAPS= EXTRA_VOLUMES= APP_VERSION= ABOUT_CMD=
+CLI= URL_SCHEMES= SOCKETS= NATIVE_HOSTS=
 # shellcheck disable=SC1090
 . "$CONF"
 SLUG=$(basename "$CONF" .conf)   # the conf's basename is authoritative (a manifest SLUG= is ignored)
@@ -239,6 +240,34 @@ CAPS='$CAPS'
 EXTRA_VOLUMES='$EXTRA_VOLUMES'
 HOST_MOUNTS='$HOST_MOUNTS'
 SPEC
+# What the runtime tools (porthole-cli, porthole-follow, porthole-native-host, the viewer) need to give
+# the app native behaviour; spec 2026-11-21-scriptable-apps in tests/test_spec_keys.bats. Each value is
+# single-quoted, a ' inside written as '\''.
+specq() { printf "%s='%s'\n" "$1" "$(printf '%s' "$2" | sed "s/'/'\\\\''/g")"; }
+declared() {  # LIST-VAR PREFIX [SUFFIX...]: each name's PREFIX_<n>[SUFFIX], <n> with - as _
+  _list=$1 _pre=$2; shift 2
+  eval "_names=\$$_list"
+  specq "$_list" "$_names"
+  for _n in $_names; do
+    _v=$(printf '%s' "$_n" | tr - _)
+    eval "_val=\${${_pre}_$_v:-}"
+    [ -n "$_val" ] || { echo "generate-viewer: $SLUG: $_list names '$_n' but ${_pre}_$_v is empty" >&2; exit 2; }
+    specq "${_pre}_$_v" "$_val"
+    for _sfx in "$@"; do eval "specq ${_pre}_$_v$_sfx \"\${${_pre}_$_v$_sfx:-}\""; done
+  done
+}
+{
+  specq APP_USER "$USER"
+  specq APP_HOME "$HOME"
+  specq APP_BIN "$APP_BIN"
+  specq APP_FLAGS "$APP_FLAGS"
+  specq EXTRA_ENV "$EXTRA_ENV"
+  specq URL_SCHEMES "$URL_SCHEMES"
+  declared CLI CLI
+  for _n in $CLI; do _v=$(printf '%s' "$_n" | tr - _); eval "specq CLI_USER_$_v \"\${CLI_USER_$_v:-}\""; done
+  declared SOCKETS SOCKET
+  declared NATIVE_HOSTS NATIVE_HOST _FILE
+} >> "$BINDIR/../$SLUG.container"
 
 # --- CMake args (for the native Porthole viewer build) -------------------------
 # A per-app menu manifest (<confdir>/<slug>.menu.json) is bundled into the .app when present.
