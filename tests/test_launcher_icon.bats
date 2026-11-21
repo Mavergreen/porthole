@@ -114,3 +114,40 @@ run_icon_nolib() { NOLIB=1 run_icon "$@"; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ ! -s "$WORK/sips.log" ]
 }
+
+# Menu-bar art: the launcher refreshes the per-user cache with the engine's porthole-menubar-art.
+menubar_tool() {
+  cp "${BATS_TEST_DIRNAME}"/stubs/* "$STUB_DIR/"; export PORTHOLE_BIN="$STUB_DIR/porthole"
+  cat > "$STUB_DIR/porthole-menubar-art" <<'EOF2'
+#!/bin/sh
+echo "menubar $*" >> "$WORK/menubar.log"; mkdir -p "$2"
+EOF2
+  chmod +x "$STUB_DIR/porthole-menubar-art"
+}
+
+@test "menu-bar art: copied into the user cache when there is none" {
+  menubar_tool
+  run_icon 2026-01-01T00:00:00.000000000Z 0
+  grep -q '^menubar .*/app/Contents/Resources/thunderbird.container .*/user/thunderbird.menubar$' "$WORK/menubar.log"
+}
+
+@test "menu-bar art: a cache newer than the image and the spec is kept" {
+  menubar_tool
+  mkdir -p "$WORK/user/thunderbird.menubar"; touch -t 203001010000 "$WORK/user/thunderbird.menubar"
+  run_icon 2000-01-01T00:00:00.000000000Z 0
+  [ ! -f "$WORK/menubar.log" ]
+}
+
+@test "menu-bar art: a cache older than the image is refreshed" {
+  menubar_tool
+  mkdir -p "$WORK/user/thunderbird.menubar"; touch -t 200001010000 "$WORK/user/thunderbird.menubar"
+  run_icon 2026-01-01T00:00:00.000000000Z 0
+  grep -q "^menubar " "$WORK/menubar.log"
+}
+
+@test "menu-bar art: a cache older than the app's spec (a new preset) is refreshed" {
+  menubar_tool
+  mkdir -p "$WORK/user/thunderbird.menubar"; touch -t 200001010000 "$WORK/user/thunderbird.menubar"
+  run_icon 1990-01-01T00:00:00.000000000Z 0
+  grep -q "^menubar " "$WORK/menubar.log"
+}

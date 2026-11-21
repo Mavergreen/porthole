@@ -1,0 +1,57 @@
+#!/bin/sh
+# platform: macOS-only -- runs on the Mac, reading the app's pictures out of its container
+# porthole-menubar-art SPEC DIR: copy each of the app's MENUBAR_ART pairs out of its running container
+# into DIR, the per-user cache its viewer reads: <n>.app.png (the picture the app's tray shows) and
+# <n>.mac.png, or <n>.mac-template.png for a *Template* image (the picture the Mac's menu bar shows
+# instead). Porthole ships neither: they are the installed app's own. All or nothing: a picture that
+# can't be had leaves DIR as it was. An app with no MENUBAR_ART has no DIR.
+set -u
+spec=${1:?usage: porthole-menubar-art SPEC DIR} dir=${2:?usage: porthole-menubar-art SPEC DIR}
+lib=${PORTHOLE_ENGINE_BIN:-$(dirname "$0")}/porthole-spec-lib.sh
+. "$lib"
+MENUBAR_ART=
+. "$spec"
+if [ -z "$MENUBAR_ART" ]; then rm -rf "$dir"; exit 0; fi
+spec_docker_env
+spec_up "$NAME" "$CONTAINER" || exit 1
+
+# In the container: print one file, a plain path or ARCHIVE.asar:/PATH (from the archive, or the
+# .asar.unpacked beside it for a file the archive marks unpacked).
+GET_PY='
+import json, os, struct, sys
+root = os.environ.get("PORTHOLE_ROOT", "")
+spec = sys.argv[1]
+out = sys.stdout.buffer
+if ".asar:/" not in spec:
+    out.write(open(root + spec, "rb").read()); sys.exit(0)
+arc, inner = spec.split(":", 1)
+f = open(root + arc, "rb")
+_, size, _, n = struct.unpack("<4I", f.read(16))
+node = json.loads(f.read(n))
+for part in inner.strip("/").split("/"):
+    node = node["files"][part]
+if node.get("unpacked"):
+    out.write(open(root + arc + ".unpacked" + inner, "rb").read())
+else:
+    f.seek(8 + size + int(node["offset"])); out.write(f.read(node["size"]))
+'
+get() { docker exec "$CONTAINER" python3 -c "$GET_PY" "$1"; }
+is_png() { [ "$(head -c 8 "$1" | od -An -tx1 | tr -d ' \n')" = 89504e470d0a1a0a ]; }
+
+mkdir -p "$(dirname "$dir")" || exit 1
+tmp=$(mktemp -d "$dir.XXXXXX") || exit 1
+trap 'rm -rf "$tmp"' EXIT
+for n in $MENUBAR_ART; do
+  eval "pair=\${MENUBAR_ART_$(printf '%s' "$n" | tr - _):-}"
+  set -- $pair
+  [ $# -eq 2 ] || { echo "porthole-menubar-art: $NAME: MENUBAR_ART_$n isn't two pictures" >&2; exit 1; }
+  mac=$n.mac.png
+  case ${2##*/} in *Template*) mac=$n.mac-template.png ;; esac
+  for p in "$1:$n.app.png" "$2:$mac"; do
+    src=${p%:*} to=$tmp/${p##*:}
+    if ! get "$src" > "$to" 2>/dev/null || ! is_png "$to"; then
+      echo "porthole-menubar-art: $NAME: no picture at $src" >&2; exit 1
+    fi
+  done
+done
+rm -rf "$dir" && mv "$tmp" "$dir"

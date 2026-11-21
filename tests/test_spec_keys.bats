@@ -40,12 +40,22 @@ APP_FLAGS=\"--x='it''s' \\\$HOME\""
   [ "$(spec APP_FLAGS)" = "--x='it''s' \$HOME" ]
 }
 
+@test "the spec carries menu-bar art: each name's app tray picture and the Mac picture shown for it" {
+  render "MENUBAR_ART='unlocked locked'
+MENUBAR_ART_unlocked='/opt/a.asar:/t/u.png /opt/a.asar:/m/u_Template@2x.png'
+MENUBAR_ART_locked='/opt/t/l.png /opt/m/l_Template@2x.png'"
+  [ "$(spec MENUBAR_ART)" = 'unlocked locked' ]
+  [ "$(spec MENUBAR_ART_unlocked)" = '/opt/a.asar:/t/u.png /opt/a.asar:/m/u_Template@2x.png' ]
+  [ "$(spec MENUBAR_ART_locked)" = '/opt/t/l.png /opt/m/l_Template@2x.png' ]
+}
+
 @test "a conf without them renders them empty" {
   render ""
   [ -z "$(spec CLI)" ]
   [ -z "$(spec SOCKETS)" ]
   [ -z "$(spec URL_SCHEMES)" ]
   [ -z "$(spec NATIVE_HOSTS)" ]
+  [ -z "$(spec MENUBAR_ART)" ]
 }
 
 @test "a declared name with no definition is refused at generate time" {

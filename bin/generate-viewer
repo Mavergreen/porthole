@@ -36,7 +36,7 @@ APP_BIN= APP_FLAGS= USER= USER_GROUP= DATADIR= ICON_GLOB= LIFECYCLE=
 AUDIO= PRINTING= PTRACE= DARK_THEME= OPEN_URL= FILE_TRANSFER= NOTIFICATIONS=
 EXTRA_SETUP= ENCODINGS=rgb APT_LIST= EXTRA_ENV= HOST_MOUNTS= TARBALL_URL= TARBALL_BIN= MENU_PRODUCER=
 UPDATE= PACKAGING= CAPS= EXTRA_VOLUMES= APP_VERSION= ABOUT_CMD=
-CLI= URL_SCHEMES= SOCKETS= NATIVE_HOSTS=
+CLI= URL_SCHEMES= SOCKETS= NATIVE_HOSTS= MENUBAR_ART=
 # shellcheck disable=SC1090
 . "$CONF"
 SLUG=$(basename "$CONF" .conf)   # the conf's basename is authoritative (a manifest SLUG= is ignored)
@@ -240,6 +240,9 @@ CAPS='$CAPS'
 EXTRA_VOLUMES='$EXTRA_VOLUMES'
 HOST_MOUNTS='$HOST_MOUNTS'
 SPEC
+# MENUBAR_ART_<n> is "APP-PICTURE MAC-PICTURE": while the app's tray shows APP-PICTURE, the Mac's menu
+# bar shows MAC-PICTURE (a *Template* image is drawn as a template). Either is a path in the container,
+# or ARCHIVE.asar:/PATH for a file in an Electron archive.
 # What the runtime tools (porthole-cli, porthole-follow, porthole-native-host, the viewer) need to give
 # the app native behaviour; spec 2026-11-21-scriptable-apps in tests/test_spec_keys.bats. Each value is
 # single-quoted, a ' inside written as '\''.
@@ -266,6 +269,7 @@ declared() {  # LIST-VAR PREFIX [SUFFIX...]: each name's PREFIX_<n>[SUFFIX], <n>
   declared CLI CLI
   declared SOCKETS SOCKET
   declared NATIVE_HOSTS NATIVE_HOST _FILE
+  declared MENUBAR_ART MENUBAR_ART
 } >> "$BINDIR/../$SLUG.container"
 
 # --- CMake args (for the native Porthole viewer build) -------------------------

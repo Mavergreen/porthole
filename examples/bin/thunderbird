@@ -295,6 +295,17 @@ if [ -f "$_root/bin/porthole-icon-lib.sh" ]; then
   else _hand=; fi
   if [ -n "$_hand" ]; then PORTHOLE_APP_ICON="$_best"; export PORTHOLE_APP_ICON; fi
   say_mark "icon: done"
+  # Menu-bar art: the app's own tray pictures and the Mac pictures shown for them (MENUBAR_ART),
+  # copied out of its container into the cache the viewer reads, again when the image or the spec
+  # is newer than the copy. Best-effort: without it the viewer shows the app's tray art as drawn.
+  _art="${PORTHOLE_USER_ICON_CACHE:-$HOME/Library/Caches/dev.mavergreen.porthole}/thunderbird.menubar"
+  if [ -x "$ENGINE_BIN_DIR/porthole-menubar-art" ]; then
+    if [ ! -d "$_art" ] || [ "$(stat -f %m "$_art")" -lt "$(stat -f %m "$SPEC")" ] \
+       || { _ie=$(image_created_epoch "$IMAGE") && [ "$(stat -f %m "$_art")" -lt "$_ie" ]; }; then
+      PORTHOLE_ENGINE_BIN="$ENGINE_BIN_DIR" "$ENGINE_BIN_DIR/porthole-menubar-art" "$SPEC" "$_art" 2>/dev/null \
+        || icon_log thunderbird "menu-bar art: couldn't copy it out of $CONTAINER"
+    fi
+  fi
 fi
 
 # This viewer runs its OWN copy of the Porthole engine binary, IN PLACE (exec, not `open` of a shared
