@@ -24,6 +24,7 @@ SPEC
   # docker: `exec [-i] [-u U] CONTAINER sh -c SCRIPT ARG...` runs SCRIPT here with the container's HOME.
   cat > "$BIN/docker" <<'SH'
 #!/bin/sh
+[ "$1" = inspect ] && { cat "$STATE/cid" 2>/dev/null || echo c1; exit 0; }
 [ "$1" = exec ] || exit 0
 shift
 while [ $# -gt 0 ]; do case $1 in -i) shift ;; -u) shift 2 ;; *) break ;; esac; done
@@ -41,7 +42,8 @@ SH
 s=$2; touch "$STATE/items"
 case $s in
   *"get the path of every login item"*) paste -sd, - < "$STATE/items" | sed 's/,/, /g'; echo "mac-read" >> "$STATE/calls" ;;
-  *"make login item"*) p=$(printf '%s' "$s" | sed -n 's/.*path:"\([^"]*\)".*/\1/p'); h=$(printf '%s' "$s" | sed -n 's/.*hidden:\([a-z]*\).*/\1/p')
+  *"make login item"*) [ -e "$STATE/makefail" ] && { rm "$STATE/makefail"; echo "System Events got an error" >&2; exit 1; }
+     p=$(printf '%s' "$s" | sed -n 's/.*path:"\([^"]*\)".*/\1/p'); h=$(printf '%s' "$s" | sed -n 's/.*hidden:\([a-z]*\).*/\1/p')
      echo "$p" >> "$STATE/items"; echo "mac-make $h" >> "$STATE/calls" ;;
   *"delete"*) p=$(printf '%s' "$s" | sed -n 's/.*path is "\([^"]*\)".*/\1/p'); grep -vxF "$p" "$STATE/items" > "$STATE/i2"; mv "$STATE/i2" "$STATE/items"; echo "mac-delete" >> "$STATE/calls" ;;
 esac
@@ -63,7 +65,7 @@ login_items() { cat "$STATE/items" 2>/dev/null; }
   once
   [ "$(login_items)" = "$BUNDLE" ]
   grep -qx 'mac-make true' "$STATE/calls"
-  [ "$(cat "$PORTHOLE_STATE_DIR/demo.login")" = on ]
+  [ "$(sed -n 1p "$PORTHOLE_STATE_DIR/demo.login")" = on ]
 }
 
 @test "an entry that starts the app as usual makes a visible Login Item" {
@@ -90,7 +92,7 @@ login_items() { cat "$STATE/items" 2>/dev/null; }
   : > "$STATE/items"
   once
   [ ! -e "$AS/com.example.Demo.desktop" ]
-  [ "$(cat "$PORTHOLE_STATE_DIR/demo.login")" = off ]
+  [ "$(sed -n 1p "$PORTHOLE_STATE_DIR/demo.login")" = off ]
   echo "$BUNDLE" > "$STATE/items"
   once
   grep -qx 'Exec=/opt/Demo/demo --silent' "$AS/com.example.Demo.desktop"
@@ -134,4 +136,21 @@ login_items() { cat "$STATE/items" 2>/dev/null; }
   rm "$AS/com.example.Demo.desktop"             # ...and unticks it
   once
   [ -z "$(login_items)" ]
+}
+
+@test "a Login Item that couldn't be made is tried again, and the app's setting stays on" {
+  app_entry --silent; : > "$STATE/makefail"
+  once
+  [ -z "$(login_items)" ]
+  once
+  [ "$(login_items)" = "$BUNDLE" ]
+  [ -f "$AS/com.example.Demo.desktop" ]
+}
+
+@test "a rebuilt container gets the app's entry back from the Mac, and the Login Item stays" {
+  app_entry --silent; once                         # synced on, container c1
+  rm "$AS/com.example.Demo.desktop"; echo c2 > "$STATE/cid"   # recreated: its autostart dir is new
+  once
+  [ "$(login_items)" = "$BUNDLE" ]
+  grep -qx 'Exec=/opt/Demo/demo --silent' "$AS/com.example.Demo.desktop"
 }

@@ -18,7 +18,8 @@
 #            usually running already at login, and hiding is how the Mac gives that entry's effect.
 #            The app's entry is kept, so turning it back on from the Mac restores it as it was.
 #
-# Started detached by the app's launcher; one per app (a second exits at once). Checks every
+# Started detached by the app's launcher; one per app. A second for the same viewer exits at once; one
+# for a new viewer (a relaunch) takes over from the old viewer's, which may not have noticed yet. Checks every
 # PORTHOLE_FOLLOW_SECS (default 3) seconds. SIGTERM, or the viewer exiting, stops everything it serves.
 set -u
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -33,8 +34,25 @@ spec_docker_env
 
 D=${TMPDIR:-/tmp}/porthole-follow-$SLUG
 mkdir -p "$D" && chmod 0700 "$D" || exit 1
-if [ -f "$D/pid" ] && kill -0 "$(cat "$D/pid")" 2>/dev/null; then exit 0; fi
-echo $$ > "$D/pid"
+# $D/pid: "FOLLOWER-PID VIEWER-PID"; $D/lock serializes followers starting at once.
+n=0
+until mkdir "$D/lock" 2>/dev/null; do
+  n=$((n + 1)); [ "$n" -le 50 ] || { rmdir "$D/lock" 2>/dev/null; n=0; }   # a lock left by a crash
+  sleep 0.1
+done
+set -- $(cat "$D/pid" 2>/dev/null)
+if [ $# -eq 2 ] && kill -0 "$1" 2>/dev/null; then
+  [ "$2" = "$viewer" ] && { rmdir "$D/lock"; exit 0; }
+  kill -TERM "$1" 2>/dev/null
+  n=0
+  while kill -0 "$1" 2>/dev/null; do
+    n=$((n + 1)); [ "$n" -le 50 ] || { kill -KILL "$1" 2>/dev/null; break; }
+    sleep 0.1
+  done
+fi
+echo "$$ $viewer" > "$D/pid"
+rmdir "$D/lock"
+mine_pid() { [ "$(cut -d' ' -f1 "$D/pid" 2>/dev/null)" = $$ ] && rm -f "$D/pid"; }
 
 macpath() { case $1 in "~/"*) printf '%s/%s' "$HOME" "${1#"~/"}" ;; *) printf '%s' "$1" ;; esac; }
 
@@ -60,11 +78,11 @@ each_socket() {  # FN: FN NAME CONTAINER-PATH MAC-PATH for each declared socket
   done
 }
 follow_socket() {
-  if docker exec "$CONTAINER" test -S "$2" 2>/dev/null; then
-    served "$1" || serve "$@"
-  elif served "$1" || [ -e "$3" ]; then
-    unserve "$1" "$3"
-  fi
+  # Only the container's own answer counts: a moment Docker can't be reached changes nothing.
+  case $(docker exec "$CONTAINER" sh -c 'test -S "$1" && echo yes || echo no' sh "$2" 2>/dev/null) in
+    yes) served "$1" || serve "$@" ;;
+    no) if served "$1" || [ -e "$3" ]; then unserve "$1" "$3"; fi ;;
+  esac
 }
 stop_socket() { unserve "$1" "$3"; }
 
@@ -123,25 +141,31 @@ follow_login() {
   case $L in on|off) ;; *) return 0 ;; esac
   items=$(sysevents 'get the path of every login item') || return 0
   case ", $items, " in *", $bundle, "*) M=on ;; *) M=off ;; esac
-  S=$(cat "$STATE_DIR/$SLUG.login" 2>/dev/null || echo off)
+  # The record: the synced value, and the container it was synced with. A new container (a rebuild,
+  # an update) starts without the app's entry, which is not the user turning it off: the Mac's stands.
+  S=$(sed -n 1p "$STATE_DIR/$SLUG.login" 2>/dev/null); S=${S:-off}
+  scid=$(sed -n 2p "$STATE_DIR/$SLUG.login" 2>/dev/null)
+  cid=$(docker inspect -f '{{.Id}}' "$CONTAINER" 2>/dev/null) || return 0
   if [ "$L" = on ]; then
     mkdir -p "$STATE_DIR"
     printf '%s\n' "$out" | sed 1d > "$saved.tmp" && mv "$saved.tmp" "$saved"
   fi
+  # Recorded only once both sides agree: a write that failed is tried again next time.
   if [ "$L" = "$M" ]; then new=$L
-  elif [ "$M" != "$S" ]; then new=$M; set_linux "$M"
-  else new=$L; set_mac "$L"
+  elif [ "$M" != "$S" ] || { [ -n "$scid" ] && [ "$cid" != "$scid" ]; }; then new=$M; set_linux "$M" || return 0
+  else new=$L; set_mac "$L" || return 0
   fi
-  [ "$new" = "$S" ] || { mkdir -p "$STATE_DIR"; echo "$new" > "$STATE_DIR/$SLUG.login"; }
+  [ "$new" = "$S" ] && [ "$cid" = "$scid" ] && return 0
+  mkdir -p "$STATE_DIR" && printf '%s\n%s\n' "$new" "$cid" > "$STATE_DIR/$SLUG.login"
 }
 
-finish() { fn=stop_socket; each_socket; rm -f "$D/pid"; exit 0; }
+finish() { fn=stop_socket; each_socket; mine_pid; exit 0; }
 trap finish TERM INT HUP
 
 while kill -0 "$viewer" 2>/dev/null; do
   fn=follow_socket; each_socket
   follow_login
-  [ -n "${PORTHOLE_FOLLOW_ONCE:-}" ] && { rm -f "$D/pid"; exit 0; }   # tests: one pass
+  [ -n "${PORTHOLE_FOLLOW_ONCE:-}" ] && { mine_pid; exit 0; }   # tests: one pass
   sleep "${PORTHOLE_FOLLOW_SECS:-3}" &
   wait $!
 done

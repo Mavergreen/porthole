@@ -23,7 +23,9 @@ SPEC
 # docker exec [-u U] CONTAINER test -S PATH | other
 for a in "$@"; do last=$a; done
 case "$*" in
-  *" test -S "*) [ -e "$STATE/present" ] ;;
+  *"test -S"*)
+    [ -e "$STATE/dockerfail" ] && { echo "error during connect: i/o timeout" >&2; exit 1; }
+    [ -e "$STATE/present" ] && echo yes || echo no ;;
   *) exit 0 ;;
 esac
 SH
@@ -36,17 +38,18 @@ while :; do sleep 0.1; done
 SH
   printf '#!/bin/sh\nexit 0\n' > "$BIN/osascript"
   chmod 755 "$BIN"/*
-  sleep 600 & VIEWER=$!
+  sleep 600 </dev/null >/dev/null 2>&1 3>&- & VIEWER=$!
   export PATH="$BIN:$PATH" PORTHOLE_FOLLOW_SECS=0.2 DOCKER_HOST=tcp://192.0.2.1:2376 PORTHOLE_FOLLOW_BIN="$BIN"
   FOLLOW="${BATS_TEST_DIRNAME}/../bin/porthole-follow"
   MAC="$HOME/.demo/agent.sock"
 }
 teardown() {
   kill "$VIEWER" 2>/dev/null || :
+  [ -f "$W/pids" ] && kill $(cat "$W/pids") 2>/dev/null || :
   [ -f "$W/follow.pid" ] && kill "$(cat "$W/follow.pid")" 2>/dev/null || :
   sleep 0.3; rm -rf "$W"
 }
-start_follow() { "$FOLLOW" "$W/demo.container" "$VIEWER" >"$W/follow.out" 2>&1 & echo $! > "$W/follow.pid"; }
+start_follow() { "$FOLLOW" "$W/demo.container" "$VIEWER" </dev/null >"$W/follow.out" 2>&1 3>&- & echo $! > "$W/follow.pid"; }
 until_() { n=0; until eval "$1"; do n=$((n + 1)); [ $n -le 40 ] || return 1; sleep 0.1; done; }
 
 @test "the Mac socket appears when the app serves its socket, and goes when it stops" {
@@ -88,4 +91,34 @@ until_() { n=0; until eval "$1"; do n=$((n + 1)); [ $n -le 40 ] || return 1; sle
   until_ '[ -e "$MAC" ]'
   kill -TERM "$(cat "$W/follow.pid")"
   until_ '[ ! -e "$MAC" ]'
+}
+
+@test "a relaunched viewer's follower takes over from one still finishing for the old viewer" {
+  : > "$STATE/present"
+  PORTHOLE_FOLLOW_SECS=30 start_follow            # slow to notice its viewer is gone
+  until_ '[ -e "$MAC" ]'
+  old=$(cat "$W/follow.pid")
+  sleep 600 </dev/null >/dev/null 2>&1 3>&- & V2=$!; echo "$V2" >> "$W/pids"
+  "$FOLLOW" "$W/demo.container" "$V2" </dev/null >/dev/null 2>&1 3>&- & new=$!; echo "$new $old" >> "$W/pids"
+  until_ '! kill -0 "$old" 2>/dev/null'
+  kill -0 "$new"
+  until_ '[ -e "$MAC" ]'
+  kill "$new" "$V2" 2>/dev/null || :
+}
+
+@test "two followers started at once for the same viewer leave one" {
+  "$FOLLOW" "$W/demo.container" "$VIEWER" </dev/null >/dev/null 2>&1 3>&- & a=$!
+  "$FOLLOW" "$W/demo.container" "$VIEWER" </dev/null >/dev/null 2>&1 3>&- & b=$!; echo "$a $b" >> "$W/pids"
+  sleep 1
+  n=0; kill -0 "$a" 2>/dev/null && n=$((n + 1)); kill -0 "$b" 2>/dev/null && n=$((n + 1))
+  kill "$a" "$b" 2>/dev/null || :
+  [ "$n" -eq 1 ]
+}
+
+@test "a moment Docker can't be reached leaves the Mac socket served" {
+  : > "$STATE/present"; start_follow
+  until_ '[ -e "$MAC" ]'
+  : > "$STATE/dockerfail"; sleep 0.8
+  [ -e "$MAC" ]
+  [ "$(wc -l < "$STATE/served.log" | tr -d ' ')" = 1 ]
 }
