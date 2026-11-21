@@ -87,3 +87,52 @@ xpra_pin_mm() { tr -d '[:space:]' < "${BATS_TEST_DIRNAME}/../XPRA_VERSION" | cut
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [[ "$output" == *"--rebuild"* ]] || return 1
 }
+
+# Stand-ins name each Mac caller at its own path, in a private namespace; a container that can't make
+# one is said once a day in the launch log, and the app still starts. $1 = what --check does.
+run_thunderbird_ns() {
+  d="$(mktemp -d -t pls)"
+  for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
+  cat > "$d/docker" <<EOF2
+#!/bin/sh
+case "\$*" in
+  *"porthole-standin-at --check"*) $1 ;;
+  *"image inspect -f"*) echo 2999-01-01T00:00:00Z ;;
+  *"inspect -f"*) echo true ;;
+  *) : ;;
+esac
+exit 0
+EOF2
+  chmod +x "$d"/*
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
+  run env DOCKER_HOST=tcp://192.0.2.1:2376 HOME="$d/home" PATH="$d:$PATH" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+  ns_output=$output ns_status=$status
+  run env DOCKER_HOST=tcp://192.0.2.1:2376 HOME="$d/home" PATH="$d:$PATH" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+  ns_again=$output
+  rm -rf "$d"
+}
+NS_MSG='porthole-standin-at: caller identity is unavailable: this container cannot create user namespaces (unshare: Operation not permitted)'
+
+@test "launcher: a container without user namespaces is said once, and the app still starts" {
+  run_thunderbird_ns "echo '$NS_MSG' >&2; exit 3"
+  [ "$ns_status" -eq 0 ] || { echo "$ns_output"; return 1; }
+  [[ "$ns_output" == *"thunderbird: $NS_MSG"* ]] || { echo "$ns_output"; return 1; }
+  [[ "$ns_output" == *"viewer-exec"* ]] || { echo "$ns_output"; return 1; }
+  [[ "$ns_again" != *"caller identity"* ]] || { echo "$ns_again"; return 1; }
+}
+
+@test "launcher: a container that can make stand-ins is silent about them" {
+  run_thunderbird_ns "exit 0"
+  [ "$ns_status" -eq 0 ] || { echo "$ns_output"; return 1; }
+  [[ "$ns_output" != *"caller identity"* ]] || { echo "$ns_output"; return 1; }
+}
+
+@test "launcher: an image older than porthole-standin-at is silent about it" {
+  run_thunderbird_ns "echo 'exec: porthole-standin-at: not found' >&2; exit 127"
+  [ "$ns_status" -eq 0 ] || { echo "$ns_output"; return 1; }
+  [[ "$ns_output" != *"porthole-standin-at"* ]] || { echo "$ns_output"; return 1; }
+}
