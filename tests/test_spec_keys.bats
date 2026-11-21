@@ -42,7 +42,10 @@ APP_FLAGS=\"--x='it''s' \\\$HOME\""
 
 @test "a conf without them renders them empty" {
   render ""
-  [ -z "$(spec CLI)" ] && [ -z "$(spec SOCKETS)" ] && [ -z "$(spec URL_SCHEMES)" ] && [ -z "$(spec NATIVE_HOSTS)" ]
+  [ -z "$(spec CLI)" ]
+  [ -z "$(spec SOCKETS)" ]
+  [ -z "$(spec URL_SCHEMES)" ]
+  [ -z "$(spec NATIVE_HOSTS)" ]
 }
 
 @test "a declared name with no definition is refused at generate time" {

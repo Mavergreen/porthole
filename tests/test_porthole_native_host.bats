@@ -52,7 +52,8 @@ teardown() { rm -rf "$W"; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   w=$(grep -n '^docker exec -i -u 0 demo-gui sh -c ' "$STATE/log" | cut -d: -f1)
   r=$(grep -n '^porthole-standin-run' "$STATE/log" | cut -d: -f1)
-  [ -n "$w" ] && [ "$w" -lt "$r" ]
+  [ -n "$w" ]
+  [ "$w" -lt "$r" ]
   grep -q 'mv -f "$t" "$1"' "$STATE/log"
   grep -q ' /etc/demo/allowed$' "$STATE/log"
   printf 'Safari.app\nChromium.app\nGoogle Chrome.app\n' | diff -u - "$STATE/file.in"
