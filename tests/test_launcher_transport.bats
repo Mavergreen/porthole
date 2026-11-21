@@ -97,3 +97,25 @@ run_launcher_in() {
   [[ "$out" == *"--rebuild"* ]] || { echo "no rebuild advice: $out"; return 1; }
   ! grep -q 'ENGINE-IPC .*porthole-xpra.sock' "$STUB_LOG" || { echo "bridge started anyway"; return 1; }
 }
+
+@test "launcher: starts the engine's porthole-follow for this app, naming its spec and the viewer's pid" {
+  e="$(mktemp -d -t plfe)"
+  printf '#!/bin/sh\nexit 0\n' > "$e/porthole"
+  printf '#!/bin/sh\nsleep 2\n' > "$e/s6-ipcserver"
+  printf '#!/bin/sh\necho "FOLLOW $*" >> "%s"\n' "$STUB_LOG" > "$e/porthole-follow"
+  chmod +x "$e"/*
+  d="$(mktemp -d -t plf)"
+  printf '#!/bin/sh\n[ "$1" = status ] && echo running\nexit 0\n' > "$d/docker-machine-ctl"
+  printf '#!/bin/sh\nexit 0\n' > "$d/docker-machine"
+  printf '#!/bin/sh\ncase "$*" in *"inspect -f"*) echo true ;; esac\nexit 0\n' > "$d/docker"
+  printf '#!/bin/sh\necho "viewer-pid $$"\n' > "$d/viewer"
+  chmod +x "$d"/*
+  out=$(env DOCKER_HOST= DOCKER_CONTEXT= PATH="$d:$PATH" PORTHOLE_BIN="$e/porthole" THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird" 2>/dev/null) || true
+  ok=
+  for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q '^FOLLOW ' "$STUB_LOG" && { ok=1; break; }; sleep 0.1; done
+  rm -rf "$e" "$d"
+  [ -n "$ok" ] || { echo "no follower: $(cat "$STUB_LOG")"; return 1; }
+  vpid=${out##*viewer-pid }
+  grep -qx "FOLLOW .*/thunderbird.container $vpid" "$STUB_LOG" || { cat "$STUB_LOG"; echo "viewer $vpid"; return 1; }
+}
