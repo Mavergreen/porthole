@@ -12,7 +12,10 @@
 #   login    the app's own start-at-login setting (an XDG autostart entry for its program, which
 #            1Password's "Start at login" checkbox writes) and the Mac's Login Items follow each
 #            other: whichever changed since the last sync (PORTHOLE_STATE_DIR/<slug>.login) wins.
-#            Two on/off sides that differ cannot both have changed. The Login Item is hidden when
+#            Two on/off sides that differ cannot both have changed. An app restates its own setting
+#            each time it starts (1Password rewrites or removes its entry, and its checkbox follows
+#            only its own settings), so a change seen in a new run of the app, or a new container, is
+#            not the user's: the Mac's side stands. The Login Item is hidden when
 #            the entry starts the app differently from a normal launch (1Password's --silent):
 #            containers restart with the VM (porthole up: --restart unless-stopped), so the app is
 #            usually running already at login, and hiding is how the Mac gives that entry's effect.
@@ -87,6 +90,8 @@ follow_socket() {
 stop_socket() { unserve "$1" "$3"; }
 
 # In the container, as the app's user. $0 = read PROG | off PROG | on PROG FILE (entry on stdin).
+# read prints when the app's oldest process started (ticks after boot, or -), then on or off, then
+# the app's entry: its file name and content.
 LOGIN_SH='d="$HOME/.config/autostart" op=$0 prog=$1
 mine() {
   for f in "$d"/*.desktop; do
@@ -95,8 +100,16 @@ mine() {
     [ "${p##*/}" = "$prog" ] && printf "%s\n" "$f"
   done
 }
+started() {
+  n=$(printf "%.15s" "$prog")
+  for p in "${PORTHOLE_PROC:-/proc}"/[0-9]*; do
+    [ "$(cat "$p/comm" 2>/dev/null)" = "$n" ] || continue
+    sed "s/.*) //" "$p/stat" 2>/dev/null | cut -d" " -f20
+  done | sort -n | head -n 1
+}
 case $op in
-  read) # The app'"'"'s own entry replaces one made from the Mac (porthole-*.desktop), so the app owns it.
+  read) t=$(started); echo "${t:--}"
+        # The app'"'"'s own entry replaces one made from the Mac (porthole-*.desktop), so the app owns it.
         if mine | grep -qv "/porthole-[^/]*\.desktop$"; then
           mine | grep "/porthole-[^/]*\.desktop$" | while IFS= read -r f; do rm -f "$f"; done
         fi
@@ -137,18 +150,20 @@ set_linux() {
 }
 follow_login() {
   out=$(linux read "$prog" </dev/null) || return 0
-  L=$(printf '%s\n' "$out" | head -n 1)
+  L=$(printf '%s\n' "$out" | sed -n 2p)
   case $L in on|off) ;; *) return 0 ;; esac
   items=$(sysevents 'get the path of every login item') || return 0
   case ", $items, " in *", $bundle, "*) M=on ;; *) M=off ;; esac
-  # The record: the synced value, and the container it was synced with. A new container (a rebuild,
-  # an update) starts without the app's entry, which is not the user turning it off: the Mac's stands.
+  # The record: the synced value, and the run of the app it was synced with (its container, and when
+  # its process started). A new container starts without the app's entry, and a restarted app
+  # restates its own setting: neither is the user changing it, so the Mac's stands.
   S=$(sed -n 1p "$STATE_DIR/$SLUG.login" 2>/dev/null); S=${S:-off}
   scid=$(sed -n 2p "$STATE_DIR/$SLUG.login" 2>/dev/null)
   cid=$(docker inspect -f '{{.Id}}' "$CONTAINER" 2>/dev/null) || return 0
+  cid="$cid $(printf '%s\n' "$out" | head -n 1)"
   if [ "$L" = on ]; then
     mkdir -p "$STATE_DIR"
-    printf '%s\n' "$out" | sed 1d > "$saved.tmp" && mv "$saved.tmp" "$saved"
+    printf '%s\n' "$out" | sed 1,2d > "$saved.tmp" && mv "$saved.tmp" "$saved"
   fi
   # Recorded only once both sides agree: a write that failed is tried again next time.
   if [ "$L" = "$M" ]; then new=$L

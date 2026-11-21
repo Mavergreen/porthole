@@ -2,7 +2,8 @@
 # platform: host-agnostic
 # porthole-follow, start at login: the app's own setting (its XDG autostart entry, which 1Password's
 # "Start at login" checkbox writes) and the Mac's Login Items follow each other. Whichever side changed
-# since the last sync wins (two on/off sides that differ cannot both have changed).
+# since the last sync wins (two on/off sides that differ cannot both have changed), except that a
+# restarted app restating its own setting never counts as a change: the Mac's side stands.
 
 setup() {
   W="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/pfl.XXXXXX")" && pwd)"
@@ -59,6 +60,15 @@ teardown() { rm -rf "$W"; }
 once() { PORTHOLE_FOLLOW_ONCE=1 "$FOLLOW" "$BUNDLE/Contents/Resources/demo.container" $$; }
 app_entry() { printf '[Desktop Entry]\nType=Application\nName=Demo\nExec=/opt/Demo/demo %s\n' "$1" > "$AS/com.example.Demo.desktop"; }
 login_items() { cat "$STATE/items" 2>/dev/null; }
+# The app's process, as the container's /proc shows it: started TICKS after boot. Its own processes
+# share its name; the oldest is the app.
+app_started() {
+  export PORTHOLE_PROC="$W/proc"; rm -rf "$W/proc"
+  for t in "$@"; do
+    mkdir -p "$W/proc/$t"; echo demo > "$W/proc/$t/comm"
+    echo "$t (demo) S 1 1 1 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 $t 0 0" > "$W/proc/$t/stat"
+  done
+}
 
 @test "the app's own setting turned on: a Login Item is made, hidden when the entry starts it differently" {
   app_entry --silent
@@ -153,4 +163,30 @@ login_items() { cat "$STATE/items" 2>/dev/null; }
   once
   [ "$(login_items)" = "$BUNDLE" ]
   grep -qx 'Exec=/opt/Demo/demo --silent' "$AS/com.example.Demo.desktop"
+}
+
+@test "the app restating its own setting when it next starts does not undo the Mac's removal" {
+  app_started 100; app_entry --silent; once      # synced on
+  : > "$STATE/items"; once                       # removed on the Mac: synced off
+  app_started 200 250; app_entry --silent        # the app restarts and writes its entry again
+  once
+  [ -z "$(login_items)" ]
+  [ ! -e "$AS/com.example.Demo.desktop" ]
+  [ "$(sed -n 1p "$PORTHOLE_STATE_DIR/demo.login")" = off ]
+}
+
+@test "nor does it undo a Login Item added on the Mac" {
+  app_started 100; once                          # nothing on
+  echo "$BUNDLE" > "$STATE/items"; once          # added on the Mac
+  rm -f "$AS"/*.desktop; app_started 200         # the app restarts, its setting off: no entry
+  once
+  [ "$(login_items)" = "$BUNDLE" ]
+  [ -n "$(ls "$AS")" ]
+}
+
+@test "ticking the app's checkbox while it runs still makes the Login Item" {
+  app_started 100; once                          # synced off with this run of the app
+  app_entry --silent
+  once
+  [ "$(login_items)" = "$BUNDLE" ]
 }
