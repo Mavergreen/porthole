@@ -264,7 +264,6 @@ declared() {  # LIST-VAR PREFIX [SUFFIX...]: each name's PREFIX_<n>[SUFFIX], <n>
   specq EXTRA_ENV "$EXTRA_ENV"
   specq URL_SCHEMES "$URL_SCHEMES"
   declared CLI CLI
-  for _n in $CLI; do _v=$(printf '%s' "$_n" | tr - _); eval "specq CLI_USER_$_v \"\${CLI_USER_$_v:-}\""; done
   declared SOCKETS SOCKET
   declared NATIVE_HOSTS NATIVE_HOST _FILE
 } >> "$BINDIR/../$SLUG.container"

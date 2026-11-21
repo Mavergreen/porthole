@@ -128,8 +128,9 @@ say_mark "docker: ready"
 # The app's program with the URL, in its running container: an Electron or GTK app hands it to its
 # running instance. The viewer asks only once the app is up.
 if [ -n "$OPEN_URL_ARG" ]; then
-  exec docker exec -d -u @USER@ -e DISPLAY=:100 -e HOME=@HOME@ -e XDG_RUNTIME_DIR=/run/user/1000 \
-    "$CONTAINER" @APP_BIN@ @APP_FLAGS@ "$OPEN_URL_ARG"
+  set -- -d -u @USER@ -e DISPLAY=:100 -e HOME=@HOME@ -e XDG_RUNTIME_DIR=/run/user/1000
+  for _e in @EXTRA_ENV@; do set -- "$@" -e "$_e"; done   # the app's own environment, as it starts
+  exec docker exec "$@" "$CONTAINER" @APP_BIN@ @APP_FLAGS@ "$OPEN_URL_ARG"
 fi
 #@IF ABOUT_CMD
 if [ "$ABOUT" = 1 ]; then

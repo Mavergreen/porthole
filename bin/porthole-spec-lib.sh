@@ -25,5 +25,18 @@ spec_docker_env() {
   eval "$(docker-machine env "${PORTHOLE_MACHINE:-default}" 2>/dev/null | grep '^export ')" || :
 }
 
-# spec_running CONTAINER: exit 0 iff the container is running.
-spec_running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" = true ]; }
+# spec_docker_unreachable: exit 0 iff a docker error on stdin is the client failing to reach the VM
+# (not anything a program in the container said).
+spec_docker_unreachable() { grep -qE '^(error during connect|Cannot connect to the Docker daemon)'; }
+
+# spec_up NAME CONTAINER: exit 0 iff the container is running; otherwise say why, exit 1.
+spec_up() {
+  _su=$(docker inspect -f '{{.State.Running}}' "$2" 2>&1)
+  [ "$_su" = true ] && return 0
+  if printf '%s\n' "$_su" | spec_docker_unreachable; then
+    echo "$1 can't be reached: the Docker VM isn't answering (check Container Tools)." >&2
+  else
+    echo "$1 isn't running; open it first." >&2
+  fi
+  return 1
+}

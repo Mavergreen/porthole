@@ -125,8 +125,9 @@ say_mark "docker: ready"
 # The app's program with the URL, in its running container: an Electron or GTK app hands it to its
 # running instance. The viewer asks only once the app is up.
 if [ -n "$OPEN_URL_ARG" ]; then
-  exec docker exec -d -u thunderbird -e DISPLAY=:100 -e HOME=/home/thunderbird -e XDG_RUNTIME_DIR=/run/user/1000 \
-    "$CONTAINER" thunderbird  "$OPEN_URL_ARG"
+  set -- -d -u thunderbird -e DISPLAY=:100 -e HOME=/home/thunderbird -e XDG_RUNTIME_DIR=/run/user/1000
+  for _e in ; do set -- "$@" -e "$_e"; done   # the app's own environment, as it starts
+  exec docker exec "$@" "$CONTAINER" thunderbird  "$OPEN_URL_ARG"
 fi
 
 # Bring the container up via Porthole's SINGLE creator. The whole container spec (name, image,

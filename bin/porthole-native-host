@@ -32,7 +32,7 @@ set -- $host
 prog=$1 ids=$2
 
 spec_docker_env
-spec_running "$CONTAINER" || { echo "$NAME isn't running; open it first." >&2; exit 1; }
+spec_up "$NAME" "$CONTAINER" || exit 1
 
 trusted() {  # MAC-FILE: its lines, if root owns it and only root can write it
   [ -f "$1" ] || return 0

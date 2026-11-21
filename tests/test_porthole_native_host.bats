@@ -23,7 +23,8 @@ SPEC
   cat > "$BIN/docker" <<'SH'
 #!/bin/sh
 case $1 in
-  inspect) [ -e "$STATE/down" ] && echo false || echo true; exit 0 ;;
+  inspect) [ -e "$STATE/unreachable" ] && { echo "Cannot connect to the Docker daemon at tcp://192.0.2.1:2376" >&2; exit 1; }
+    [ -e "$STATE/down" ] && echo false || echo true; exit 0 ;;
   exec) echo "docker $*" >> "$STATE/log"; cat > "$STATE/file.in"; exit 0 ;;
 esac
 SH
@@ -97,4 +98,11 @@ teardown() { rm -rf "$W"; }
   run "$HOST" demo nope '{id}' </dev/null
   [ "$status" -eq 2 ]
   [[ "$output" == *"porthole-native-host: demo declares no native host 'nope'"* ]]
+}
+
+@test "a Docker VM that can't be reached is said so" {
+  touch "$STATE/unreachable"
+  run "$HOST" demo browser '{id}' </dev/null
+  [ "$status" -eq 1 ]
+  [ "$output" = "Linux Demo can't be reached: the Docker VM isn't answering (check Container Tools)." ]
 }

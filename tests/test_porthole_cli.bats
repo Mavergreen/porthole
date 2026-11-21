@@ -22,11 +22,13 @@ SPEC
   cat > "$BIN/docker" <<'SH'
 #!/bin/sh
 case $1 in
-  inspect) [ -e "$STATE/running" ] && echo true || echo false; exit 0 ;;
+  inspect) [ -e "$STATE/unreachable" ] && { echo "error during connect: Get http://192.0.2.1:2376: i/o timeout" >&2; exit 1; }
+    [ -e "$STATE/running" ] && echo true || echo false; exit 0 ;;
   exec)
     n=$(cat "$STATE/n" 2>/dev/null || echo 0); n=$((n + 1)); echo $n > "$STATE/n"
     for a in "$@"; do printf '[%s]' "$a"; done >> "$STATE/exec.log"; echo >> "$STATE/exec.log"
     if [ -e "$STATE/conn_fail_once" ] && [ "$n" = 1 ]; then echo "error during connect: i/o timeout" >&2; exit 1; fi
+    [ -e "$STATE/app_says_refused" ] && { echo "[ERROR] connection refused by the server" >&2; exit 1; }
     printf 'out\000bytes'; exit 7 ;;
 esac
 SH
@@ -69,4 +71,18 @@ teardown() { rm -rf "$W"; }
   run env PATH="$BIN:$PATH" "$CLI" demo op whoami </dev/null
   [ "$status" -eq 7 ]
   [ "$(wc -l < "$STATE/exec.log" | tr -d ' ')" = 2 ]
+}
+
+@test "the program's own failure is never run again, even when it mentions a connection" {
+  : > "$STATE/running"; : > "$STATE/app_says_refused"
+  run env PATH="$BIN:$PATH" "$CLI" demo op item create x </dev/null
+  [ "$status" -eq 1 ]
+  [ "$(wc -l < "$STATE/exec.log" | tr -d ' ')" = 1 ]
+}
+
+@test "a Docker VM that can't be reached is said so, not that the app isn't running" {
+  : > "$STATE/unreachable"
+  run env PATH="$BIN:$PATH" "$CLI" demo op whoami </dev/null
+  [ "$status" -eq 1 ]
+  [ "$output" = "Linux Demo can't be reached: the Docker VM isn't answering (check Container Tools)." ]
 }
