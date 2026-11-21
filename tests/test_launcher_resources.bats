@@ -40,13 +40,10 @@ printf 'Usage: resource-ctl\\n' >&2; exit 2
 STUB
   chmod +x "$d"/*
   printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
-  _saved_d="$d"
   run env DOCKER_HOST=tcp://192.0.2.1:2376 HOME="$d/home" PATH="$d:$PATH" \
       PORTHOLE_RESOURCE_CTL="$d/resource-ctl" \
       THUNDERBIRD_VIEWER_BIN="$d/viewer" \
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
-  # Keep docker-calls accessible to callers that need it, but clean up after assertions.
-  _docker_calls="$d/docker-calls"
   rm -rf "$d"
 }
 
@@ -214,4 +211,136 @@ STUB
   fi
   rm -rf "$d"
   [ "$_rc" -eq 0 ] || { echo "exit $_rc"; return 1; }
+}
+
+# ---------------------------------------------------------------------------
+# 11. osascript notification fires once/day for 1024/1; not again for the same day.
+# ---------------------------------------------------------------------------
+@test "launcher: 1024 MiB/1 vCPU posts an osascript notification once per day" {
+  d="$(mktemp -d -t res)"
+  for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
+  cat > "$d/docker" <<'EOF'
+#!/bin/sh
+case "$*" in *"inspect -f"*) echo true ;; *) : ;; esac
+exit 0
+EOF
+  cat > "$d/docker-machine-ctl" <<'EOF'
+#!/bin/sh
+[ "$1" = status ] && { echo running; exit 0; }
+exit 0
+EOF
+  printf 'memory_mib=1024\nvcpus=1\nsource=vmx\n' > "$d/res-out"
+  cat > "$d/resource-ctl" <<STUB
+#!/bin/sh
+[ "\$1" = resource-status ] && { cat "$d/res-out"; exit 0; }
+printf 'Usage: resource-ctl\n' >&2; exit 2
+STUB
+  cat > "$d/osascript" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$(dirname "$0")/osa.log"
+EOF
+  chmod +x "$d"/*
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
+  # First run: notification expected.
+  run env DOCKER_HOST=tcp://192.0.2.1:2376 HOME="$d/home" PATH="$d:$PATH" \
+      PORTHOLE_RESOURCE_CTL="$d/resource-ctl" THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+  grep -q 'display notification' "$d/osa.log" 2>/dev/null \
+    || { echo "FAIL: osascript not called with display notification for 1024/1; output: $output"; rm -rf "$d"; return 1; }
+  : > "$d/osa.log"
+  # Second run same HOME: stamp exists, no duplicate notification.
+  run env DOCKER_HOST=tcp://192.0.2.1:2376 HOME="$d/home" PATH="$d:$PATH" \
+      PORTHOLE_RESOURCE_CTL="$d/resource-ctl" THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+  grep -q 'display notification' "$d/osa.log" 2>/dev/null \
+    && { echo "FAIL: osascript notification must not fire twice in the same day; output: $output"; rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+# ---------------------------------------------------------------------------
+# 12. osascript notification NOT posted at or above baseline (2048/2).
+# ---------------------------------------------------------------------------
+@test "launcher: 2048 MiB/2 vCPUs at baseline posts no osascript notification" {
+  d="$(mktemp -d -t res)"
+  for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
+  cat > "$d/docker" <<'EOF'
+#!/bin/sh
+case "$*" in *"inspect -f"*) echo true ;; *) : ;; esac
+exit 0
+EOF
+  printf 'memory_mib=2048\nvcpus=2\nsource=driver\n' > "$d/res-out"
+  cat > "$d/resource-ctl" <<STUB
+#!/bin/sh
+[ "\$1" = resource-status ] && { cat "$d/res-out"; exit 0; }
+printf 'Usage: resource-ctl\n' >&2; exit 2
+STUB
+  cat > "$d/osascript" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$(dirname "$0")/osa.log"
+EOF
+  chmod +x "$d"/*
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
+  run env DOCKER_HOST=tcp://192.0.2.1:2376 HOME="$d/home" PATH="$d:$PATH" \
+      PORTHOLE_RESOURCE_CTL="$d/resource-ctl" THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+  grep -q 'display notification' "$d/osa.log" 2>/dev/null \
+    && { echo "FAIL: unexpected osascript notification for 2048/2; output: $output"; rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+# ---------------------------------------------------------------------------
+# 13. osascript notification NOT posted for 'unknown' resource-status.
+# ---------------------------------------------------------------------------
+@test "launcher: 'unknown' resource-status posts no osascript notification" {
+  d="$(mktemp -d -t res)"
+  for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
+  cat > "$d/docker" <<'EOF'
+#!/bin/sh
+case "$*" in *"inspect -f"*) echo true ;; *) : ;; esac
+exit 0
+EOF
+  printf 'unknown\n' > "$d/res-out"
+  cat > "$d/resource-ctl" <<STUB
+#!/bin/sh
+[ "\$1" = resource-status ] && { cat "$d/res-out"; exit 0; }
+printf 'Usage: resource-ctl\n' >&2; exit 2
+STUB
+  cat > "$d/osascript" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$(dirname "$0")/osa.log"
+EOF
+  chmod +x "$d"/*
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
+  run env DOCKER_HOST=tcp://192.0.2.1:2376 HOME="$d/home" PATH="$d:$PATH" \
+      PORTHOLE_RESOURCE_CTL="$d/resource-ctl" THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+  grep -q 'display notification' "$d/osa.log" 2>/dev/null \
+    && { echo "FAIL: unexpected osascript notification for unknown; output: $output"; rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+# ---------------------------------------------------------------------------
+# 14. osascript notification NOT posted when resource ctl is missing.
+# ---------------------------------------------------------------------------
+@test "launcher: missing resource ctl posts no osascript notification" {
+  d="$(mktemp -d -t res)"
+  for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
+  cat > "$d/docker" <<'EOF'
+#!/bin/sh
+case "$*" in *"inspect -f"*) echo true ;; *) : ;; esac
+exit 0
+EOF
+  cat > "$d/osascript" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$(dirname "$0")/osa.log"
+EOF
+  chmod +x "$d"/*
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
+  # No resource-ctl and no docker-machine-ctl: check_gui_resources returns early.
+  run env DOCKER_HOST=tcp://192.0.2.1:2376 HOME="$d/home" PATH="$d:$PATH" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+  grep -q 'display notification' "$d/osa.log" 2>/dev/null \
+    && { echo "FAIL: unexpected osascript notification with missing ctl; output: $output"; rm -rf "$d"; return 1; }
+  rm -rf "$d"
 }

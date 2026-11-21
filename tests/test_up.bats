@@ -142,6 +142,7 @@ builds() { cat "$FAKE/builds" 2>/dev/null || echo 0; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   ! grep -q '^docker rm' "$STUB_LOG" || return 1
   ! grep -q '^docker run' "$STUB_LOG" || return 1
+  ! grep -q '^docker volume rm' "$STUB_LOG" || return 1
   [ -f "$FAKE/volume.demo-gui-data" ] || { echo "data volume gone"; return 1; }
   [ -f "$FAKE/volume.demo-cli" ] || { echo "extra volume gone"; return 1; }
 }
