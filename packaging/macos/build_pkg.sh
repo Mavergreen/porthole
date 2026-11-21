@@ -63,6 +63,7 @@ install -m 0644 "$REPO/bin/porthole-icon-lib.sh"          "$ENGDIR/bin/porthole-
 install -m 0644 "$REPO/bin/porthole-spec-lib.sh"          "$ENGDIR/bin/porthole-spec-lib.sh"
 install -m 0755 "$REPO/bin/porthole-cli"                 "$ENGDIR/bin/porthole-cli"
 install -m 0755 "$REPO/bin/porthole-follow"              "$ENGDIR/bin/porthole-follow"
+install -m 0755 "$REPO/bin/porthole-native-host"         "$ENGDIR/bin/porthole-native-host"
 install -m 0644 "$REPO/bin/porthole-say.sh"               "$ENGDIR/bin/porthole-say.sh"
 install -m 0644 "$REPO/menu-daemon.py"                   "$ENGDIR/menu-daemon.py"
 # What the VIEWER speaks, read out of its sources (which do not ship). generate-viewer runs on the

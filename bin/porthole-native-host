@@ -1,0 +1,57 @@
+#!/bin/sh
+# platform: macOS-only -- reads Mac files' ownership with BSD stat and finds the app in /Applications
+# porthole-native-host SLUG NAME [ARG...] -- a browser's native-messaging host for an app, as the
+# browser's manifest runs it (1Password's extension: the preset's wrapper execs this).
+#
+# The spec declares NATIVE_HOST_<name>='PROGRAM UID:GID' and, optionally,
+# NATIVE_HOST_<name>_FILE='CONTAINER-PATH MAC-FILE...': before every start the Mac files are joined in
+# order (leading/trailing blanks, comments and blank lines dropped) and written as root, 0644, at
+# CONTAINER-PATH, so an edit takes effect at the browser's next connection. A Mac file is honoured only
+# if root owns it and no one else can write it (1Password's own rule for the allowlist it reads); a
+# missing one is skipped. Then PROGRAM runs as UID:GID under the calling browser's stand-in
+# (porthole-standin-run), with only the browser's last argument: its extension id or origin (the
+# manifest path a browser also passes means nothing in the container). An app that isn't running is
+# said so, exit 1 (the browser shows the extension's own error).
+set -u
+me=porthole-native-host
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$here/porthole-spec-lib.sh"
+tools=${PORTHOLE_TOOLS_BIN:-$here}
+[ $# -ge 2 ] || { echo "usage: $me SLUG NAME [ARG...]" >&2; exit 2; }
+slug=$1 name=$2; shift 2
+last=
+for a in "$@"; do last=$a; done
+spec=$(spec_find "$slug") || exit 2
+NAME= CONTAINER= APP_HOME= NATIVE_HOSTS=
+. "$spec"
+case " $NATIVE_HOSTS " in *" $name "*) ;; *) echo "$me: $slug declares no native host '$name'" >&2; exit 2 ;; esac
+v=$(printf '%s' "$name" | tr - _)
+eval "host=\${NATIVE_HOST_$v:-} file=\${NATIVE_HOST_${v}_FILE:-}"
+set -- $host
+[ $# -eq 2 ] || { echo "$me: $slug declares no native host '$name'" >&2; exit 2; }
+prog=$1 ids=$2
+
+spec_docker_env
+spec_running "$CONTAINER" || { echo "$NAME isn't running; open it first." >&2; exit 1; }
+
+trusted() {  # MAC-FILE: its lines, if root owns it and only root can write it
+  [ -f "$1" ] || return 0
+  # -L: the file read, never a symlink to it.
+  set -- "$1" $(stat -L -f '%u %Lp' "$1" 2>/dev/null)
+  if [ "${2:-}" != 0 ] || [ $(( 0${3:-777} & 022 )) -ne 0 ]; then
+    echo "$me: ignoring $1: it must be owned by root and writable only by root (sudo chown root:wheel, chmod 644)" >&2
+    return 0
+  fi
+  sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^#/d' -e '/^$/d' "$1"
+}
+if [ -n "$file" ]; then
+  set -- $file
+  dest=$1; shift
+  # Each write has its own temp file ($$ is the container shell's): browsers connecting at once.
+  for f in "$@"; do trusted "$f"; done | docker exec -i -u 0 "$CONTAINER" sh -c 'umask 022 &&
+    mkdir -p "$(dirname "$1")" && t="$(dirname "$1")/.$(basename "$1").$$" && cat > "$t" &&
+    mv -f "$t" "$1"' sh "$dest" >&2 \
+    || { echo "$me: could not write $dest in $CONTAINER" >&2; exit 1; }
+fi
+exec "$tools/porthole-standin-run" "$CONTAINER" -u "$ids" -e HOME="$APP_HOME" -e XDG_RUNTIME_DIR=/run/user/1000 \
+  -- "$prog" ${last:+"$last"}
