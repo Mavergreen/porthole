@@ -54,7 +54,7 @@ teardown() { rm -rf "$W"; }
 @test "runs the program as the app's user with its environment, each argument intact" {
   : > "$STATE/running"
   run env PATH="$BIN:$PATH" "$CLI" demo op item get 'a b' "it's" '$HOME' </dev/null
-  [ "$(cat "$STATE/exec.log")" = "[exec][-i][-u][demo][-e][HOME=/home/demo][-e][A=1][-e][B=two][demo-gui][/usr/bin/op][item][get][a b][it's][\$HOME]" ]
+  [ "$(cat "$STATE/exec.log")" = "[exec][-i][-u][demo][-e][HOME=/home/demo][-e][XDG_RUNTIME_DIR=/run/user/1000][-e][A=1][-e][B=two][demo-gui][/usr/bin/op][item][get][a b][it's][\$HOME]" ]
 }
 
 @test "stdout bytes and the exit status pass through" {

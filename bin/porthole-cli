@@ -29,7 +29,7 @@ spec_running "$CONTAINER" || { echo "$NAME isn't running; open it first." >&2; e
 n=$#
 set -- "$@" -i
 { [ -t 0 ] && [ -t 1 ]; } && set -- "$@" -t
-set -- "$@" -u "$user" -e "HOME=$APP_HOME"
+set -- "$@" -u "$user" -e "HOME=$APP_HOME" -e XDG_RUNTIME_DIR=/run/user/1000   # where the app's sockets are
 for e in $EXTRA_ENV; do set -- "$@" -e "$e"; done
 set -- "$@" "$CONTAINER" "$prog"
 i=0; while [ "$i" -lt "$n" ]; do set -- "$@" "$1"; shift; i=$((i + 1)); done
