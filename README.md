@@ -10,6 +10,22 @@ So wrap it up in a little purpose-specific Mac app that makes it feel as native 
 
 Porthole makes those Mac apps for you.
 
+## VM resources
+
+Porthole runs GUI apps inside a VMware Fusion VM managed by Container Tools. The tested starting baseline is **2 GiB RAM and two vCPUs**; 4 GiB and two vCPUs offer comfortable headroom for apps like Signal or 1Password. Both Container Tools (at first create) and the launcher (each time you open an app) notify you once a day if the VM falls below this baseline.
+
+There is no established host minimum: a lightly loaded Mac can run below this baseline, but host RAM pressure, swap activity, and disk fill rate all affect smoothness.
+
+**To adjust resources:**
+
+1. Close any open Porthole apps.
+2. Stop the Docker VM: Container Tools menu → **Stop Docker VM** (or `docker-machine-ctl stop`).
+3. In VMware Fusion, open the **container-tools** VM settings and change Memory and Processors.
+4. Verify: `docker-machine-ctl resource-status` (`source=vmx` confirms the VMX is current).
+5. Start the VM: Container Tools menu → **Start Docker VM**, or wait for the login agent.
+
+**Container shared memory:** Porthole containers are configured with `--shm-size 512m` as an upper bound on `/dev/shm`; this does not reserve RAM. (256 MiB was tested as a reference value.) Changing this limit requires stopping and recreating the container while keeping its named volumes — an intentional step you control. Moving a monitor between displays does not restart apps.
+
 ## Usage
 
 Install
