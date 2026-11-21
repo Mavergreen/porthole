@@ -6,13 +6,14 @@ ENGINE="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 
 # A materialized-style root: the generated thunderbird launcher, the library, a fake extractor that
 # copies $EXTRACT_FROM to OUT (or fails when unset), and a viewer stub printing PORTHOLE_APP_ICON.
-run_icon() {  # $1 = image Created; $2 = AppIcon.width in the bundle
+run_icon() {  # $1 = image Created; $2 = AppIcon.width in the bundle; $3 = AppIcon.source (none: unrecorded)
   command -v sips >/dev/null 2>&1 || skip "needs sips (macOS)"
   R="$WORK/app/Contents/Resources"; mkdir -p "$R/bin" "$WORK/app/Contents/MacOS"
   cp "$ENGINE/examples/bin/thunderbird" "$R/bin/thunderbird"
   [ -n "${NOLIB:-}" ] || cp "$ENGINE/bin/porthole-icon-lib.sh" "$R/bin/"
   printf 'NAME=x\nCONTAINER=thunderbird-gui\nIMAGE=mavericks-thunderbird\nBUILD_CONTEXT=thunderbird\n' > "$R/thunderbird.container"
   printf '%s\n' "$2" > "$R/AppIcon.width"
+  [ -z "${3:-}" ] || printf '%s\n' "$3" > "$R/AppIcon.source"
   cat > "$R/bin/extract-app-icns.sh" <<'EOF'
 #!/bin/sh
 echo "extract $*" >> "$WORK/extract.log"
@@ -44,11 +45,24 @@ fixture_icns() {  # $1 = width, $2 = out
   [[ "$output" == *"APPICON=$WORK/user/thunderbird.icns"* ]] || return 1
 }
 
-@test "a 512 system icon, bundle already wearing it: no extraction, no hand-off" {
-  fixture_icns 512 "$WORK/sys/thunderbird.icns"
-  run_icon 2026-01-01T00:00:00.000000000Z 512
+@test "a 512 ICON_URL icon doesn't stop extraction: the app's own smaller icon is handed off" {
+  fixture_icns 512 "$WORK/sys/thunderbird.icns"; fixture_icns 256 "$WORK/src.icns"
+  EXTRACT_FROM="$WORK/src.icns" run_icon 2026-01-01T00:00:00.000000000Z 512 url
+  grep -q "^extract thunderbird-gui .* $WORK/user/thunderbird.icns$" "$WORK/extract.log"
+  [[ "$output" == *"APPICON=$WORK/user/thunderbird.icns"* ]] || return 1
+}
+
+@test "the bundle already wearing the app's own icon: no hand-off" {
+  fixture_icns 512 "$WORK/sys/thunderbird.icns"; fixture_icns 256 "$WORK/user/thunderbird.icns"
+  run_icon 2000-01-01T00:00:00.000000000Z 256 app
   [ ! -f "$WORK/extract.log" ]
   [[ "$output" != *"APPICON=/"* ]] || return 1
+}
+
+@test "a bundle wearing the penguin is handed the ICON_URL icon when that's all there is" {
+  fixture_icns 180 "$WORK/sys/thunderbird.icns"
+  run_icon 2026-01-01T00:00:00.000000000Z 0 penguin
+  [[ "$output" == *"APPICON=$WORK/sys/thunderbird.icns"* ]] || return 1
 }
 
 @test "only a 180 icon cached: extracts to upgrade it" {
@@ -96,7 +110,7 @@ run_icon_nolib() { NOLIB=1 run_icon "$@"; }
   fixture_icns 512 "$WORK/sys/thunderbird.icns"; fixture_icns 512 "$WORK/user/thunderbird.icns"
   mkdir -p "$WORK/sipsbin"; printf '#!/bin/sh\necho sips >> "%s/sips.log"\nexec /usr/bin/sips "$@"\n' "$WORK" > "$WORK/sipsbin/sips"
   chmod +x "$WORK/sipsbin/sips"
-  PATH="$WORK/sipsbin:$PATH" run_icon 2026-01-01T00:00:00.000000000Z 512
+  PATH="$WORK/sipsbin:$PATH" run_icon 2000-01-01T00:00:00.000000000Z 512 app
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ ! -s "$WORK/sips.log" ]
 }

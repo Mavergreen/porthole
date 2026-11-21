@@ -562,7 +562,7 @@ exec "\$_launcher" "\$@"
 EOF
 chmod 755 "$BUNDLE/Contents/MacOS/$SLUG"
 
-# 3) App icon: the largest real icon cached on this Mac, else the penguin. Porthole ships no vendor
+# 3) App icon: the app's own icon once a launch has cached it, else ICON_URL's, else the penguin. Porthole ships no vendor
 #    icon: ICON_URL is fetched from the vendor by this Mac (best-effort, kept across installs in the
 #    system cache), and the launcher adds the app's own from its container to the user's cache.
 . "$ENGINE/bin/porthole-icon-lib.sh"
@@ -600,17 +600,19 @@ if [ -n "$USER_ICONS" ] && [ -f "$USER_ICONS/$SLUG.icns" ] && [ ! -L "$USER_ICON
   _ucopy=$(mktemp "${TMPDIR:-/tmp}/porthole-usericon.XXXXXX") \
     && cat "$USER_ICONS/$SLUG.icns" > "$_ucopy" 2>/dev/null || _ucopy=
 fi
-_icon=$(icon_best "$SYS_ICONS/$SLUG.icns" ${_ucopy:+"$_ucopy"})
+_icon=$(icon_pick "$SYS_ICONS/$SLUG.icns" "$_ucopy")
 ICON_FILE=
 PENGUIN="$ENGINE/penguin.icns"; [ -f "$PENGUIN" ] || PENGUIN="$ENGINE/packaging/macos/penguin.icns"
 if [ -n "$_icon" ]; then
   install -m 0644 "$_icon" "$BUNDLE/Contents/Resources/AppIcon.icns"
   icon_width_cached "$_icon" > "$BUNDLE/Contents/Resources/AppIcon.width"
+  if [ "$_icon" = "$_ucopy" ]; then echo app; else echo url; fi > "$BUNDLE/Contents/Resources/AppIcon.source"
   ICON_FILE="AppIcon"
 elif [ -f "$PENGUIN" ]; then
   icon_log "$SLUG" "no cached icon; the app wears the penguin"
   install -m 0644 "$PENGUIN" "$BUNDLE/Contents/Resources/AppIcon.icns"
   echo 0 > "$BUNDLE/Contents/Resources/AppIcon.width"
+  echo penguin > "$BUNDLE/Contents/Resources/AppIcon.source"
   ICON_FILE="AppIcon"
 fi
 [ -n "$_ucopy" ] && rm -f "$_ucopy" "$_ucopy.width"

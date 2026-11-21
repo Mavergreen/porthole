@@ -250,32 +250,29 @@ EOF
 say_mark "data: checked"
 
 # App icon. Keep the per-user cache holding the app's own icon from its container (Porthole never
-# ships a vendor icon): extract when no cached icon is at least 512 px, or the user's copy predates
-# this image. Hand the widest cached icon to the viewer for the Dock when it beats the bundle's;
-# the next materialize (any Porthole or preset install) bakes it into the bundle for Finder.
+# ships a vendor icon): extract when it isn't cached, or the cached copy predates this image. The
+# app's own icon beats ICON_URL's at any size; hand the viewer the icon to wear when the bundle
+# isn't already wearing it, and the next materialize bakes it into the bundle for Finder.
 # Icons are best-effort: without the library (an older bundle, or examples/), skip them entirely.
 if [ -f "$_root/bin/porthole-icon-lib.sh" ]; then
   . "$_root/bin/porthole-icon-lib.sh"
   _sysicon="${PORTHOLE_ICON_CACHE:-/usr/local/mavergreen/var/porthole/icons}/clion.icns"
   _usericon="${PORTHOLE_USER_ICON_CACHE:-$HOME/Library/Caches/dev.mavergreen.porthole}/clion.icns"
   if [ -n "/opt/clion/bin/clion.png" ] && [ -x "$_root/bin/extract-app-icns.sh" ]; then
-    _best=$(icon_best "$_sysicon" "$_usericon"); _bw=0
-    [ -n "$_best" ] && _bw=$(icon_width_cached "$_best")
     _stale=0
     if [ -f "$_usericon" ] && _ie=$(image_created_epoch "$IMAGE") \
        && [ "$(stat -f %m "$_usericon")" -lt "$_ie" ]; then _stale=1; fi
-    # Extract when the container's icon isn't cached yet and nothing cached is at least 512 px, or
-    # when the cached copy predates this image. Once it's cached and fresh, re-extracting can't do better.
-    if { [ ! -f "$_usericon" ] && [ "$_bw" -lt 512 ]; } || [ "$_stale" = 1 ]; then
+    if [ ! -f "$_usericon" ] || [ "$_stale" = 1 ]; then
       sh "$_root/bin/extract-app-icns.sh" "$CONTAINER" "/opt/clion/bin/clion.png" "$_usericon" 2>/dev/null \
         || icon_log clion "icon extraction from $CONTAINER found nothing usable for /opt/clion/bin/clion.png"
     fi
   fi
-  _best=$(icon_best "$_sysicon" "$_usericon")
-  _have=$(cat "$_root/AppIcon.width" 2>/dev/null || echo 0)
-  if [ -n "$_best" ] && [ "$(icon_width_cached "$_best")" -gt "${_have:-0}" ]; then
-    PORTHOLE_APP_ICON="$_best"; export PORTHOLE_APP_ICON
-  fi
+  _best=$(icon_pick "$_sysicon" "$_usericon")
+  _wears=$(cat "$_root/AppIcon.source" 2>/dev/null || echo unknown)
+  if [ "$_best" = "$_usericon" ] && [ "$_wears" != app ]; then _hand=1
+  elif [ -n "$_best" ] && [ "$_best" = "$_sysicon" ] && [ "$_wears" = penguin ]; then _hand=1
+  else _hand=; fi
+  if [ -n "$_hand" ]; then PORTHOLE_APP_ICON="$_best"; export PORTHOLE_APP_ICON; fi
   say_mark "icon: done"
 fi
 

@@ -116,13 +116,19 @@ R() { printf '%s' "$APPS/Linux Thunderbird.app/Contents/Resources"; }
 }
 icon_w() { sips -g pixelWidth "$1" | awk '/pixelWidth/{print $2}'; }
 
-@test "the larger cached icon wins, whichever cache holds it" {
-  icon_setup; with_icon_url "file://$APPS/p180.png"; mat
+@test "the app's own icon wins over a larger ICON_URL icon, and the bundle records which it wears" {
+  icon_setup; with_icon_url "file://$APPS/p512.png"; mat
+  [ "$(cat "$(R)/AppIcon.source")" = url ]
   mkdir -p "$APPS/user-icons"
-  . "$ENGINE/bin/porthole-icon-lib.sh"; icon_png_to_icns "$APPS/p512.png" "$APPS/user-icons/thunderbird.icns"
+  . "$ENGINE/bin/porthole-icon-lib.sh"; icon_png_to_icns "$APPS/p180.png" "$APPS/user-icons/thunderbird.icns"
   mat
-  [ "$(cat "$(R)/AppIcon.width")" = 512 ]
   cmp -s "$(R)/AppIcon.icns" "$APPS/user-icons/thunderbird.icns"
+  [ "$(cat "$(R)/AppIcon.source")" = app ]
+}
+
+@test "the penguin is recorded as the penguin" {
+  icon_setup; mat
+  [ "$(cat "$(R)/AppIcon.source")" = penguin ]
 }
 
 @test "re-materializing keeps a cached real icon (no penguin reset)" {

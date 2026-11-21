@@ -76,14 +76,13 @@ icon_png_to_icns() {
   return $_rc
 }
 
-icon_best() {
-  _best= _bw=0
-  for _f in "$@"; do
-    [ -f "$_f" ] || continue
-    _fw=$(icon_width_cached "$_f")
-    if [ "$_fw" -gt "$_bw" ]; then _best=$_f; _bw=$_fw; fi
+# icon_pick URL_ICNS APP_ICNS: the app's own icon (from its container) whenever it is cached, at any
+# size; else the ICON_URL icon; else nothing. ICON_URL only stands in until the first launch. A file
+# that measures no width is not an image and is never picked.
+icon_pick() {
+  for _f in "${2:-}" "${1:-}"; do
+    if [ -n "$_f" ] && [ -f "$_f" ] && [ "$(icon_width_cached "$_f")" -gt 0 ]; then printf '%s' "$_f"; return; fi
   done
-  printf '%s' "$_best"
 }
 
 icon_log() {

@@ -43,15 +43,16 @@ teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
   cmp -s "$WORK/keep.icns" "$ENGINE/packaging/macos/penguin.icns"
 }
 
-@test "icon_best picks the widest existing file, first on a tie" {
-  icon_png_to_icns "$WORK/p180.png" "$WORK/a.icns"
-  icon_png_to_icns "$WORK/p512.png" "$WORK/b.icns"
-  cp "$WORK/b.icns" "$WORK/c.icns"
-  [ "$(icon_best "$WORK/a.icns" "$WORK/b.icns")" = "$WORK/b.icns" ]
-  [ "$(icon_best "$WORK/b.icns" "$WORK/c.icns")" = "$WORK/b.icns" ]
-  [ "$(icon_best "$WORK/c.icns" "$WORK/b.icns")" = "$WORK/c.icns" ]
-  [ "$(icon_best "$WORK/none.icns" "$WORK/a.icns")" = "$WORK/a.icns" ]
-  [ -z "$(icon_best "$WORK/none.icns")" ]
+@test "icon_pick prefers the app's own icon over ICON_URL's, whatever their sizes" {
+  icon_png_to_icns "$WORK/p180.png" "$WORK/app.icns"
+  icon_png_to_icns "$WORK/p512.png" "$WORK/url.icns"
+  [ "$(icon_pick "$WORK/url.icns" "$WORK/app.icns")" = "$WORK/app.icns" ]
+  [ "$(icon_pick "$WORK/url.icns" "$WORK/none.icns")" = "$WORK/url.icns" ]
+  [ "$(icon_pick "$WORK/none.icns" "$WORK/app.icns")" = "$WORK/app.icns" ]
+  [ -z "$(icon_pick "$WORK/none.icns" "$WORK/none2.icns")" ]
+  [ -z "$(icon_pick "$WORK/none.icns" "")" ]
+  printf 'not an icon' > "$WORK/junk.icns"
+  [ "$(icon_pick "$WORK/url.icns" "$WORK/junk.icns")" = "$WORK/url.icns" ]
 }
 
 @test "icon_log never fails, even without logger" {
