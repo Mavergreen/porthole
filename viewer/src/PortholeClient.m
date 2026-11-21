@@ -306,6 +306,7 @@
         type = [p[0] description];
     }
 
+    long rWid; int rW, rH;   // a resize the app made (PortholeAppResize)
     if ([type isEqualToString:@"hello"]) {
         NSLog(@"server hello ok");
         // The server defaults XPRA_DELAY_KEYBOARD_DATA=True, so a keymap sent in
@@ -351,6 +352,9 @@
         if (p.count < 3) return;
         NSString *title = PortholeTitleFromMetadata(p[2]);
         if (title && _cb.window_title) _cb.window_title(_cb.ctx, [p[1] integerValue], [title UTF8String]);
+    }
+    else if (PortholeAppResize(type, p, &rWid, &rW, &rH)) {
+        if (_cb.window_resized) _cb.window_resized(_cb.ctx, rWid, rW, rH);
     }
     else if ([type isEqualToString:@"new-tray"]) {
         // ["new-tray", wid, w, h, metadata]; icon pixels then arrive as `draw`

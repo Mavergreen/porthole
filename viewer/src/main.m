@@ -26,6 +26,7 @@
                                            PortholeLaunchSessionDelegate, PortholeLaunchFeedbackSink>
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title;
 - (void)windowWid:(long)wid retitled:(NSString *)title;
+- (void)windowWid:(long)wid resizedTo:(NSSize)size;
 - (void)drawWid:(long)wid rect:(NSRect)rect encoding:(NSString *)enc
          pixels:(const void *)pixels length:(size_t)len rowstride:(int)rowstride;
 - (void)lostWid:(long)wid;
@@ -117,6 +118,9 @@ static void cb_set_cursor(void *ctx, int w, int h, int xhot, int yhot, const voi
 }
 static void cb_reset_cursor(void *ctx) { [(PortholeAppDelegate *)ctx resetCursor]; }
 static void cb_new_tray(void *ctx, long wid, int w, int h) { [(PortholeAppDelegate *)ctx newTrayWid:wid w:w h:h]; }
+static void cb_window_resized(void *ctx, long wid, int w, int h) {
+    [(PortholeAppDelegate *)ctx windowWid:wid resizedTo:NSMakeSize(w, h)];
+}
 static void cb_window_title(void *ctx, long wid, const char *title) {
     [(PortholeAppDelegate *)ctx windowWid:wid retitled:(title ? [NSString stringWithUTF8String:title] : nil)];
 }
@@ -305,6 +309,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     cb.reset_cursor = cb_reset_cursor;
     cb.new_tray = cb_new_tray;
     cb.window_title = cb_window_title;
+    cb.window_resized = cb_window_resized;
     cb.audio_out = cb_audio_out;
     cb.disconnected = cb_disconnected;
     _audio = [[PortholeAudioPlayer alloc] init];
@@ -351,6 +356,8 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 - (void)quickAccessHotKey { [self summonQuickAccess]; }
 // Cmd-Shift-L: lock (the native macOS 1Password lock shortcut).
 - (void)lockHotKey { [self focusMainThenShortcut:@"l" keyval:'l' shift:YES]; }
+
+- (void)windowWid:(long)wid resizedTo:(NSSize)size { [_windows[@(wid)] appResizedTo:size]; }
 
 - (void)windowWid:(long)wid retitled:(NSString *)title {
     if (title && _titles[@(wid)]) _titles[@(wid)] = title;

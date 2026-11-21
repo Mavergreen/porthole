@@ -96,6 +96,9 @@ typedef struct rds_callbacks {
     /* A remote window's title changed (xpra window-metadata). */
     void (*window_title)(void *ctx, long wid, const char *title);
 
+    /* The app resized its own window (or popup) to (w,h): e.g. a prompt that grew to fit its text. */
+    void (*window_resized)(void *ctx, long wid, int w, int h);
+
     /* The remote app is playing sound. (data,len) is one chunk of an encoded audio
      * stream; `codec` names the format ("mp3"). The shell decodes + plays it. A
      * (NULL,0) chunk (codec="") signals the stream stopped -> flush/reset. Unlike the

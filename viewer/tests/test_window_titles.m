@@ -44,6 +44,17 @@ int main(void) {
         assert(PortholeNewWindowFor(YES, YES, NO, NO, NO) == PortholeWindowStay);       // a popup while in back
         assert(PortholeNewWindowFor(NO, YES, YES, NO, NO) == PortholeWindowActivate);   // already in front
         assert(PortholeNewWindowFor(YES, YES, NO, NO, YES) == PortholeWindowActivate);  // the tray was clicked
+        // The app resizing its own window: the size xpra says it now has.
+        long wid = 0; int w = 0, h = 0;
+        assert(PortholeAppResize(@"window-move-resize", @[[NSData data], @7, @10, @20, @400, @310, @0], &wid, &w, &h));
+        assert(wid == 7 && w == 400 && h == 310);
+        assert(PortholeAppResize(@"window-resized", @[[NSData data], @8, @300, @200, @0], &wid, &w, &h));
+        assert(wid == 8 && w == 300 && h == 200);
+        assert(PortholeAppResize(@"configure-override-redirect", @[[NSData data], @9, @1, @2, @120, @90], &wid, &w, &h));
+        assert(wid == 9 && w == 120 && h == 90);
+        assert(!PortholeAppResize(@"window-move-resize", @[[NSData data], @7, @10, @20, @400], &wid, &w, &h));   // short
+        assert(!PortholeAppResize(@"window-move-resize", @[[NSData data], @7, @10, @20, @0, @310], &wid, &w, &h)); // no size
+        assert(!PortholeAppResize(@"window-metadata", @[[NSData data], @7, @{}], &wid, &w, &h));
         printf("test_window_titles: OK\n");
     }
     return 0;

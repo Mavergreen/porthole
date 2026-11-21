@@ -605,6 +605,17 @@ static NSString *PortholeKeyname(unichar c) {
     CGFloat screenH = [[NSScreen mainScreen] frame].size.height;
     return NSMakePoint(cf.origin.x, screenH - (cf.origin.y + cf.size.height));
 }
+- (void)appResizedTo:(NSSize)size {
+    if (_inLiveResize) return;   // the user is sizing it: theirs wins, and is sent on release
+    NSSize cur = [[_window contentView] frame].size;
+    if ((int)cur.width == (int)size.width && (int)cur.height == (int)size.height) return;
+    NSRect c = [_window contentRectForFrameRect:[_window frame]];
+    CGFloat top = NSMaxY(c);
+    c.size = size; c.origin.y = top - size.height;
+    _inFlightSize = size;   // the app has this size already: -pumpConfigure won't send it back
+    [_window setFrame:[_window frameRectForContentRect:c] display:YES];
+}
+
 // On resize, tell the server the new geometry so it reflows the real Linux window
 // and sends fresh draws at the new size (instead of us just scaling the old frame).
 // Freeze reflow during live drag; reflow once on pause (idle pump) and once on end.

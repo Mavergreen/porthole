@@ -34,3 +34,15 @@ PortholeNewWindowAction PortholeNewWindowFor(BOOL overrideRedirect, BOOL appShow
     if (!appShownSomething) return launchedAtLogin ? PortholeWindowStay : PortholeWindowActivate;
     return overrideRedirect ? PortholeWindowStay : PortholeWindowActivate;
 }
+
+BOOL PortholeAppResize(NSString *type, NSArray *p, long *wid, int *w, int *h) {
+    NSUInteger at;
+    if ([type isEqualToString:@"window-move-resize"] || [type isEqualToString:@"configure-override-redirect"]) at = 4;
+    else if ([type isEqualToString:@"window-resized"]) at = 2;
+    else return NO;
+    if ([p count] < at + 2) return NO;
+    int nw = [p[at] intValue], nh = [p[at + 1] intValue];
+    if (nw <= 0 || nh <= 0) return NO;
+    *wid = [p[1] longValue]; *w = nw; *h = nh;
+    return YES;
+}

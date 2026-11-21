@@ -32,6 +32,9 @@
 // Is this the app's key (focused) window? Lets the main-menu Edit actions route a
 // forwarded shortcut to whichever viewer window currently has focus.
 - (BOOL)isKeyWindow;
+// The app resized this window itself (a prompt growing to fit its wrapped text): take that size,
+// keeping the top edge where it is. Ignored while the user is resizing it.
+- (void)appResizedTo:(NSSize)size;
 // Top-left screen coordinate (y measured from the top) of this window's content
 // view -- used to place child popups at the right spot.
 - (NSPoint)contentTopLeftScreen;

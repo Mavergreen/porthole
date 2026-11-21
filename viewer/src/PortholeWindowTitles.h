@@ -15,3 +15,8 @@ BOOL PortholeQuitsWhenWindowsClose(BOOL appHasShownSomething, NSUInteger trayCou
 typedef enum { PortholeWindowActivate, PortholeWindowStay } PortholeNewWindowAction;
 PortholeNewWindowAction PortholeNewWindowFor(BOOL overrideRedirect, BOOL appShownSomething, BOOL appActive,
                                              BOOL launchedAtLogin, BOOL userAsked);
+// The app resized its own window: from xpra's window-move-resize [TYPE, wid, x, y, w, h, ...],
+// window-resized [TYPE, wid, w, h, ...] or configure-override-redirect [TYPE, wid, x, y, w, h], the
+// window and the size it now has. TYPE is the packet's type, decoded. NO for anything else, or a
+// packet without a usable size.
+BOOL PortholeAppResize(NSString *type, NSArray *packet, long *wid, int *w, int *h);
