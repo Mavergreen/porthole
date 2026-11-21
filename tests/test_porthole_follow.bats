@@ -67,7 +67,7 @@ until_() { n=0; until eval "$1"; do n=$((n + 1)); [ $n -le 40 ] || return 1; sle
   kill "$VIEWER"
   until_ '[ ! -e "$MAC" ]'
   until_ '! kill -0 "$(cat "$W/follow.pid")" 2>/dev/null'
-  ! pgrep -f "s6-ipcserver -a 0600 $MAC" >/dev/null
+  until_ '! pgrep -f "s6-ipcserver -a 0600 $MAC" >/dev/null'
 }
 
 @test "a second follower for the same app exits at once" {

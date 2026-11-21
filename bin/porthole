@@ -499,7 +499,7 @@ CONF=$(cd "$(dirname "$CONF_ARG")" && pwd)/$(basename "$CONF_ARG")
 [ -f "$CONF" ] || { echo "porthole materialize: no such conf: $CONF" >&2; exit 1; }
 
 # Load the conf for NAME + ICON_GLOB, using the same defaults the generator applies.
-APP= NAME= ICON_GLOB= ICON_URL= ABOUT_CMD=
+APP= NAME= ICON_GLOB= ICON_URL= ABOUT_CMD= URL_SCHEMES=
 # shellcheck disable=SC1090
 . "$CONF"
 # The conf's basename is authoritative for the slug -- a manifest SLUG= is ignored, exactly as
@@ -617,7 +617,17 @@ elif [ -f "$PENGUIN" ]; then
 fi
 [ -n "$_ucopy" ] && rm -f "$_ucopy" "$_ucopy.width"
 
-# 4) Info.plist.
+# 4) Info.plist. The preset's URL_SCHEMES make the app their handler (the viewer takes the GetURL).
+URL_TYPES=
+if [ -n "$URL_SCHEMES" ]; then
+  URL_TYPES="
+	<key>CFBundleURLTypes</key><array><dict>
+		<key>CFBundleURLName</key><string>$NAME URL</string>
+		<key>CFBundleURLSchemes</key><array>"
+  for _s in $URL_SCHEMES; do URL_TYPES="$URL_TYPES<string>$_s</string>"; done
+  URL_TYPES="$URL_TYPES</array>
+	</dict></array>"
+fi
 cat > "$BUNDLE/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -629,7 +639,7 @@ cat > "$BUNDLE/Contents/Info.plist" <<EOF
 	<key>CFBundleIdentifier</key><string>$BUNDLEID</string>
 	<key>CFBundleIconFile</key><string>$ICON_FILE</string>
 	<key>CFBundlePackageType</key><string>APPL</string>${ABOUT_CMD:+
-	<key>PortholeHasAbout</key><true/>}
+	<key>PortholeHasAbout</key><true/>}$URL_TYPES
 	<key>NSPrincipalClass</key><string>NSApplication</string>
 	<key>LSMinimumSystemVersion</key><string>10.9</string>
 </dict>

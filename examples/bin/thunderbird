@@ -21,6 +21,12 @@ REBUILD=0 PREPARE=0
 [ "${1:-}" = --rebuild ] && REBUILD=1
 # --prepare (an install, ahead of any launch): the VM, then the image; no container change, no questions.
 [ "${1:-}" = --prepare ] && PREPARE=1
+# --open-url URL: a link to the app (the viewer's GetURL handler, for the preset's URL_SCHEMES).
+OPEN_URL_ARG=
+if [ "${1:-}" = --open-url ]; then
+  [ -n "${2:-}" ] || { echo "usage: $0 --open-url URL" >&2; exit 2; }
+  OPEN_URL_ARG=$2
+fi
 PORTHOLE_XPRA_VERSION="${THUNDERBIRD_XPRA_VERSION:-6.5}"   # major.minor the viewer speaks
 
 _root=$(cd "$(dirname "$0")/.." && pwd)   # Contents/Resources of the materialized app
@@ -116,6 +122,12 @@ check_standin_namespaces() {
 
 eval "$(docker-machine env "$MACHINE" 2>/dev/null)" || true
 say_mark "docker: ready"
+# The app's program with the URL, in its running container: an Electron or GTK app hands it to its
+# running instance. The viewer asks only once the app is up.
+if [ -n "$OPEN_URL_ARG" ]; then
+  exec docker exec -d -u thunderbird -e DISPLAY=:100 -e HOME=/home/thunderbird -e XDG_RUNTIME_DIR=/run/user/1000 \
+    "$CONTAINER" thunderbird  "$OPEN_URL_ARG"
+fi
 
 # Bring the container up via Porthole's SINGLE creator. The whole container spec (name, image,
 # caps, volumes, host mounts) was resolved once at materialize into thunderbird.container beside this

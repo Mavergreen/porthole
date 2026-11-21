@@ -231,3 +231,21 @@ about_conf() {
   ! /usr/libexec/PlistBuddy -c 'Print :PortholeHasAbout' "$B/Info.plist" >/dev/null 2>&1 || return 1
   ! grep -q -- '--about' "$B/Resources/bin/thunderbird" || false
 }
+
+# A preset's URL_SCHEMES make the app the Mac's handler for them (open sgnl://... reaches Signal).
+@test "the app declares the preset's URL schemes in its Info.plist" {
+  cp "$ENGINE/examples/thunderbird.conf" "$APPS/thunderbird.conf"
+  printf "URL_SCHEMES='x-demo x-other'\n" >> "$APPS/thunderbird.conf"
+  run "$ENGINE/bin/porthole" materialize "$APPS/thunderbird.conf" --apps-dir "$APPS"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  P="$APPS/Linux Thunderbird.app/Contents/Info.plist"
+  pb() { /usr/libexec/PlistBuddy -c "Print :$1" "$P"; }
+  [ "$(pb CFBundleURLTypes:0:CFBundleURLName)" = "Linux Thunderbird URL" ]
+  [ "$(pb CFBundleURLTypes:0:CFBundleURLSchemes:0)" = x-demo ]
+  [ "$(pb CFBundleURLTypes:0:CFBundleURLSchemes:1)" = x-other ]
+}
+
+@test "an app without URL schemes declares none" {
+  "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
+  ! /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" "$APPS/Linux Thunderbird.app/Contents/Info.plist" 2>/dev/null
+}

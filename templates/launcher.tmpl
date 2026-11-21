@@ -20,6 +20,12 @@ REBUILD=0 PREPARE=0
 [ "${1:-}" = --rebuild ] && REBUILD=1
 # --prepare (an install, ahead of any launch): the VM, then the image; no container change, no questions.
 [ "${1:-}" = --prepare ] && PREPARE=1
+# --open-url URL: a link to the app (the viewer's GetURL handler, for the preset's URL_SCHEMES).
+OPEN_URL_ARG=
+if [ "${1:-}" = --open-url ]; then
+  [ -n "${2:-}" ] || { echo "usage: $0 --open-url URL" >&2; exit 2; }
+  OPEN_URL_ARG=$2
+fi
 #@IF ABOUT_CMD
 # --about: the app's own About, opened in its running container (the viewer's About menu item).
 ABOUT=0; [ "${1:-}" = --about ] && ABOUT=1
@@ -119,6 +125,12 @@ check_standin_namespaces() {
 
 eval "$(docker-machine env "$MACHINE" 2>/dev/null)" || true
 say_mark "docker: ready"
+# The app's program with the URL, in its running container: an Electron or GTK app hands it to its
+# running instance. The viewer asks only once the app is up.
+if [ -n "$OPEN_URL_ARG" ]; then
+  exec docker exec -d -u @USER@ -e DISPLAY=:100 -e HOME=@HOME@ -e XDG_RUNTIME_DIR=/run/user/1000 \
+    "$CONTAINER" @APP_BIN@ @APP_FLAGS@ "$OPEN_URL_ARG"
+fi
 #@IF ABOUT_CMD
 if [ "$ABOUT" = 1 ]; then
   exec docker exec -d -u @USER@ -e DISPLAY=:100 -e HOME=@HOME@ -e XDG_RUNTIME_DIR=/run/user/1000 \

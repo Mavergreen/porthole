@@ -19,6 +19,7 @@ set(RDS_XPRA_SOURCES
   src/PortholeTransport.m
   src/PortholeClient.m
   src/PortholeWindowTitles.m
+  src/PortholeURLQueue.m
   src/PortholeUpdateItem.m)
 
 # --- app identity ---
@@ -199,6 +200,10 @@ add_executable(test_window_titles tests/test_window_titles.m src/PortholeWindowT
 target_include_directories(test_window_titles PRIVATE src)
 target_link_libraries(test_window_titles PRIVATE ${FOUNDATION_LIBRARY})
 add_test(NAME window_titles COMMAND test_window_titles)
+add_executable(test_url_queue tests/test_url_queue.m src/PortholeURLQueue.m)
+target_include_directories(test_url_queue PRIVATE src)
+target_link_libraries(test_url_queue PRIVATE ${FOUNDATION_LIBRARY})
+add_test(NAME url_queue COMMAND test_url_queue)
 
 # --- layer presenter math unit test ---
 add_executable(test_layer_presenter tests/test_layer_presenter.m src/PortholeLayerPresenter.m)

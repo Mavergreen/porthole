@@ -10,6 +10,7 @@
 #import "PortholeMenuModel.h"
 #import "PortholeTrayArt.h"
 #import "PortholeWindowTitles.h"
+#import "PortholeURLQueue.h"
 #import "PortholeLaunchArgs.h"
 #import "PortholeLaunchSession.h"
 #import "PortholeLaunchWindow.h"
@@ -67,6 +68,7 @@
     BOOL _openAfterPrepare;               // opened while preparing: open the app once the build is done
     NSString *_runningImage;              // the image the app's container runs, from the launcher
     BOOL _appShownSomething;              // the app has put up a window or tray of its own
+    PortholeURLQueue *_urls;              // links to the app, held until it is up
     BOOL _launchedAtLogin;                // a Login Item launch: stay put until the user activates it
 }
 
@@ -135,11 +137,30 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // A Login Item launch says so in its open-application event (keyAELaunchedAsLogInItem), current only
 // until launching finishes. Such an app doesn't come forward on its own (PortholeNewWindowFor).
 - (void)applicationWillFinishLaunching:(NSNotification *)n {
+    // Links to the app (its URL_SCHEMES, in Info.plist): the launcher hands each to the app.
+    _urls = [[PortholeURLQueue alloc] init];
+    [[NSAppleEventManager sharedAppleEventManager] setEventHandler:self
+        andSelector:@selector(getURL:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
     NSAppleEventDescriptor *e = [[NSAppleEventManager sharedAppleEventManager] currentAppleEvent];
     _launchedAtLogin = [e eventID] == kAEOpenApplication
         && [[e paramDescriptorForKeyword:keyAEPropData] enumCodeValue] == keyAELaunchedAsLogInItem;
 }
 - (void)applicationDidBecomeActive:(NSNotification *)n { _launchedAtLogin = NO; }
+- (void)getURL:(NSAppleEventDescriptor *)e withReplyEvent:(NSAppleEventDescriptor *)reply {
+    NSString *url = [[e paramDescriptorForKeyword:keyDirectObject] stringValue];
+    if (url.length) [self openURLs:[_urls add:url]];
+}
+- (void)openURLs:(NSArray *)urls {
+    NSString *launcher = [[[NSBundle mainBundle] resourcePath]
+                          stringByAppendingPathComponent:[@"bin" stringByAppendingPathComponent:[self appSlug]]];
+    for (NSString *u in urls) PortholeRunDetached(@[launcher, @"--open-url", u]);
+}
+// The app has put up a window or tray of its own: it is up, so held links can go.
+- (void)appIsUp {
+    if (_appShownSomething) return;
+    _appShownSomething = YES;
+    [self openURLs:[_urls appIsUp]];
+}
 
 - (void)applicationDidFinishLaunching:(NSNotification *)n {
     _windows = [[NSMutableDictionary alloc] init];
@@ -342,7 +363,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title {
     PortholeNewWindowAction action = PortholeNewWindowFor(overrideRedirect, _appShownSomething, [NSApp isActive],
                                                           _launchedAtLogin, _trayPopupPending);
-    if (!overrideRedirect) { _appShownSomething = YES; [_feedback firstWindow]; }
+    if (!overrideRedirect) { [self appIsUp]; [_feedback firstWindow]; }
     NSString *tracked = PortholeTrackedTitle(overrideRedirect, title);
     if (tracked) { _titles[@(wid)] = tracked; [self titlesChanged]; }
     // Every window after the main one is positioned at its server (root) position
@@ -546,7 +567,7 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 // ---- system tray (remote app tray icon -> Mac menu-bar item) ----
 - (void)newTrayWid:(long)wid w:(int)w h:(int)h {
     (void)w; (void)h;
-    _appShownSomething = YES;
+    [self appIsUp];
     NSStatusItem *item = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
     [item setHighlightMode:YES];
     [item setMenu:[self buildTrayMenu]];   // native click -> menu, like macOS 1Password
