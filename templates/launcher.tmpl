@@ -131,6 +131,35 @@ check_standin_namespaces() {
   [ "$?" = 3 ] && nudge_once standin-ns "$_why"
   return 0
 }
+check_gui_resources() {   # advisory; non-fatal on any absent/unknown/nonzero/unrecognized output
+  _ctl="${PORTHOLE_RESOURCE_CTL:-}"
+  if [ -z "$_ctl" ]; then
+    _ctl=$(command -v docker-machine-ctl 2>/dev/null) || return 0
+  fi
+  [ -n "$_ctl" ] && [ -x "$_ctl" ] || return 0
+  _rout=$("$_ctl" resource-status 2>/dev/null) || return 0
+  _mem="" _cpu="" _lines=0
+  while IFS= read -r _line; do
+    [ -z "$_line" ] && continue
+    _lines=$((_lines + 1))
+    [ "$_lines" -gt 3 ] && return 0
+    case $_line in
+      memory_mib=[1-9]*) _mem=${_line#memory_mib=} ;;
+      vcpus=[1-9]*)      _cpu=${_line#vcpus=} ;;
+      source=vmx|source=driver) ;;
+      *) return 0 ;;
+    esac
+  done <<EOF
+$_rout
+EOF
+  [ "$_lines" = 3 ] || return 0
+  [ -n "$_mem" ] && [ -n "$_cpu" ] || return 0
+  case $_mem in *[!0-9]*) return 0 ;; esac
+  case $_cpu in *[!0-9]*) return 0 ;; esac
+  if [ "$_mem" -lt 2048 ] || [ "$_cpu" -lt 2 ]; then
+    nudge_once gui-resources "this VM has fewer resources than the tested baseline (2 GiB RAM and two vCPUs); 4 GiB offers headroom -- use Container Tools or VMware Fusion to increase these explicitly"
+  fi
+}
 
 eval "$(docker-machine env "$MACHINE" 2>/dev/null)" || true
 say_mark "docker: ready"
@@ -192,6 +221,7 @@ esac
 
 check_xpra_compat
 check_standin_namespaces
+check_gui_resources
 say_routine "Starting @NAME@"
 
 # Wait until xpra is actually ACCEPTING CONNECTIONS on its Unix socket inside the
