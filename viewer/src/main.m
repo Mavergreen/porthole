@@ -134,16 +134,11 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     return noErr;
 }
 
-// A Login Item launch says so in its open-application event (keyAELaunchedAsLogInItem), current only
-// until launching finishes. Such an app doesn't come forward on its own (PortholeNewWindowFor).
 - (void)applicationWillFinishLaunching:(NSNotification *)n {
     // Links to the app (its URL_SCHEMES, in Info.plist): the launcher hands each to the app.
     _urls = [[PortholeURLQueue alloc] init];
     [[NSAppleEventManager sharedAppleEventManager] setEventHandler:self
         andSelector:@selector(getURL:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
-    NSAppleEventDescriptor *e = [[NSAppleEventManager sharedAppleEventManager] currentAppleEvent];
-    _launchedAtLogin = [e eventID] == kAEOpenApplication
-        && [[e paramDescriptorForKeyword:keyAEPropData] enumCodeValue] == keyAELaunchedAsLogInItem;
 }
 - (void)applicationDidBecomeActive:(NSNotification *)n { _launchedAtLogin = NO; }
 - (void)getURL:(NSAppleEventDescriptor *)e withReplyEvent:(NSAppleEventDescriptor *)reply {
@@ -163,6 +158,8 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)n {
+    // A Login Item launch doesn't come forward on its own (PortholeNewWindowFor).
+    _launchedAtLogin = PortholeLaunchedAsLoginItem([[NSAppleEventManager sharedAppleEventManager] currentAppleEvent]);
     _windows = [[NSMutableDictionary alloc] init];
     _trays = [[NSMutableDictionary alloc] init];
     _trayArt = [[NSMutableDictionary alloc] init];

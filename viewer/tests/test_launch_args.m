@@ -24,6 +24,17 @@ int main(void) {
 
         PortholeLaunchArgs *c = PortholeParseLaunchArgs(@[@"/x/Porthole"]);
         assert(c.launcherPath == nil && c.socketPath == nil);
+        // A Login Item launch says so in its open-application event; any other launch doesn't.
+        NSAppleEventDescriptor *oapp = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
+            eventID:kAEOpenApplication targetDescriptor:nil returnID:kAutoGenerateReturnID transactionID:kAnyTransactionID];
+        assert(!PortholeLaunchedAsLoginItem(oapp));
+        [oapp setParamDescriptor:[NSAppleEventDescriptor descriptorWithEnumCode:keyAELaunchedAsLogInItem] forKeyword:keyAEPropData];
+        assert(PortholeLaunchedAsLoginItem(oapp));
+        assert(!PortholeLaunchedAsLoginItem(nil));
+        NSAppleEventDescriptor *odoc = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
+            eventID:kAEOpenDocuments targetDescriptor:nil returnID:kAutoGenerateReturnID transactionID:kAnyTransactionID];
+        [odoc setParamDescriptor:[NSAppleEventDescriptor descriptorWithEnumCode:keyAELaunchedAsLogInItem] forKeyword:keyAEPropData];
+        assert(!PortholeLaunchedAsLoginItem(odoc));
         printf("test_launch_args: OK\n");
     }
     return 0;

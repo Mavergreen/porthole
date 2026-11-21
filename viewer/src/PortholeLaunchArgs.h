@@ -8,3 +8,6 @@
 @property(assign) BOOL prepare;
 @end
 PortholeLaunchArgs *PortholeParseLaunchArgs(NSArray *argv);
+// The open-application event of a launch says whether it was a Login Item's. It is current only in
+// applicationDidFinishLaunching: (AppKit handles it after applicationWillFinishLaunching:).
+BOOL PortholeLaunchedAsLoginItem(NSAppleEventDescriptor *launchEvent);

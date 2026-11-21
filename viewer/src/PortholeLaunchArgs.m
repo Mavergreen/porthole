@@ -24,3 +24,8 @@ PortholeLaunchArgs *PortholeParseLaunchArgs(NSArray *argv) {
     }
     return r;
 }
+
+BOOL PortholeLaunchedAsLoginItem(NSAppleEventDescriptor *e) {
+    return e && [e eventClass] == kCoreEventClass && [e eventID] == kAEOpenApplication
+        && [[e paramDescriptorForKeyword:keyAEPropData] enumCodeValue] == keyAELaunchedAsLogInItem;
+}
