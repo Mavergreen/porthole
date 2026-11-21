@@ -100,10 +100,10 @@ say_routine "Checking Container Tools"   # first, so a window that appears is ne
 preflight_host
 say_mark "vm: running"
 
-nudge_once() {   # $1 = key, $2 = message; advisory, once per day
+nudge_once() {   # $1 = key, $2 = message; advisory, once per day; returns 1 if already fired today
   mkdir -p "$CONFIG_DIR" 2>/dev/null || return 0
   _stamp="$CONFIG_DIR/nudged-$1"; _today=$(date '+%Y-%m-%d')
-  [ "$(cat "$_stamp" 2>/dev/null)" = "$_today" ] && return 0
+  [ "$(cat "$_stamp" 2>/dev/null)" = "$_today" ] && return 1
   printf '%s\n' "$_today" > "$_stamp" 2>/dev/null || true
   echo "helium: $2" >&2
 }
@@ -119,7 +119,7 @@ check_xpra_compat() {
   case $_ver in [0-9]*.[0-9]*) ;; *) return 0 ;; esac
   _mm=$(printf '%s' "$_ver" | cut -d. -f1,2)
   [ "$_mm" = "$PORTHOLE_XPRA_VERSION" ] && return 0
-  nudge_once xpra-compat "this container's xpra ($_mm) differs from what the viewer expects ($PORTHOLE_XPRA_VERSION); try $0 --rebuild -- if it still differs, the shared base image has moved ahead of this Porthole and Porthole wants updating"
+  nudge_once xpra-compat "this container's xpra ($_mm) differs from what the viewer expects ($PORTHOLE_XPRA_VERSION); try $0 --rebuild -- if it still differs, the shared base image has moved ahead of this Porthole and Porthole wants updating" || true
 }
 # Stand-ins (porthole-standin-at) name each Mac caller at its own path from a private namespace; a
 # container that can't make one says so (exit 3) once a day. An image from before it (127) is silent.
@@ -127,6 +127,37 @@ check_standin_namespaces() {
   _why=$(docker exec -u 1000 "$CONTAINER" porthole-standin-at --check 2>&1) && return 0
   [ "$?" = 3 ] && nudge_once standin-ns "$_why"
   return 0
+}
+check_gui_resources() {   # advisory; non-fatal on any absent/unknown/nonzero/unrecognized output
+  _ctl="${PORTHOLE_RESOURCE_CTL:-}"
+  if [ -z "$_ctl" ]; then
+    _ctl=$(command -v docker-machine-ctl 2>/dev/null) || return 0
+  fi
+  [ -n "$_ctl" ] && [ -x "$_ctl" ] || return 0
+  _rout=$("$_ctl" resource-status 2>/dev/null) || return 0
+  _mem="" _cpu="" _lines=0
+  while IFS= read -r _line; do
+    [ -z "$_line" ] && continue
+    _lines=$((_lines + 1))
+    [ "$_lines" -gt 3 ] && return 0
+    case $_line in
+      memory_mib=[1-9]*) _mem=${_line#memory_mib=} ;;
+      vcpus=[1-9]*)      _cpu=${_line#vcpus=} ;;
+      source=vmx|source=driver) ;;
+      *) return 0 ;;
+    esac
+  done <<EOF
+$_rout
+EOF
+  [ "$_lines" = 3 ] || return 0
+  [ -n "$_mem" ] && [ -n "$_cpu" ] || return 0
+  case $_mem in *[!0-9]*) return 0 ;; esac
+  case $_cpu in *[!0-9]*) return 0 ;; esac
+  if [ "$_mem" -lt 2048 ] || [ "$_cpu" -lt 2 ]; then
+    if nudge_once gui-resources "this VM has fewer resources than the tested baseline (2 GiB RAM and two vCPUs); 4 GiB offers additional headroom for heavier or concurrent use -- stop Docker from the Container Tools menu, then raise Memory/Processors in VMware Fusion"; then
+      osascript -e "display notification \"This VM has fewer resources than the tested baseline (2 GiB RAM, two vCPUs). Stop Docker from the Container Tools menu, then raise Memory/Processors in VMware Fusion.\" with title \"helium\"" >/dev/null 2>&1 || true
+    fi
+  fi
 }
 
 eval "$(docker-machine env "$MACHINE" 2>/dev/null)" || true
@@ -183,6 +214,7 @@ esac
 
 check_xpra_compat
 check_standin_namespaces
+check_gui_resources
 say_routine "Starting Linux Helium"
 
 # Wait until xpra is actually ACCEPTING CONNECTIONS on its Unix socket inside the
