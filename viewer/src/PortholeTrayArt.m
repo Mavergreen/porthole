@@ -25,25 +25,33 @@ NSSize PortholeTrayArtSize(NSSize pixels, CGFloat scale, CGFloat maxHeight) {
     return NSMakeSize(pts.width * k, maxHeight);
 }
 
-static double light_of(const uint8_t *p) {
-    uint8_t hi = p[0], lo = p[0];
-    for (int c = 1; c < 3; c++) { if (p[c] > hi) hi = p[c]; if (p[c] < lo) lo = p[c]; }
-    return (hi + lo) / 510.0;
+// xpra sends tray pixels premultiplied by alpha (and NSBitmapImageRep takes them so), so colour is
+// read, and written back, through the alpha.
+static void straight(const uint8_t *p, int bpp, double c[3]) {
+    double a = bpp >= 4 && p[3] ? p[3] / 255.0 : 1.0;
+    for (int i = 0; i < 3; i++) c[i] = fmin(1.0, p[i] / 255.0 / a);
 }
 
+static double light_of(const uint8_t *p, int bpp) {
+    double c[3]; straight(p, bpp, c);
+    return (fmax(c[0], fmax(c[1], c[2])) + fmin(c[0], fmin(c[1], c[2]))) / 2;
+}
+
+// Measured 2026-11-21 on the real art: 1Password's tray is 54-60% near-white, Signal's 34% (though
+// its mean lightness, 0.72, is as high as 1Password's 0.74), so the share of bar-like pixels, not
+// the mean, tells them apart.
 BOOL PortholeTrayArtBlendsWithBar(const uint8_t *px, int w, int h, size_t stride, int bpp, BOOL darkBar) {
-    double sum = 0, weight = 0;
+    double like = 0, weight = 0;
     for (int y = 0; y < h; y++) {
         const uint8_t *row = px + (size_t)y * stride;
         for (int x = 0; x < w; x++) {
             const uint8_t *p = row + (size_t)x * bpp;
-            double a = bpp >= 4 ? p[3] / 255.0 : 1.0;
-            sum += light_of(p) * a; weight += a;
+            double a = bpp >= 4 ? p[3] / 255.0 : 1.0, l = light_of(p, bpp);
+            weight += a;
+            if (darkBar ? l < 0.25 : l > 0.75) like += a;
         }
     }
-    if (weight <= 0) return NO;
-    double mean = sum / weight;
-    return darkBar ? mean < 0.3 : mean > 0.7;
+    return weight > 0 && like / weight > 0.45;
 }
 
 static double hue_to(double p, double q, double t) {
@@ -60,7 +68,8 @@ void PortholeTrayArtFlipForBar(uint8_t *px, int w, int h, size_t stride, int bpp
         for (int x = 0; x < w; x++) {
             uint8_t *p = row + (size_t)x * bpp;
             if (bpp >= 4 && p[3] == 0) continue;
-            double c0 = p[0] / 255.0, c1 = p[1] / 255.0, c2 = p[2] / 255.0;
+            double cs[3]; straight(p, bpp, cs);
+            double c0 = cs[0], c1 = cs[1], c2 = cs[2], alpha = bpp >= 4 ? p[3] / 255.0 : 1.0;
             double hi = fmax(c0, fmax(c1, c2)), lo = fmin(c0, fmin(c1, c2)), l = (hi + lo) / 2;
             // Only the bar's side moves, and not all the way to its opposite: light 0.9 lands at a dark
             // grey 0.25 rather than black, so the art keeps its shading.
@@ -79,7 +88,7 @@ void PortholeTrayArtFlipForBar(uint8_t *px, int w, int h, size_t stride, int bpp
             double q = nl < 0.5 ? nl * (1 + s) : nl + s - nl * s, pp = 2 * nl - q;
             double o[3] = { hue_to(pp, q, hu + 1.0 / 3), hue_to(pp, q, hu), hue_to(pp, q, hu - 1.0 / 3) };
             if (d == 0) o[0] = o[1] = o[2] = nl;
-            for (int c = 0; c < 3; c++) p[c] = (uint8_t)lround(fmax(0, fmin(1, o[c])) * 255);
+            for (int c = 0; c < 3; c++) p[c] = (uint8_t)lround(fmax(0, fmin(1, o[c])) * alpha * 255);
         }
     }
 }

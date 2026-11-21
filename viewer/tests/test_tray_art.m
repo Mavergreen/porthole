@@ -59,6 +59,24 @@ int main(void) {
     CHECK(!PortholeTrayArtBlendsWithBar(op, 16, 16, 64, 4, YES), "light art stands out on a dark bar");
     CHECK(!PortholeTrayArtBlendsWithBar(s, 16, 16, 64, 4, NO), "Signal's blue stands out on a light bar");
     CHECK(!PortholeTrayArtBlendsWithBar(s, 16, 16, 64, 4, YES), "Signal's blue stands out on a dark bar");
+    // Signal's real art measures mean lightness 0.72 but only a third near-white: it stands out.
+    uint8_t *sig = fill(16, 16, 0, 0, 0, 0);
+    for (int i = 0; i < 86; i++) { sig[i*4]=sig[i*4+1]=sig[i*4+2]=245; sig[i*4+3]=255; }
+    for (int i = 86; i < 256; i++) { sig[i*4]=250; sig[i*4+1]=150; sig[i*4+2]=120; sig[i*4+3]=255; }
+    CHECK(!PortholeTrayArtBlendsWithBar(sig, 16, 16, 64, 4, NO), "Signal-like art (a third near-white) stands out on a light bar");
+    // 1Password's real art: just over half near-white, the rest a mid blue ring.
+    uint8_t *op2 = fill(16, 16, 0, 0, 0, 0);
+    for (int i = 0; i < 140; i++) { op2[i*4]=op2[i*4+1]=op2[i*4+2]=240; op2[i*4+3]=255; }
+    for (int i = 140; i < 256; i++) { op2[i*4]=242; op2[i*4+1]=120; op2[i*4+2]=60; op2[i*4+3]=255; }
+    CHECK(PortholeTrayArtBlendsWithBar(op2, 16, 16, 64, 4, NO), "1Password-like art (over half near-white) blends into a light bar");
+    free(sig); free(op2);
+    // xpra sends tray pixels premultiplied by alpha (seen live 2026-11-21): a near-white edge pixel at
+    // alpha 0x21 arrives as 1c1c1c. It is light, and flipping it keeps its colour within its alpha.
+    uint8_t *edge = fill(16, 16, 0x1c, 0x1c, 0x1c, 0x21);
+    CHECK(PortholeTrayArtBlendsWithBar(edge, 16, 16, 64, 4, NO), "premultiplied near-white edges count as light");
+    PortholeTrayArtFlipForBar(edge, 16, 16, 64, 4, NO);
+    CHECK(edge[0] <= edge[3] && edge[0] < 0x10 && edge[3] == 0x21, "a flipped edge stays premultiplied, now dark");
+    free(edge);
     uint8_t *navy = fill(16, 16, 60, 30, 30, 255);
     CHECK(PortholeTrayArtBlendsWithBar(navy, 16, 16, 64, 4, YES), "dark art blends into a dark bar");
     CHECK(!PortholeTrayArtBlendsWithBar(navy, 16, 16, 64, 4, NO), "dark art stands out on a light bar");
