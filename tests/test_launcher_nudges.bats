@@ -137,6 +137,36 @@ NS_MSG='porthole-standin-at: caller identity is unavailable: this container cann
   [[ "$ns_output" != *"porthole-standin-at"* ]] || { echo "$ns_output"; return 1; }
 }
 
+@test "launcher: a throttled standin-ns nudge on second launch does not abort the launcher" {
+  d="$(mktemp -d -t pls)"
+  for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
+  cat > "$d/docker" <<EOF2
+#!/bin/sh
+case "\$*" in
+  *"porthole-standin-at --check"*) echo '$NS_MSG' >&2; exit 3 ;;
+  *"image inspect -f"*) echo 2999-01-01T00:00:00Z ;;
+  *"inspect -f"*) echo true ;;
+  *) : ;;
+esac
+exit 0
+EOF2
+  chmod +x "$d"/*
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
+  # First launch: nudge fires, stamp written.
+  run env DOCKER_HOST=tcp://192.0.2.1:2376 HOME="$d/home" PATH="$d:$PATH" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+  [ "$status" -eq 0 ] || { echo "FAIL first launch exit $status: $output"; rm -rf "$d"; return 1; }
+  [[ "$output" == *"viewer-exec"* ]] || { echo "FAIL: viewer not invoked first launch: $output"; rm -rf "$d"; return 1; }
+  # Second launch same HOME: stamp exists, standin-ns nudge throttled -- must NOT abort under set -eu.
+  run env DOCKER_HOST=tcp://192.0.2.1:2376 HOME="$d/home" PATH="$d:$PATH" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
+      "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
+  rm -rf "$d"
+  [ "$status" -eq 0 ] || { echo "FAIL second launch exit $status (throttled standin nudge aborted launcher): $output"; return 1; }
+  [[ "$output" == *"viewer-exec"* ]] || { echo "FAIL: viewer not invoked second launch: $output"; return 1; }
+}
+
 @test "launcher: a throttled xpra nudge on second launch does not abort the launcher" {
   _mm="$(xpra_pin_mm)"
   _bad_mm="${_mm%.*}.$(( ${_mm##*.} - 1 ))"

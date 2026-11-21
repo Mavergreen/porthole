@@ -103,12 +103,14 @@ say_routine "Checking Container Tools"   # first, so a window that appears is ne
 preflight_host
 say_mark "vm: running"
 
-nudge_once() {   # $1 = key, $2 = message; advisory, once per day; returns 1 if already fired today
+nudge_once() {   # $1 = key, $2 = message; advisory, once per day; sets NUDGE_FIRED=1 if it printed
+  NUDGE_FIRED=
   mkdir -p "$CONFIG_DIR" 2>/dev/null || return 0
   _stamp="$CONFIG_DIR/nudged-$1"; _today=$(date '+%Y-%m-%d')
-  [ "$(cat "$_stamp" 2>/dev/null)" = "$_today" ] && return 1
+  [ "$(cat "$_stamp" 2>/dev/null)" = "$_today" ] && return 0
   printf '%s\n' "$_today" > "$_stamp" 2>/dev/null || true
   echo "@SLUG@: $2" >&2
+  NUDGE_FIRED=1
 }
 image_created_epoch() {   # $1 = image -> seconds since the epoch (UTC), or fail
   _created=$(docker image inspect -f '{{.Created}}' "$1" 2>/dev/null) || return 1
@@ -157,7 +159,8 @@ EOF
   case $_mem in *[!0-9]*) return 0 ;; esac
   case $_cpu in *[!0-9]*) return 0 ;; esac
   if [ "$_mem" -lt 2048 ] || [ "$_cpu" -lt 2 ]; then
-    if nudge_once gui-resources "this VM has fewer resources than the tested baseline (2 GiB RAM and two vCPUs); 4 GiB offers additional headroom for heavier or concurrent use -- stop Docker from the Container Tools menu, then raise Memory/Processors in VMware Fusion"; then
+    nudge_once gui-resources "this VM has fewer resources than the tested baseline (2 GiB RAM and two vCPUs); 4 GiB offers additional headroom for heavier or concurrent use -- stop Docker from the Container Tools menu, then raise Memory/Processors in VMware Fusion"
+    if [ "$NUDGE_FIRED" = 1 ]; then
       osascript -e "display notification \"This VM has fewer resources than the tested baseline (2 GiB RAM, two vCPUs). Stop Docker from the Container Tools menu, then raise Memory/Processors in VMware Fusion.\" with title \"@SLUG@\"" >/dev/null 2>&1 || true
     fi
   fi
