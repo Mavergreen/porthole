@@ -9,6 +9,15 @@
 #            agent" is ticked): s6-ipcserver + porthole-standin-bridge, so each caller keeps its
 #            identity. Gone when the app stops serving it, or the viewer exits.
 #
+#   login    the app's own start-at-login setting (an XDG autostart entry for its program, which
+#            1Password's "Start at login" checkbox writes) and the Mac's Login Items follow each
+#            other: whichever changed since the last sync (PORTHOLE_STATE_DIR/<slug>.login) wins.
+#            Two on/off sides that differ cannot both have changed. The Login Item is hidden when
+#            the entry starts the app differently from a normal launch (1Password's --silent):
+#            containers restart with the VM (porthole up: --restart unless-stopped), so the app is
+#            usually running already at login, and hiding is how the Mac gives that entry's effect.
+#            The app's entry is kept, so turning it back on from the Mac restores it as it was.
+#
 # Started detached by the app's launcher; one per app (a second exits at once). Checks every
 # PORTHOLE_FOLLOW_SECS (default 3) seconds. SIGTERM, or the viewer exiting, stops everything it serves.
 set -u
@@ -16,7 +25,7 @@ here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$here/porthole-spec-lib.sh"
 [ $# -eq 2 ] || { echo "usage: porthole-follow SPEC VIEWER_PID" >&2; exit 2; }
 spec=$1 viewer=$2
-NAME= SLUG= CONTAINER= SOCKETS=
+NAME= SLUG= CONTAINER= SOCKETS= APP_USER= APP_BIN= APP_FLAGS=
 . "$spec"
 tools=${PORTHOLE_FOLLOW_BIN:-$here}
 PATH="$tools:$here:$PATH"; export PATH
@@ -59,11 +68,80 @@ follow_socket() {
 }
 stop_socket() { unserve "$1" "$3"; }
 
+# In the container, as the app's user. $0 = read PROG | off PROG | on PROG FILE (entry on stdin).
+LOGIN_SH='d="$HOME/.config/autostart" op=$0 prog=$1
+mine() {
+  for f in "$d"/*.desktop; do
+    [ -f "$f" ] || continue
+    e=$(sed -n "s/^Exec=//p" "$f" | head -n 1); p=${e%% *}
+    [ "${p##*/}" = "$prog" ] && printf "%s\n" "$f"
+  done
+}
+case $op in
+  read) # The app'"'"'s own entry replaces one made from the Mac (porthole-*.desktop), so the app owns it.
+        if mine | grep -qv "/porthole-[^/]*\.desktop$"; then
+          mine | grep "/porthole-[^/]*\.desktop$" | while IFS= read -r f; do rm -f "$f"; done
+        fi
+        mine | while IFS= read -r f; do
+          grep -qiE "^(X-GNOME-Autostart-enabled=false|Hidden=true)" "$f" && continue
+          echo on; basename "$f"; cat "$f"; exit 9
+        done; [ $? = 9 ] || echo off ;;
+  off)  mine | while IFS= read -r f; do rm -f "$f"; done ;;
+  on)   mkdir -p "$d" && cat > "$d/.$2.tmp" && mv "$d/.$2.tmp" "$d/$2" ;;
+esac'
+STATE_DIR=${PORTHOLE_STATE_DIR:-$HOME/Library/Application Support/Porthole}
+bundle=$(CDPATH= cd -- "$(dirname -- "$spec")/../.." && pwd)
+prog=${APP_BIN##*/}
+saved="$STATE_DIR/$SLUG.autostart"   # line 1: the entry's file name; then the entry
+linux() { docker exec -i -u "$APP_USER" "$CONTAINER" sh -c "$LOGIN_SH" "$@"; }
+sysevents() { osascript -e "tell application \"System Events\" to $1"; }
+
+set_mac() {
+  if [ "$1" = off ]; then sysevents "delete (every login item whose path is \"$bundle\")" >/dev/null; return; fi
+  hidden=false
+  if [ -f "$saved" ]; then
+    e=$(sed -n 's/^Exec=//p' "$saved" | head -n 1)
+    for a in ${e#* }; do
+      [ "$e" = "${e#* }" ] && break
+      case $a in %?) ;; *) case " $APP_FLAGS " in *" $a "*) ;; *) hidden=true ;; esac ;; esac
+    done
+  fi
+  sysevents "make login item at end with properties {path:\"$bundle\", hidden:$hidden}" >/dev/null
+}
+set_linux() {
+  if [ "$1" = off ]; then linux off "$prog" </dev/null; return; fi
+  if [ -f "$saved" ]; then
+    sed 1d "$saved" | linux on "$prog" "$(head -n 1 "$saved")"
+  else
+    printf '[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nX-GNOME-Autostart-enabled=true\n' \
+      "$NAME" "$(echo $APP_BIN $APP_FLAGS)" | linux on "$prog" "porthole-$SLUG.desktop"
+  fi
+}
+follow_login() {
+  out=$(linux read "$prog" </dev/null) || return 0
+  L=$(printf '%s\n' "$out" | head -n 1)
+  case $L in on|off) ;; *) return 0 ;; esac
+  items=$(sysevents 'get the path of every login item') || return 0
+  case ", $items, " in *", $bundle, "*) M=on ;; *) M=off ;; esac
+  S=$(cat "$STATE_DIR/$SLUG.login" 2>/dev/null || echo off)
+  if [ "$L" = on ]; then
+    mkdir -p "$STATE_DIR"
+    printf '%s\n' "$out" | sed 1d > "$saved.tmp" && mv "$saved.tmp" "$saved"
+  fi
+  if [ "$L" = "$M" ]; then new=$L
+  elif [ "$M" != "$S" ]; then new=$M; set_linux "$M"
+  else new=$L; set_mac "$L"
+  fi
+  [ "$new" = "$S" ] || { mkdir -p "$STATE_DIR"; echo "$new" > "$STATE_DIR/$SLUG.login"; }
+}
+
 finish() { fn=stop_socket; each_socket; rm -f "$D/pid"; exit 0; }
 trap finish TERM INT HUP
 
 while kill -0 "$viewer" 2>/dev/null; do
   fn=follow_socket; each_socket
+  follow_login
+  [ -n "${PORTHOLE_FOLLOW_ONCE:-}" ] && { rm -f "$D/pid"; exit 0; }   # tests: one pass
   sleep "${PORTHOLE_FOLLOW_SECS:-3}" &
   wait $!
 done

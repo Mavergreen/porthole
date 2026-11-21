@@ -34,6 +34,14 @@ int main(void) {
         assert(PortholeCloseTellsApp(NO, NO));     // a dialog: About, Settings, an approval prompt
         assert(!PortholeCloseTellsApp(YES, NO));   // the main window: close to the menu bar
         assert(!PortholeCloseTellsApp(NO, YES));   // a popup
+        // A new window: (overrideRedirect, appShownSomething, appActive, launchedAtLogin, userAsked)
+        assert(PortholeNewWindowFor(NO, NO, NO, NO, NO) == PortholeWindowActivate);     // the user launched it
+        assert(PortholeNewWindowFor(NO, NO, NO, YES, NO) == PortholeWindowStay);        // launched at login
+        assert(PortholeNewWindowFor(NO, YES, NO, YES, NO) == PortholeWindowComeForward); // a prompt, even then
+        assert(PortholeNewWindowFor(NO, YES, NO, NO, NO) == PortholeWindowComeForward); // a prompt while in back
+        assert(PortholeNewWindowFor(YES, YES, NO, NO, NO) == PortholeWindowStay);       // a popup while in back
+        assert(PortholeNewWindowFor(NO, YES, YES, NO, NO) == PortholeWindowActivate);   // already in front
+        assert(PortholeNewWindowFor(YES, YES, NO, NO, YES) == PortholeWindowActivate);  // the tray was clicked
         printf("test_window_titles: OK\n");
     }
     return 0;

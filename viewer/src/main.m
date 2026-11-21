@@ -67,6 +67,7 @@
     BOOL _openAfterPrepare;               // opened while preparing: open the app once the build is done
     NSString *_runningImage;              // the image the app's container runs, from the launcher
     BOOL _appShownSomething;              // the app has put up a window or tray of its own
+    BOOL _launchedAtLogin;                // a Login Item launch: stay put until the user activates it
 }
 
 // ---- session event callbacks (backend -> shell), bridged from C ----
@@ -130,6 +131,15 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     else if (hkID.id == 2) [d lockHotKey];          // Cmd-Shift-L
     return noErr;
 }
+
+// A Login Item launch says so in its open-application event (keyAELaunchedAsLogInItem), current only
+// until launching finishes. Such an app doesn't come forward on its own (PortholeNewWindowFor).
+- (void)applicationWillFinishLaunching:(NSNotification *)n {
+    NSAppleEventDescriptor *e = [[NSAppleEventManager sharedAppleEventManager] currentAppleEvent];
+    _launchedAtLogin = [e eventID] == kAEOpenApplication
+        && [[e paramDescriptorForKeyword:keyAEPropData] enumCodeValue] == keyAELaunchedAsLogInItem;
+}
+- (void)applicationDidBecomeActive:(NSNotification *)n { _launchedAtLogin = NO; }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)n {
     _windows = [[NSMutableDictionary alloc] init];
@@ -330,6 +340,8 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     [_staticMenu setAppLocked:!PortholeLockItemEnabled([_titles allValues])];
 }
 - (void)newWindowWid:(long)wid frame:(NSRect)frame overrideRedirect:(BOOL)overrideRedirect title:(NSString *)title {
+    PortholeNewWindowAction action = PortholeNewWindowFor(overrideRedirect, _appShownSomething, [NSApp isActive],
+                                                          _launchedAtLogin, _trayPopupPending);
     if (!overrideRedirect) { _appShownSomething = YES; [_feedback firstWindow]; }
     NSString *tracked = PortholeTrackedTitle(overrideRedirect, title);
     if (tracked) { _titles[@(wid)] = tracked; [self titlesChanged]; }
@@ -353,10 +365,16 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
         _trayPopupPending = NO;
     }
     [w release];   // dictionary retains it
-    // NSRunningApplication activation is more reliable for a process that started
-    // life without a window (we connect first, windows arrive ~130ms later).
-    [[NSRunningApplication currentApplication]
-        activateWithOptions:NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps];
+    if (action == PortholeWindowActivate) {
+        // NSRunningApplication activation is more reliable for a process that started
+        // life without a window (we connect first, windows arrive ~130ms later).
+        [[NSRunningApplication currentApplication]
+            activateWithOptions:NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps];
+    } else if (action == PortholeWindowComeForward) {
+        // A prompt from an app in the background: PortholeWindow already shows it above the other
+        // apps' windows without taking focus; the Dock icon bounces once to say so.
+        [NSApp requestUserAttention:NSInformationalRequest];
+    }
 }
 
 - (void)drawWid:(long)wid rect:(NSRect)rect encoding:(NSString *)enc

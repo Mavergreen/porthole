@@ -27,3 +27,10 @@ BOOL PortholeCloseTellsApp(BOOL isMainWindow, BOOL overrideRedirect) { return !i
 BOOL PortholeQuitsWhenWindowsClose(BOOL appHasShownSomething, NSUInteger trayCount) {
     return appHasShownSomething && trayCount == 0;
 }
+
+PortholeNewWindowAction PortholeNewWindowFor(BOOL overrideRedirect, BOOL appShownSomething, BOOL appActive,
+                                             BOOL launchedAtLogin, BOOL userAsked) {
+    if (userAsked || appActive) return PortholeWindowActivate;
+    if (!appShownSomething) return launchedAtLogin ? PortholeWindowStay : PortholeWindowActivate;
+    return overrideRedirect ? PortholeWindowStay : PortholeWindowComeForward;
+}
