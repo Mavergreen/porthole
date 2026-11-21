@@ -39,6 +39,7 @@ cp "$ROOT/base/Dockerfile"          "$CTX/Dockerfile"
 cp "$ROOT/menu-daemon.py"           "$CTX/porthole-menu-daemon.py"
 cp "$ROOT/templates/mac-fonts.conf" "$CTX/mac-fonts.conf"
 cp "$ROOT/base/porthole-standin.c"  "$CTX/porthole-standin.c"
+cp "$ROOT/base/porthole-standin-at.c" "$CTX/porthole-standin-at.c"
 cp "$ROOT/base/porthole-standin-ctl" "$CTX/porthole-standin-ctl"
 
 TAGS=""

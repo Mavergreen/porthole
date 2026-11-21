@@ -33,6 +33,12 @@ grep -qE 'gcc .*porthole-standin\.c' "$DFI" \
   || fail "base/Dockerfile: does not compile porthole-standin.c in the s6 build stage"
 grep -qE "^COPY --from=[a-z0-9]+ .*/porthole-standin( |\$)" "$DFI" \
   || fail "base/Dockerfile: the final image does not COPY porthole-standin from the s6 build stage"
+grep -qE 'gcc .*porthole-standin-at\.c' "$DFI" \
+  || fail "base/Dockerfile: does not compile porthole-standin-at.c in the s6 build stage"
+grep -qE "^COPY --from=[a-z0-9]+ .*/porthole-standin-at( |\$)" "$DFI" \
+  || fail "base/Dockerfile: the final image does not COPY porthole-standin-at from the s6 build stage"
+grep -qE 'mkdir -p /usr/local/lib/porthole-standin/mnt' "$DFI" \
+  || fail "base/Dockerfile: no empty /usr/local/lib/porthole-standin/mnt for porthole-standin-at's mirror"
 grep -qE '^COPY porthole-standin-ctl /usr/local/bin/' "$DFI" \
   || fail "base/Dockerfile: the final image does not COPY porthole-standin-ctl into /usr/local/bin/"
 for f in porthole-standin.c porthole-standin-ctl; do
