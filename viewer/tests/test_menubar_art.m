@@ -20,6 +20,20 @@ static NSImage *disc(NSColor *color, int px, BOOL badge) {
     [im addRepresentation:r]; [r release];
     return im;
 }
+// The same disc as tray art arrives without alpha (rgb24): opaque, black where it was transparent.
+static NSImage *opaqueDisc(NSColor *color, int px, BOOL badge) {
+    NSBitmapImageRep *r = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:px pixelsHigh:px
+        bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace
+        bytesPerRow:0 bitsPerPixel:0];
+    [NSGraphicsContext saveGraphicsState];
+    [NSGraphicsContext setCurrentContext:[NSGraphicsContext graphicsContextWithBitmapImageRep:r]];
+    [[NSColor blackColor] setFill]; NSRectFill(NSMakeRect(0, 0, px, px));
+    [disc(color, px, badge) drawInRect:NSMakeRect(0, 0, px, px) fromRect:NSZeroRect operation:NSCompositeSourceOver fraction:1];
+    [NSGraphicsContext restoreGraphicsState];
+    NSImage *im = [[[NSImage alloc] initWithSize:NSMakeSize(px, px)] autorelease];
+    [im addRepresentation:r]; [r release];
+    return im;
+}
 static void writePNG(NSImage *im, NSString *path) {
     NSBitmapImageRep *r = (NSBitmapImageRep *)[[im representations] firstObject];
     [[r representationUsingType:NSPNGFileType properties:@{}] writeToFile:path atomically:YES];
@@ -49,6 +63,19 @@ int main(void) {
         CHECK(l && ![l isTemplate], "a plain .mac picture is not a template");
         CHECK(l && NSEqualSizes([l size], NSMakeSize(16, 16)), "a 16-pixel picture is shown at 16 points");
 
+        CHECK([art macPictureFor:opaqueDisc(blue, 16, NO)] == u, "art sent without alpha (black for transparent) matches");
+        CHECK([art macPictureFor:opaqueDisc(blue, 16, YES)] == l, "...and keeps the badge apart");
+        // The app's tray art may be drawn afresh for its size rather than scaled from its picture:
+        // still nearest its own, by a clear margin, though not identical.
+        NSColor *bluish = [NSColor colorWithDeviceRed:0.25 green:0.5 blue:0.95 alpha:1];
+        CHECK([art macPictureFor:disc(bluish, 16, NO)] == u, "a redrawn, slightly different disc is still recognised");
+        // Halfway between two pictures (a half-faded badge): neither is clearly it.
+        NSImage *between = disc(blue, 22, NO);
+        [between lockFocus];
+        [[[NSColor whiteColor] colorWithAlphaComponent:0.5] setFill];
+        NSRectFillUsingOperation(NSMakeRect(11, 0, 11, 11), NSCompositeSourceOver);
+        [between unlockFocus];
+        CHECK([art macPictureFor:between] == nil, "art as near one picture as another gets none");
         CHECK([art macPictureFor:disc([NSColor greenColor], 22, NO)] == nil, "unrelated art gets none");
         CHECK([art macPictureFor:nil] == nil, "no art gets none");
 

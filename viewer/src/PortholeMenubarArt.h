@@ -9,4 +9,6 @@
 // The Mac picture for the tray art the app sent: its pair's whose app picture looks most like it, or
 // nil when none is close.
 - (NSImage *)macPictureFor:(NSImage *)trayArt;
+// The same, saying in CLOSEST how far the most alike app picture was (mean difference per channel, 0..1).
+- (NSImage *)macPictureFor:(NSImage *)trayArt closest:(double *)closest;
 @end

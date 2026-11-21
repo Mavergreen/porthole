@@ -421,9 +421,12 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
     NSString *enc = art[@"enc"];
     int w = [art[@"w"] intValue], h = [art[@"h"] intValue], stride = [art[@"stride"] intValue];
     // The app's own Mac picture for this art, when it ships one (1Password's menu-bar templates).
+    double closest = 1;
     NSImage *mac = [[self menubarArt] macPictureFor:
-                    [self imageFromCoding:enc pixels:art[@"data"] w:w h:h stride:stride]];
+                    [self imageFromCoding:enc pixels:art[@"data"] w:w h:h stride:stride] closest:&closest];
     if (mac) { [tray setImage:mac]; return; }
+    if (_menubarArt) NSLog(@"Porthole: menu-bar art: tray art (%s %dx%d) matched none of the app's pictures (closest %.3f)",
+                           [enc UTF8String], w, h, closest);
     NSMutableData *px = [[art[@"data"] mutableCopy] autorelease];
     int bpp = stride / MAX(1, w);
     BOOL raw = [enc hasPrefix:@"rgb"] && (bpp == 3 || bpp == 4) && px.length >= (NSUInteger)stride * h;
