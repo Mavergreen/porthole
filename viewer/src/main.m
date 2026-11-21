@@ -388,10 +388,6 @@ static OSStatus porthole_hotkey_handler(EventHandlerCallRef next, EventRef event
         // life without a window (we connect first, windows arrive ~130ms later).
         [[NSRunningApplication currentApplication]
             activateWithOptions:NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps];
-    } else if (action == PortholeWindowComeForward) {
-        // A prompt from an app in the background: PortholeWindow already shows it above the other
-        // apps' windows without taking focus; the Dock icon bounces once to say so.
-        [NSApp requestUserAttention:NSInformationalRequest];
     }
 }
 

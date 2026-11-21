@@ -32,5 +32,5 @@ PortholeNewWindowAction PortholeNewWindowFor(BOOL overrideRedirect, BOOL appShow
                                              BOOL launchedAtLogin, BOOL userAsked) {
     if (userAsked || appActive) return PortholeWindowActivate;
     if (!appShownSomething) return launchedAtLogin ? PortholeWindowStay : PortholeWindowActivate;
-    return overrideRedirect ? PortholeWindowStay : PortholeWindowComeForward;
+    return overrideRedirect ? PortholeWindowStay : PortholeWindowActivate;
 }
