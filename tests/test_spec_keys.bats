@@ -73,5 +73,5 @@ MENUBAR_ART_locked='/opt/t/l.png /opt/m/l_Template@2x.png'"
   [ "$output" = "$WORK/A/Linux Demo.app/Contents/Resources/demo.container" ]
   run sh -c '. "$1"; PORTHOLE_APPS_DIRS="$2" spec_find nope' _ "${BATS_TEST_DIRNAME}/../bin/porthole-spec-lib.sh" "$WORK/B"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no installed app for 'nope'"* ]]
+  [[ "$output" == *"no installed app for 'nope'"* ]] || false
 }

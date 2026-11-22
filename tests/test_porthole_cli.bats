@@ -42,7 +42,7 @@ teardown() { rm -rf "$W"; }
   : > "$STATE/running"
   run env PATH="$BIN:$PATH" "$CLI" demo nope x
   [ "$status" -eq 2 ]
-  [[ "$output" == *"porthole-cli: demo declares no CLI 'nope'"* ]]
+  [[ "$output" == *"porthole-cli: demo declares no CLI 'nope'"* ]] || false
   [ ! -e "$STATE/exec.log" ]
 }
 

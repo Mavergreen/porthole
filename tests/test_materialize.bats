@@ -251,6 +251,6 @@ about_conf() {
 @test "an app without URL schemes declares none" {
   printf '#!/bin/sh\necho "$@" >> "%s/lsreg"\n' "$APPS" > "$APPS/lsregister"; chmod +x "$APPS/lsregister"
   PORTHOLE_LSREGISTER="$APPS/lsregister" "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
-  ! /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" "$APPS/Linux Thunderbird.app/Contents/Info.plist" 2>/dev/null
+  ! /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" "$APPS/Linux Thunderbird.app/Contents/Info.plist" 2>/dev/null || false
   [ ! -e "$APPS/lsreg" ]
 }

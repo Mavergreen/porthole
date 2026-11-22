@@ -127,7 +127,7 @@ app_started() {
   once
   [ -z "$(login_items)" ]
   [ -z "$(ls "$AS")" ]
-  ! grep -q 'mac-make\|mac-delete' "$STATE/calls"
+  ! grep -q 'mac-make\|mac-delete' "$STATE/calls" || false
 }
 
 @test "the container down: nothing changes" {

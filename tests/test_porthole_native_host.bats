@@ -62,7 +62,7 @@ teardown() { rm -rf "$W"; }
 
 @test "the browser's stdin goes only to the program" {
   printf 'native-message' | "$HOST" demo browser '{id}'
-  ! grep -q native-message "$STATE/file.in"
+  ! grep -q native-message "$STATE/file.in" || false
   grep -q native-message "$STATE/host.in"
 }
 
@@ -70,14 +70,14 @@ teardown() { rm -rf "$W"; }
   printf 'Evil.app\n' > "$W/allowed"; echo "501 644" > "$STATE/stat"
   run "$HOST" demo browser '{id}' </dev/null
   [ "$status" -eq 0 ]
-  ! grep -q Evil.app "$STATE/file.in"
-  [[ "$output" == *"ignoring $W/allowed"* ]]
+  ! grep -q Evil.app "$STATE/file.in" || false
+  [[ "$output" == *"ignoring $W/allowed"* ]] || false
 }
 
 @test "a root-owned Mac source writable by group or others is ignored" {
   printf 'Evil.app\n' > "$W/allowed"; echo "0 664" > "$STATE/stat"
   run "$HOST" demo browser '{id}' </dev/null
-  ! grep -q Evil.app "$STATE/file.in"
+  ! grep -q Evil.app "$STATE/file.in" || false
 }
 
 @test "a missing Mac source is skipped quietly" {
@@ -97,7 +97,7 @@ teardown() { rm -rf "$W"; }
 @test "an undeclared host is refused" {
   run "$HOST" demo nope '{id}' </dev/null
   [ "$status" -eq 2 ]
-  [[ "$output" == *"porthole-native-host: demo declares no native host 'nope'"* ]]
+  [[ "$output" == *"porthole-native-host: demo declares no native host 'nope'"* ]] || false
 }
 
 @test "a Docker VM that can't be reached is said so" {
