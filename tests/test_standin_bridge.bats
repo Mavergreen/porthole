@@ -38,9 +38,11 @@ SH
   cat > "$BIN/s6-setlock" <<'SH'
 #!/bin/sh
 lock=$1; shift
-until mkdir "$lock.d" 2>/dev/null; do sleep 0.05; done
+# The shell's noclobber create is an O_EXCL open: exclusive on every host. mkdir is not: Ubuntu
+# 26.04's uutils mkdir let several racers "create" one directory, and two connections started.
+until (set -C; : > "$lock.held") 2>/dev/null; do sleep 0.05; done
 "$@"; rc=$?
-rmdir "$lock.d"
+rm -f "$lock.held"
 exit $rc
 SH
   cat > "$BIN/porthole-watch-exit" <<'SH'
