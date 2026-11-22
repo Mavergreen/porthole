@@ -155,4 +155,23 @@ for a in onepassword 1000 1000: :0 0:0 0:1001 1000:x -1:0; do
   [ "$rc" = 2 ] || fail "--as '$a' was not refused (exit $rc)"
 done
 echo "ok: --as refuses non-root starts and bad or root targets"
+
+# --as also leaves the stand-in at a Mac path the container lacks, seen from outside: 1Password's app
+# opens its browser helper's parent by the path its exe reads, from outside the namespace. Only where
+# root alone could have put anything on the way, and never over what is there.
+asat() { docker exec -u 0 "$C" porthole-standin-at --as 1000:0 "$1" --run true </dev/null || fail "--as at '$1' failed"; }
+asat "/Applications/Firefox Test.app"                                                                   # (o)
+[ "$(x stat -c '%F %U %a' "/Applications/Firefox Test.app")" = "regular file root 755" ] \
+  || fail "--as left no root-owned stand-in at a missing Mac path: $(x stat -c '%F %U %a' "/Applications/Firefox Test.app" 2>&1)"
+[ "$(sum "/Applications/Firefox Test.app")" = "$STANDIN_SUM" ] || fail "--as left something else at a missing Mac path"
+[ "$(x stat -c '%U %a' /Applications)" = "root 755" ] || fail "--as made /Applications as $(x stat -c '%U %a' /Applications)"
+asat /usr/bin/perl
+[ "$(sum /usr/bin/perl)" = "$perl_sum" ] || fail "--as changed the container's /usr/bin/perl"
+x sh -c 'mkdir -m 777 /open && ln -s /tmp /lnk && mkdir -p /mine && chown 1000 /mine'
+for p in /open/X.app /lnk/X.app /mine/X.app /open/sub/X.app; do
+  asat "$p"
+done
+x sh -c 'test ! -e /open/X.app && test ! -e /tmp/X.app && test ! -e /mine/X.app && test ! -e /open/sub' \
+  || fail "--as put something under a directory others can write, or through a symlink"
+echo "ok: --as leaves the stand-in at a missing Mac path, and only where root alone could"
 echo "ok standin_ns"

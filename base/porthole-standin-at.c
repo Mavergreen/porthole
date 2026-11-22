@@ -22,6 +22,10 @@
  * every uid and gid to itself (only a process privileged outside may), so the namespace is the
  * container's own ids. After placing the stand-in, the process becomes UID:GID (groups just GID, as
  * docker exec -u UID:GID) and checks it can't become root again, before exec. UID 0 is refused.
+ * First, still outside the namespace, it hard-links the stand-in at MACPATH in the container itself
+ * if nothing is there: 1Password's app opens its browser helper's parent by the path that parent's
+ * exe reads, from outside, where a path the namespace alone holds doesn't exist. So --as leaves one
+ * root-owned file per browser in the container; a stand-in started without it never writes there.
  *
  * Exit: 2 a refused path or usage; 3 no user namespaces here (one line, saying so); 4 any other
  * setup failure, naming the step.
@@ -260,6 +264,38 @@ static void place(const char *macpath) {
   if (rmdir(dst) != 0) failf(4, "remove %s", dst);
 }
 
+/* --as, before the namespace: the stand-in hard-linked at MACPATH in the container itself, if nothing
+ * is there (see --as above). Missing directories on the way are made root's, 0755. Nothing is made
+ * under a directory root doesn't own or others may write, nor through a symlink: each step is opened
+ * O_NOFOLLOW from the last, so none can be swapped in. Such a path is left as it is. */
+static void stake(const char *macpath) {
+  char buf[PATH_MAX], *comp[64];
+  struct stat st;
+  int n, d, c;
+  snprintf(buf, sizeof buf, "%s", macpath);
+  n = split(buf, comp);
+  if ((d = open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC)) < 0) failf(4, "open /");
+  for (int k = 0; k < n; k++) {
+    if (fstat(d, &st) != 0) failf(4, "stat a directory on %s", macpath);
+    if (st.st_uid != 0 || (st.st_mode & 022)) break;
+    if (k == n - 1) {
+      if (linkat(AT_FDCWD, STANDIN, d, comp[k], 0) != 0 && errno != EEXIST)
+        failf(4, "link the stand-in at %s", macpath);
+      break;
+    }
+    int made = mkdirat(d, comp[k], 0755) == 0;
+    if (!made && errno != EEXIST) failf(4, "make a directory on %s", macpath);
+    if ((c = openat(d, comp[k], O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)) < 0) {
+      if (made) failf(4, "open a directory made on %s", macpath);
+      break;   /* a symlink, or not a directory */
+    }
+    if (made && fchmod(c, 0755) != 0) failf(4, "set the mode of a directory on %s", macpath);
+    close(d);
+    d = c;
+  }
+  close(d);
+}
+
 int main(int argc, char **argv) {
   if (argc == 2 && !strcmp(argv[1], "--check")) {
     enter();
@@ -289,8 +325,10 @@ int main(int argc, char **argv) {
     snprintf(buf, sizeof buf, "%s", argv[1]);
     split(buf, comp);   /* refuse before touching anything */
   }
-  if (as) enter_all();
-  else enter();
+  if (as) {
+    stake(argv[1]);
+    enter_all();
+  } else enter();
   place(argv[1]);
   if (as) drop(u, g);
   execv(argv[1], argv + 1);
