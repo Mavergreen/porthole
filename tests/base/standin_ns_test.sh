@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic -- drives docker; the containers it checks are Linux
-# standin_ns_test.sh IMAGE | --local -- porthole-standin-at puts a stand-in at the Mac path itself.
+# tests/base/standin_ns_test.sh IMAGE | --local -- porthole-standin-at puts a stand-in at the Mac path itself.
 #
 # Starts IMAGE the way `porthole up` starts an app's container (--init, seccomp and AppArmor
 # unconfined) and checks each placement from OUTSIDE the stand-in's namespace, where 1Password looks:
@@ -10,7 +10,7 @@
 # --local builds a throwaway image from base/*.c (no xpra), for a developer box; CI passes the base
 # image it just built. Both images and containers are removed on exit.
 set -eu
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 [ $# -eq 1 ] || { echo "usage: $0 IMAGE | --local" >&2; exit 64; }
 C=porthole-nstest-$$ C2=porthole-nstest-$$-default IMAGE=$1 LOCAL=
 cleanup() {

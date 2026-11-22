@@ -195,5 +195,5 @@ echo "base image OK: stand-in"
 
 # Prove porthole-standin-at, in the image: each stand-in seen at its Mac path from outside its
 # namespace, and a container that cannot make one says so.
-sh "$ROOT/tests/standin_ns_test.sh" "$1"
+sh "$ROOT/tests/base/standin_ns_test.sh" "$1"
 echo "base image OK: stand-in at the Mac path"

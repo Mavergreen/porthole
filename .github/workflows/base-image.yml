@@ -48,7 +48,7 @@ jobs:
 
       # The same script the release job runs -- it assembles the context, passes the XPRA_VERSION
       # pin as a build arg, and asserts the built image really carries that xpra.
-      # build-base-image.sh runs tests/standin_ns_test.sh, whose launcher makes an unprivileged user
+      # build-base-image.sh runs tests/base/standin_ns_test.sh, whose launcher makes an unprivileged user
       # namespace. Ubuntu's AppArmor restricts those on this runner; the Docker VM Porthole runs on
       # (boot2docker) has no AppArmor, so the runner's policy is relaxed rather than tested.
       - name: Allow unprivileged user namespaces on the runner

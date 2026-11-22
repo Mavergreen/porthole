@@ -103,3 +103,29 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   ! pgrep -f "$BIN/s6-ipcserver" >/dev/null || { echo "server still running"; pkill -f "$BIN/s6-ipcserver"; return 1; }
 }
+
+# A host that can't run 10.9 Mach-O (the Linux release build) checks what it can and leaves the run
+# to a job on 10.9, which runs it with --run-only against the binaries the pkg installed.
+@test "check-transport with CHECK_TRANSPORT_RUN=elsewhere runs the guard but not the transport" {
+  CHECK_TRANSPORT_RUN=elsewhere STUB_MODE=exit run sh "$ENGINE/build/check-transport.sh" "$BIN"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q s6-ipcserver "$GUARD_LOG"
+  [[ "$output" == *"run on 10.9 elsewhere"* ]] || { echo "$output"; return 1; }
+}
+
+@test "check-transport refuses a CHECK_TRANSPORT_RUN it doesn't know" {
+  CHECK_TRANSPORT_RUN=skip run sh "$ENGINE/build/check-transport.sh" "$BIN"
+  [ "$status" -ne 0 ]
+  [ ! -e "$GUARD_LOG" ]
+}
+
+@test "check-transport --run-only runs the transport without a compat guard" {
+  PORTHOLE_COMPAT_GUARD="$WORK/nonexistent.sh" run sh "$ENGINE/build/check-transport.sh" --run-only "$BIN"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"relays a connection owner-only"* ]] || { echo "$output"; return 1; }
+}
+
+@test "check-transport --run-only still fails a transport that doesn't relay" {
+  STUB_MODE=noecho run sh "$ENGINE/build/check-transport.sh" --run-only "$BIN"
+  [ "$status" -ne 0 ]
+}

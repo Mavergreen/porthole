@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- clang cross-compiles against a macOS SDK (-isysroot, -mmacosx-version-min)
+# platform: host-agnostic -- clang22 cross-compiles against the 10.9 SDK on a Mac, on 10.9 or on Linux
 # Fetch (git, by pinned commit) + cross-build skalibs then s6 (static, no execline) as
 # x86_64/min-10.9 Mach-O, prove them with check-transport.sh, then copy the s6-ipcserver component
 # binaries into $1 (an out bin dir). Pins: the commit is read from SKALIBS_REF/S6_REF (first field;
@@ -22,6 +22,7 @@ CLANG22="$(sh "$SHIPYARD/fetch_clang22.sh" "$REPO/components/clang22")" \
 CC="$CLANG22/bin/clang -arch x86_64 -isysroot $SDK -mmacosx-version-min=10.9"
 LDFLAGS="-fuse-ld=lld"; export LDFLAGS
 AR="$CLANG22/bin/llvm-ar"; RANLIB="$CLANG22/bin/llvm-ranlib"; STRIP="$CLANG22/bin/llvm-strip"
+NCPU=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu)
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/s6-build.XXXXXX"); trap 'rm -rf "$WORK"' EXIT
 STAGE="$WORK/stage"; mkdir -p "$STAGE"
 
@@ -42,7 +43,7 @@ S6R=$(awk 'NR==1{print $1}' "$REPO/S6_REF")
 fetch skalibs "$SKR"
 cd "$WORK/skalibs"
 CC="$CC" ./configure --disable-shared --enable-static --prefix="$STAGE"
-make -j"$(sysctl -n hw.ncpu)" AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
+make -j"$NCPU" AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
 make install AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
 
 fetch s6 "$S6R"
@@ -55,7 +56,7 @@ cd "$WORK/s6"
 CC="$CC" ./configure --enable-static --disable-shared --enable-allstatic --disable-execline \
   --with-include="$STAGE/include" --with-lib="$STAGE/lib" \
   --with-sysdeps="$STAGE/lib/skalibs/sysdeps" --prefix="$STAGE"
-make -j"$(sysctl -n hw.ncpu)" AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
+make -j"$NCPU" AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
 make install AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP"
 
 # Prove them (10.9 compat guard + a real run) BEFORE staging: a failed check must leave nothing in

@@ -5,7 +5,7 @@ name: release
 # the day Porthole's own code last changed). push/PR to main build + test only; a manual
 # workflow_dispatch cuts + publishes a release. Build -> signed .pkg +
 # Sparkle appcast -> the shared publish-release.yml (which mints the tag, checksums, notes body).
-# No 10.9 runner; artifacts re-validated on a real 10.9 box.
+# Built on Linux; installed and tested on Mac OS X 10.9 in a VM (vm-test).
 
 on:
   push:
@@ -37,7 +37,10 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-26   # Apple Silicon (arm64), cross-targets 10.9; use macos-15 if 26 is unavailable
+    # Linux, like most of the family: the pinned clang22 cross-builds every Mac binary against the 10.9
+    # SDK, the llvm-* readers measure them, and shipyard's stevedore seams make the pkg. What needs a
+    # Mac to RUN -- the macOS-only tests and the transport's real relay -- runs on 10.9 in vm-test.
+    runs-on: ubuntu-latest
     # A hang must cost minutes, not the 6-hour default. From 2026-08-04 to 2026-09-09 every run here
     # blocked on the launcher's modal die() dialog and was killed at the 360-minute limit -- three
     # runs per push, ~18 runner-hours, producing nothing and reporting only "cancelled". The dialog
@@ -73,36 +76,39 @@ jobs:
           { echo "ver=$ver"; echo "publish=$pub"; } >> "$GITHUB_OUTPUT"
           echo "version=$ver publish=$pub"
 
-      # The pinned clang22-cross (components/clang22/version), unpacked once by fetch_clang22.sh and kept.
+      # The pinned clang22 (components/clang22/version), unpacked once by fetch_clang22.sh and kept.
       - name: Cache the pinned clang22
         uses: actions/cache@v6
         with:
-          path: ~/Library/Caches/mavergreen-clang22
+          path: ~/.cache/mavergreen-clang22
           key: clang22-${{ runner.os }}-${{ hashFiles('components/clang22/version') }}
 
+      # Every host-agnostic test runs here and none may skip; the macOS-only ones run in vm-test.
       - name: Run the repo's tests
-        run: sh "$SHIPYARD_SCRIPTS/run-repo-tests.sh"
+        run: sh "$SHIPYARD_SCRIPTS/run-repo-tests.sh" --strict-host
 
-      # The transport build RUNS what it built (build/check-transport.sh): that is what lets a
-      # skalibs/s6 bump ride the green build. Its binaries are x86_64 and this runner is arm64.
-      - name: Ensure this runner can run x86_64 (Rosetta)
+      - name: clang22's Mach-O readers, for the compat guard and the steps that read the pkg
         run: |
           set -eu
-          arch -x86_64 /usr/bin/true 2>/dev/null \
-            || sudo softwareupdate --install-rosetta --agree-to-license
-          arch -x86_64 /usr/bin/true
+          CL="$(sh "$SHIPYARD_SCRIPTS/fetch_clang22.sh" "$PWD/components/clang22")"
+          { echo "LIPO=$CL/bin/llvm-lipo"; echo "OTOOL=$CL/bin/llvm-otool"; echo "NM=$CL/bin/llvm-nm"; } >> "$GITHUB_ENV"
 
-      # Compiled by the pinned clang22, as on a developer's Mac or 10.9 box -- never the runner's Xcode clang.
+      # Compiled by the pinned clang22, as on a developer's Mac or 10.9 box -- never a runner's own
+      # compiler. There is no shipyard-cmake off macOS: install@v1 points find_package at shipyard via
+      # MavericksShipyard_DIR, so the runner's cmake configures. The transport can't be run here
+      # (CHECK_TRANSPORT_RUN=elsewhere): vm-test runs it on 10.9 from the installed pkg.
       - name: Build Porthole.app + the Sparkle updater (x86_64 / min-10.9)
+        env:
+          CHECK_TRANSPORT_RUN: elsewhere
         run: |
           set -eu
-          shipyard-cmake -S . -B "$PH_BUILD/_build" -DPORTHOLE_BUILD_UPDATER=ON \
+          cmake -S . -B "$PH_BUILD/_build" -DPORTHOLE_BUILD_UPDATER=ON \
             -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/MavericksClang22Toolchain.cmake" \
             -DMAVERICKS_CLANG22_PIN="$PWD/components/clang22"
-          shipyard-cmake --build "$PH_BUILD/_build" --target Porthole
-          shipyard-cmake --build "$PH_BUILD/_build" --target porthole-updater
-          shipyard-cmake --build "$PH_BUILD/_build" --target transport   # cross-build skalibs+s6 -> _build/engine-bin
-          shipyard-cmake --build "$PH_BUILD/_build" --target porthole-caller porthole-watch-exit   # -> _build/standin
+          cmake --build "$PH_BUILD/_build" --target Porthole
+          cmake --build "$PH_BUILD/_build" --target porthole-updater
+          cmake --build "$PH_BUILD/_build" --target transport   # cross-build skalibs+s6 -> _build/engine-bin
+          cmake --build "$PH_BUILD/_build" --target porthole-caller porthole-watch-exit   # -> _build/standin
 
       - name: Package the .pkg (Porthole.app + engine CLI + updater + LaunchAgent)
         run: |
@@ -163,6 +169,77 @@ jobs:
           name: porthole
           path: ${{ env.PH_BUILD }}/dist/*
 
+  # On Mac OS X 10.9: install the pkg, run the transport it installed for real, and run every
+  # macOS-only test (the ones the Linux build can't). bats comes from the runner's apt (Debian's
+  # bats-core, unpacked, not installed; it runs on 10.9's bash 3.2); clang22, cmake and shipyard are the
+  # family's own pkgs, for the tests that compile or configure.
+  vm-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: porthole
+          path: dist
+
+      - name: Install mavericks-shipyard
+        uses: Mavergreen/shipyard/.github/actions/install@v1
+
+      # On Linux, install@v1 installs nothing and leaves SHIPYARD_SCRIPTS in its own checkout, whose
+      # components/cmake/version is the cmake its shipyard pkg requires.
+      - name: Stage bats, clang22, cmake, shipyard and the 10.9 SDK
+        run: |
+          set -eu
+          mkdir -p deps
+          fetch() { sh "$SHIPYARD_SCRIPTS/fetch-release-pkg.sh" "$@" deps; }
+          c="$(tr -d '[:space:]' < components/clang22/version)"
+          fetch clang-22 "$c" "mavericks-clang-22-native-$c.pkg"
+          cm="$(tr -d '[:space:]' < "$SHIPYARD_SCRIPTS/../components/cmake/version")"
+          fetch cmake "$cm" "cmake-$cm.pkg"
+          sv="${SHIPYARD_VERSION:?install@v1 named no shipyard release}"
+          fetch shipyard "v$sv" "mavericks-shipyard-$sv.pkg"
+          MAVERICKS_SDK_CACHE="$PWD/deps/mavericks-sdk" sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch x86_64
+          (cd "$RUNNER_TEMP" && apt-get download bats)
+          dpkg-deb -x "$RUNNER_TEMP"/bats_*.deb deps/bats
+          ls dist deps
+
+      - name: On Mac OS X 10.9, install the pkg, run its transport, and run the macOS-only tests
+        uses: Mavergreen/mavericks-vm@v1
+        with:
+          image-key: ${{ secrets.MAVERICKS_VM_KEY }}
+          run: |
+            set -eu
+            sw_vers
+            sudo -n true || { echo "the guest's user cannot sudo without a password, and installer needs root"; exit 1; }
+            for p in deps/mavericks-clang-22-native-*.pkg deps/cmake-*.pkg deps/mavericks-shipyard-*.pkg; do
+              sudo installer -pkg "$p" -target /
+            done
+            V='${{ needs.build.outputs.ver }}'
+            sudo installer -pkg "dist/porthole-$V.pkg" -target /
+            sh build/check-transport.sh --run-only /Applications/Porthole.app/Contents/Resources/engine/bin
+
+            export PATH="/usr/local/mavergreen/bin:$PATH" MAVERICKS_SDK_CACHE="$PWD/deps/mavericks-sdk"
+            TMPDIR="${TMPDIR:-$(getconf DARWIN_USER_TEMP_DIR)}"; export TMPDIR
+            # Every macOS-only test, and none may skip: here is where it runs.
+            n=0 bad=
+            for t in tests/*.bats; do
+              grep -q '^# platform: macOS-only' "$t" || continue
+              n=$((n + 1))
+              if deps/bats/usr/bin/bats "$t" > "$TMPDIR/t.log" 2>&1 && ! grep -q '^ok [0-9][0-9]* .*# skip' "$TMPDIR/t.log"; then
+                echo "PASS $t"
+              else
+                echo "FAIL $t"; sed 's/^/    | /' "$TMPDIR/t.log"; bad=1
+              fi
+            done
+            [ "$n" -gt 0 ] || { echo "no macOS-only test found"; exit 1; }
+            [ -z "$bad" ] || exit 1
+            echo "$n macOS-only test files passed on $(sw_vers -productVersion)"
+
   # All-or-nothing publish: the ONLY writer to Releases, gated on the build. The shared workflow
   # regenerates SHA256SUMS, uses RELEASE_NOTES.md from the artifact as the body (failing if missing
   # or empty), and mints the tag at this commit (a dispatch-cut tag pushed by GITHUB_TOKEN triggers
@@ -187,7 +264,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Log in to GHCR
         run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-      # build-base-image.sh runs tests/standin_ns_test.sh, whose launcher makes an unprivileged user
+      # build-base-image.sh runs tests/base/standin_ns_test.sh, whose launcher makes an unprivileged user
       # namespace. Ubuntu's AppArmor restricts those on this runner; the Docker VM Porthole runs on
       # (boot2docker) has no AppArmor, so the runner's policy is relaxed rather than tested.
       - name: Allow unprivileged user namespaces on the runner
@@ -231,7 +308,7 @@ jobs:
 
   # A Porthole whose base image is missing can build no app at all (20260802.5 shipped that way).
   publish:
-    needs: [build, scan, base-image]
+    needs: [build, vm-test, scan, base-image]
     if: needs.build.outputs.publish == 'yes'
     permissions:
       contents: write
