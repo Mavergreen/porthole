@@ -150,3 +150,59 @@ launch_vm() {
   [[ "$output" == *"Docker VM didn't start"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
   rm -rf "$d"
 }
+
+# Container Tools readiness v1 (2026-11-22): a running VM isn't a usable Docker. When the ctl offers
+# `readiness`, the launcher waits for "ready" (the managed context answers), not for "running".
+ready_stubs() {  # $@ = readiness answers, one per poll; the last repeats
+  d="$(mktemp -d -t plf)"
+  printf '%s\n' "$@" > "$d/answers"
+  cat > "$d/docker-machine-ctl" <<EOF
+#!/bin/sh
+case "\$1" in
+  readiness-version) echo 1 ;;
+  readiness) n=\$(( \$(cat "$d/polls" 2>/dev/null || echo 0) + 1 )); echo \$n > "$d/polls"
+             a=\$(sed -n "\${n}p" "$d/answers"); [ -n "\$a" ] || a=\$(tail -1 "$d/answers")
+             echo "\$a"; [ "\$a" = ready ] ;;
+  status) echo running ;;
+  start) echo start >> "$d/ctl.log" ;;
+esac
+EOF
+  for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
+  printf '#!/bin/sh\ncase "$*" in *"inspect -f"*) echo true ;; esac\nexit 0\n' > "$d/docker"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"
+  chmod +x "$d"/*
+}
+
+@test "launcher: readiness -- running but finishing setup is waited for, then launches" {
+  ready_stubs finishing-setup finishing-setup ready
+  launch_vm
+  [ "$status" -eq 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
+  [ "$(cat "$d/polls")" -eq 3 ] || { echo "polls: $(cat "$d/polls")"; rm -rf "$d"; return 1; }
+  [[ "$output" == *"finish starting"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+@test "launcher: readiness -- needs-attention names Repair, at once" {
+  ready_stubs needs-attention
+  launch_vm
+  [ "$status" -ne 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
+  [[ "$output" == *"Repair"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
+  [ "$(cat "$d/polls")" -eq 1 ] || { rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+@test "launcher: readiness -- a stopped VM is started, then waited for until ready" {
+  ready_stubs stopped finishing-setup ready
+  launch_vm
+  [ "$status" -eq 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
+  [ "$(cat "$d/ctl.log")" = start ] || { rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+@test "launcher: readiness -- never ready is named, after the wait" {
+  ready_stubs finishing-setup
+  launch_vm THUNDERBIRD_VM_WAIT=0
+  [ "$status" -ne 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
+  [[ "$output" == *"isn't ready"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
