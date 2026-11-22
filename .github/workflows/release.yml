@@ -192,7 +192,7 @@ jobs:
 
       # On Linux, install@v1 installs nothing and leaves SHIPYARD_SCRIPTS in its own checkout, whose
       # components/cmake/version is the cmake its shipyard pkg requires.
-      - name: Stage bats, Longboat, Container Tools, clang22, cmake, shipyard and the 10.9 SDK
+      - name: Stage bats, Longboat, Container Tools, clang22, make, cmake, shipyard and the 10.9 SDK
         run: |
           set -eu
           mkdir -p deps
@@ -205,11 +205,14 @@ jobs:
           fetch clang-22 "$c" "mavericks-clang-22-native-$c.pkg"
           cm="$(tr -d '[:space:]' < "$SHIPYARD_SCRIPTS/../components/cmake/version")"
           fetch cmake "$cm" "cmake-$cm.pkg"
+          mk="$(tr -d '[:space:]' < components/make/version)"
+          fetch make "$mk" "make-$mk.pkg"
           sv="${SHIPYARD_VERSION:?install@v1 named no shipyard release}"
           fetch shipyard "v$sv" "mavericks-shipyard-$sv.pkg"
           MAVERICKS_SDK_CACHE="$PWD/deps/mavericks-sdk" sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch x86_64
           (cd "$RUNNER_TEMP" && apt-get download bats)
           dpkg-deb -x "$RUNNER_TEMP"/bats_*.deb deps/bats
+          git log -1 --format=%ct > deps/source-date-epoch   # the guest has no git
           ls dist deps
 
       - name: On Mac OS X 10.9, install the pkg, run its transport, and run the macOS-only tests
@@ -223,7 +226,7 @@ jobs:
             # clang22's pkg requires the 10.9 SDK that Longboat installs (its --requires sdk109).
             for p in deps/longboat-*.pkg; do sudo installer -pkg "$p" -target /; done
             sudo /usr/local/mavergreen/longboat/bin/longboat sdk install 10.9
-            for p in deps/mavericks-clang-22-native-*.pkg deps/cmake-*.pkg deps/mavericks-shipyard-*.pkg; do
+            for p in deps/mavericks-clang-22-native-*.pkg deps/make-*.pkg deps/cmake-*.pkg deps/mavericks-shipyard-*.pkg; do
               sudo installer -pkg "$p" -target /
             done
             # Porthole's pkg requires Container Tools (--requires container-tools), as a user's Mac has it.
@@ -233,6 +236,8 @@ jobs:
             sh build/check-transport.sh --run-only /Applications/Porthole.app/Contents/Resources/engine/bin
 
             export PATH="/usr/local/mavergreen/bin:$PATH" MAVERICKS_SDK_CACHE="$PWD/deps/mavericks-sdk"
+            # The pkg seams stamp file times from the commit; with no git here, they take it from this.
+            SOURCE_DATE_EPOCH="$(cat deps/source-date-epoch)"; export SOURCE_DATE_EPOCH
             # 10.9 has no Command Line Tools, so no plain clang: the tests that compile use clang22.
             export CC=/usr/local/mavergreen/clang22/bin/clang
             [ -x "$CC" ] || { echo "no clang22 at $CC"; exit 1; }

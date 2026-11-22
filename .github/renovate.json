@@ -59,6 +59,19 @@
     },
     {
       "customType": "regex",
+      "description": "Mavergreen's make, CI only: vm-test installs it in the 10.9 guest, which has no Command Line Tools and so no working make for the standalone-build test. Nothing of it ships, so a bump re-runs CI and releases nothing.",
+      "managerFilePatterns": [
+        "/^components/make/version$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>\\S+)\\s*$"
+      ],
+      "depNameTemplate": "Mavergreen/make",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
       "description": "Longboat, CI only: vm-test installs it in the 10.9 guest, whose clang22 pkg needs its sdk109. Nothing of it ships, so a bump re-runs CI and releases nothing.",
       "managerFilePatterns": [
         "/^components/longboat/version$/"
