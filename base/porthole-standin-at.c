@@ -1,6 +1,7 @@
 /* porthole-standin-at MACPATH ARG... -- run the stand-in (porthole-standin) as MACPATH: seen there
  * from outside, by the Linux app that names its callers by path, while the container's own files
  * stay as they are.
+ * porthole-standin-at --as UID:GID MACPATH ARG... -- the same, started as root, ending as UID:GID.
  * porthole-standin-at --check -- exit 0 iff this container can do that.
  *
  * In this one process: a user namespace mapping the caller's own uid and gid to themselves (so the
@@ -14,6 +15,13 @@
  * holding A's entries as bind mounts (recursive for directories), symlinks recreated. A mirror of /
  * becomes the namespace's root by pivot_root (a chroot would leave the stand-in seen at the mirror's
  * own path); any other mirror is moved over A.
+ *
+ * --as. A namespace mapping only the caller's own ids holds no other user or group, and the kernel
+ * ignores a set-group-ID bit whose group it doesn't hold: 1Password's browser helper, which insists
+ * its group really changed, quits. Started as root, a helper process still outside the namespace maps
+ * every uid and gid to itself (only a process privileged outside may), so the namespace is the
+ * container's own ids. After placing the stand-in, the process becomes UID:GID (groups just GID, as
+ * docker exec -u UID:GID) and checks it can't become root again, before exec. UID 0 is refused.
  *
  * Exit: 2 a refused path or usage; 3 no user namespaces here (one line, saying so); 4 any other
  * setup failure, naming the step.
@@ -30,7 +38,9 @@
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
+#include <grp.h>
 #include <sys/syscall.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 static const char me[] = "porthole-standin-at";
@@ -66,6 +76,12 @@ static int put(const char *path, const char *s) {
   return n == (ssize_t)strlen(s) ? 0 : -1;
 }
 
+static void mounts(void) {
+  if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) != 0) unavailable("private mounts");
+  if (mount("none", MNT, "tmpfs", 0, "size=1m,mode=755") != 0) failf(4, "mount a tmpfs on %s", MNT);
+}
+
+/* A namespace holding only the caller's own uid and gid: no privilege needed. */
 static void enter(void) {
   char map[64];
   uid_t u = getuid();
@@ -76,8 +92,65 @@ static void enter(void) {
   if (put("/proc/self/uid_map", map) != 0) unavailable("uid_map");
   snprintf(map, sizeof map, "%u %u 1", (unsigned)g, (unsigned)g);
   if (put("/proc/self/gid_map", map) != 0) unavailable("gid_map");
-  if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) != 0) unavailable("private mounts");
-  if (mount("none", MNT, "tmpfs", 0, "size=1m,mode=755") != 0) failf(4, "mount a tmpfs on %s", MNT);
+  mounts();
+}
+
+/* --as: a namespace holding every uid and gid, mapped by a child still outside it (as root). */
+static void enter_all(void) {
+  static const char all[] = "0 0 4294967295";
+  char path[64];
+  int p[2], st;
+  pid_t self = getpid(), h;
+  if (pipe(p) != 0) failf(4, "pipe");
+  if ((h = fork()) < 0) failf(4, "fork");
+  if (h == 0) {
+    char b;
+    const char *step = "uid_map";
+    close(p[1]);
+    if (read(p[0], &b, 1) != 1) _exit(1);   /* the parent could not unshare: it says why */
+    snprintf(path, sizeof path, "/proc/%d/uid_map", (int)self);
+    if (put(path, all) == 0) {
+      step = "gid_map";
+      snprintf(path, sizeof path, "/proc/%d/gid_map", (int)self);
+      if (put(path, all) == 0) _exit(0);
+    }
+    fprintf(stderr, "%s: map every user and group (%s): %s\n", me, step, strerror(errno));
+    _exit(1);
+  }
+  close(p[0]);
+  if (unshare(CLONE_NEWUSER | CLONE_NEWNS) != 0) unavailable("unshare");
+  if (write(p[1], "x", 1) != 1) failf(4, "signal the mapper");
+  close(p[1]);
+  if (waitpid(h, &st, 0) != h || !WIFEXITED(st) || WEXITSTATUS(st) != 0) exit(4);
+  mounts();
+}
+
+/* Becomes U:G for good: no root ids, no capabilities, groups just G. */
+static void drop(uid_t u, gid_t g) {
+  uid_t r, e, s;
+  gid_t gr, ge, gs, gl[2];
+  if (setgroups(1, &g) != 0) failf(4, "set groups");
+  if (setresgid(g, g, g) != 0) failf(4, "set gid %u", (unsigned)g);
+  if (setresuid(u, u, u) != 0) failf(4, "set uid %u", (unsigned)u);
+  if (getresuid(&r, &e, &s) != 0 || r != u || e != u || s != u) failf(4, "uid is not %u", (unsigned)u);
+  if (getresgid(&gr, &ge, &gs) != 0 || gr != g || ge != g || gs != g) failf(4, "gid is not %u", (unsigned)g);
+  if (getgroups(2, gl) != 1 || gl[0] != g) failf(4, "groups are not just %u", (unsigned)g);
+  if (setresuid(0, 0, 0) == 0 || setgroups(0, NULL) == 0) { errno = EPERM; failf(4, "root could be regained"); }
+}
+
+/* "UID:GID", both decimal, UID not 0. */
+static int ids(const char *a, uid_t *u, gid_t *g) {
+  unsigned long x, y;
+  char *end;
+  if (*a < '0' || *a > '9') return -1;
+  errno = 0;
+  x = strtoul(a, &end, 10);
+  if (errno || *end != ':' || end[1] < '0' || end[1] > '9') return -1;
+  y = strtoul(end + 1, &end, 10);
+  if (errno || *end || x == 0 || x >= 4294967295UL || y >= 4294967295UL) return -1;
+  *u = (uid_t)x;
+  *g = (gid_t)y;
+  return 0;
 }
 
 /* Splits PATH into its components (at most 64), refusing what a Mac application path never is. */
@@ -192,8 +265,23 @@ int main(int argc, char **argv) {
     enter();
     return 0;
   }
+  uid_t u = 0;
+  gid_t g = 0;
+  int as = argc >= 2 && !strcmp(argv[1], "--as");
+  if (as) {
+    if (argc < 4 || ids(argv[2], &u, &g) != 0) {
+      fprintf(stderr, "%s: --as takes UID:GID, decimal, UID not 0\n", me);
+      return 2;
+    }
+    if (geteuid() != 0) {
+      fprintf(stderr, "%s: --as must be started as root\n", me);
+      return 2;
+    }
+    argv += 2;
+    argc -= 2;
+  }
   if (argc < 2 || argv[1][0] == '-') {
-    fprintf(stderr, "usage: %s MACPATH ARG... | --check\n", me);
+    fprintf(stderr, "usage: %s [--as UID:GID] MACPATH ARG... | --check\n", me);
     return 2;
   }
   {
@@ -201,8 +289,10 @@ int main(int argc, char **argv) {
     snprintf(buf, sizeof buf, "%s", argv[1]);
     split(buf, comp);   /* refuse before touching anything */
   }
-  enter();
+  if (as) enter_all();
+  else enter();
   place(argv[1]);
+  if (as) drop(u, g);
   execv(argv[1], argv + 1);
   failf(4, "exec %s", argv[1]);
 }

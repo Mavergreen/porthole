@@ -39,13 +39,21 @@ teardown() { rm -rf "$W"; }
   [ ! -e "$STATE/docker.log" ]
 }
 
+# The stand-in starts as root, so its namespace can hold every user and group (a set-group-ID program
+# under it, such as 1Password's browser helper, then really changes group), and becomes -u's user itself.
 @test "runs the program under the stand-in at the app path, in one docker call -- every path one argv element" {
   out=$(printf 'from-browser' | env PATH="$BIN:/usr/bin:/bin" "$RUN" c1 -u 1000:0 -e HOME=/h -e 'X=a b' -- /opt/x '{id}')
   [ "$out" = helper-output ]
   diff -u - "$STATE/docker.log" <<'EOF2'
-|exec|-i|-u|1000:0|-e|HOME=/h|-e|X=a b|c1|porthole-standin-at|/Applications/Google Chrome.app|--run|/opt/x|{id}
+|exec|-i|-u|0|-e|HOME=/h|-e|X=a b|c1|porthole-standin-at|--as|1000:0|/Applications/Google Chrome.app|--run|/opt/x|{id}
 RUN-READ:from-browser
 EOF2
+}
+
+@test "with no -u, the stand-in runs as docker's own user, without --as" {
+  printf x | env PATH="$BIN:/usr/bin:/bin" "$RUN" c1 -- /opt/x >/dev/null
+  head -n 1 "$STATE/docker.log" | grep -qx '|exec|-i|c1|porthole-standin-at|/Applications/Google Chrome.app|--run|/opt/x' \
+    || { cat "$STATE/docker.log"; return 1; }
 }
 
 @test "a stand-in that cannot start: its status and reason come through" {

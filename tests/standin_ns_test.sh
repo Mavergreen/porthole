@@ -121,4 +121,38 @@ wait
 [ "$(cat "$out")" = hello ] || fail "--run did not pass stdin/stdout through: $(cat "$out")"
 rm -f "$out"
 echo "ok: --run"
+
+# --as UID:GID: started as root, the namespace holds every user and group, and the stand-in becomes
+# UID:GID before anything runs. 1Password's browser helper is set-group-ID and quits unless the kernel
+# really changed its group, which it can't for a group a namespace doesn't hold.
+x sh -c 'cp /usr/bin/id /tmp/sgid-id && chgrp 1001 /tmp/sgid-id && chmod 2755 /tmp/sgid-id'           # (l)
+asrun() { docker exec -i -u 0 "$C" porthole-standin-at --as 1000:0 "/Applications/Google Chrome.app" --run "$@" </dev/null; }
+[ "$(asrun /tmp/sgid-id -g)" = 1001 ] || fail "a set-group-ID program under --as did not change group: egid $(asrun /tmp/sgid-id -g)"
+[ "$(asrun /tmp/sgid-id -rg)/$(asrun /tmp/sgid-id -u)" = 0/1000 ] || fail "under --as, a program's real ids are not 1000:0"
+echo "ok: --as: a set-group-ID program changes group"
+
+x rm -f /tmp/t.sock /tmp/t.pid                                                                          # (m)
+docker exec -d -u 0 "$C" porthole-standin-at --as 1000:0 "/Applications/Google Chrome.app" /tmp/t.sock /nonexistent
+n=0; until x test -s /tmp/t.pid; do n=$((n + 1)); [ "$n" -le 50 ] || fail "no --as stand-in came up"; sleep 0.1; done
+pid=$(x cat /tmp/t.pid)
+st=$(x cat "/proc/$pid/status")
+line() { printf '%s\n' "$st" | awk -v k="$1:" '$1 == k { $1 = ""; sub(/^ /, ""); print }'; }
+[ "$(line Uid)" = "1000 1000 1000 1000" ] || fail "--as stand-in's uids: $(line Uid)"
+[ "$(line Gid)" = "0 0 0 0" ] || fail "--as stand-in's gids: $(line Gid)"
+[ "$(line Groups)" = 0 ] || fail "--as stand-in's groups: $(line Groups)"
+for c in CapInh CapPrm CapEff CapAmb; do [ "$(line $c)" = 0000000000000000 ] || fail "--as stand-in keeps $c $(line $c)"; done
+# The namespace is root's, so only a process with CAP_SYS_PTRACE (root here; 1Password with PTRACE=yes)
+# reads inside it, and uid 1000 can't enter it: inside, every id is mapped, so entering it would be root.
+[ "$(x readlink "/proc/$pid/exe")" = "/Applications/Google Chrome.app" ] || fail "--as stand-in is not seen at its Mac path"
+! docker exec -u 1000:0 "$C" nsenter -U -t "$pid" true 2>/dev/null || fail "uid 1000 can enter a --as stand-in's namespace"
+x sh -c 'kill "$1"' sh "$pid"
+echo "ok: --as: no root left in the stand-in, and its namespace is closed to uid 1000"
+
+rc=0; docker exec -u 1000:1001 "$C" porthole-standin-at --as 1000:0 /x/y 2>/dev/null || rc=$?               # (n)
+[ "$rc" = 2 ] || fail "--as not started as root was not refused (exit $rc)"
+for a in onepassword 1000 1000: :0 0:0 0:1001 1000:x -1:0; do
+  rc=0; docker exec -u 0 "$C" porthole-standin-at --as "$a" /x/y 2>/dev/null || rc=$?
+  [ "$rc" = 2 ] || fail "--as '$a' was not refused (exit $rc)"
+done
+echo "ok: --as refuses non-root starts and bad or root targets"
 echo "ok standin_ns"
