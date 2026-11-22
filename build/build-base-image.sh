@@ -88,7 +88,7 @@ echo "base image OK: s6 relay"
 # SSH key") -- and that executable is the Mac path; then the control script's start/alive/list/stop
 # (xpra stubbed: it only starts the command), and SIGTERM removing the socket. The container is
 # started the way `porthole up` starts one, so ctl start's porthole-standin-at can make its namespace.
-got=$(docker run --rm --init --security-opt seccomp=unconfined "$1" sh -c '
+got=$(docker run --rm --init --security-opt seccomp=unconfined --security-opt apparmor=unconfined "$1" sh -c '
   fail() { echo "FAIL: $*"; exit 1; }
   python3 -c "
 import socket, struct, threading

@@ -347,7 +347,7 @@ cmd_up() {
   # shellcheck disable=SC2086  # word-splitting is intentional (one arg per token)
   docker run -d --name "$CONTAINER" --label "$SLUG_LABEL=$SLUG" --hostname "${HOSTNAME:-$IMAGE}" \
     --restart unless-stopped --init --shm-size 512m \
-    --security-opt seccomp=unconfined \
+    --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
     -e "PORTHOLE_TZ=$_tz" \
     $_cap_args \
     -v "$VOLUME:$DATADIR" $_mount_args $_vol_args \

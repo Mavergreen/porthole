@@ -2,10 +2,10 @@
 # platform: host-agnostic -- drives docker; the containers it checks are Linux
 # standin_ns_test.sh IMAGE | --local -- porthole-standin-at puts a stand-in at the Mac path itself.
 #
-# Starts IMAGE the way `porthole up` starts an app's container (--init, seccomp=unconfined) and
-# checks each placement from OUTSIDE the stand-in's namespace, where 1Password looks: the stand-in's
-# exe reads the Mac path, and the container's own files are unchanged. A second container, started
-# with Docker's default seccomp, shows the failure is loud and specific.
+# Starts IMAGE the way `porthole up` starts an app's container (--init, seccomp and AppArmor
+# unconfined) and checks each placement from OUTSIDE the stand-in's namespace, where 1Password looks:
+# the stand-in's exe reads the Mac path, and the container's own files are unchanged. A second
+# container, started with Docker's default seccomp, shows the failure is loud and specific.
 #
 # --local builds a throwaway image from base/*.c (no xpra), for a developer box; CI passes the base
 # image it just built. Both images and containers are removed on exit.
@@ -38,8 +38,9 @@ EOF
   rm -rf "$ctx"
 fi
 
-docker run -d --name "$C" --init --security-opt seccomp=unconfined --entrypoint sleep "$IMAGE" infinity >/dev/null
-docker run -d --name "$C2" --init --entrypoint sleep "$IMAGE" infinity >/dev/null
+docker run -d --name "$C" --init --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
+  --entrypoint sleep "$IMAGE" infinity >/dev/null
+docker run -d --name "$C2" --init --security-opt apparmor=unconfined --entrypoint sleep "$IMAGE" infinity >/dev/null
 x() { docker exec -u 0 "$C" "$@"; }   # outside the namespace, as root
 # A stand-in's /proc/PID/exe is read as its own user, the way 1Password reads it: Docker's default
 # root has no CAP_SYS_PTRACE, so another uid may not.

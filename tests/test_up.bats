@@ -510,11 +510,13 @@ up: cleaned up'
   [[ "$output" != *'"routine"'* ]] || { echo "$output"; return 1; }
 }
 
-# Pins existing behaviour that stand-ins now rely on: porthole-standin-at makes a user namespace,
-# which Docker's default seccomp refuses (tests/standin_ns_test.sh shows both sides).
-@test "up runs the container with seccomp unconfined, so stand-ins can make their namespace" {
+# Stand-ins rely on these: porthole-standin-at makes a user namespace, which Docker's default seccomp
+# refuses (tests/standin_ns_test.sh shows both sides), and mounts in it, which the docker-default
+# AppArmor profile of an AppArmor host (Ubuntu's, GitHub's runner) refuses.
+@test "up runs the container with seccomp and AppArmor unconfined, so stand-ins can make their namespace" {
   fake_docker; make_spec
   run "$REPO/bin/porthole" up "$SPEC"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   grep -q -- '^docker run .*--security-opt seccomp=unconfined' "$STUB_LOG"
+  grep -q -- '^docker run .*--security-opt apparmor=unconfined' "$STUB_LOG"
 }
