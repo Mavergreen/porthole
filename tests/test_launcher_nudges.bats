@@ -6,7 +6,7 @@
 load test_helper
 
 run_thunderbird() {  # $1 = image Created timestamp; DOCKER_HOST set -> preflight bypassed
-  d="$(mktemp -d -t pln)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/pln.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
   cat > "$d/docker" <<EOF
 #!/bin/sh
@@ -35,7 +35,7 @@ EOF
 @test "launcher --rebuild delegates a fresh build to porthole up --rebuild" {
   # The launcher no longer builds the image itself -- Porthole's `up` is the single creator, so
   # --rebuild must pass THROUGH to `porthole up --rebuild <spec>` (the porthole stub logs it).
-  d="$(mktemp -d -t pln)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/pln.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
   printf '#!/bin/sh\ncase "$*" in *"inspect -f"*) echo true ;; *) : ;; esac\nexit 0\n' > "$d/docker"
   printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"
@@ -50,7 +50,7 @@ EOF
 }
 
 run_thunderbird_xpra() {  # $1 = `xpra --version` output; DOCKER_HOST set -> preflight bypassed
-  d="$(mktemp -d -t plx)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plx.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
   cat > "$d/docker" <<EOF
 #!/bin/sh
@@ -91,7 +91,7 @@ xpra_pin_mm() { tr -d '[:space:]' < "${BATS_TEST_DIRNAME}/../XPRA_VERSION" | cut
 # Stand-ins name each Mac caller at its own path, in a private namespace; a container that can't make
 # one is said once a day in the launch log, and the app still starts. $1 = what --check does.
 run_thunderbird_ns() {
-  d="$(mktemp -d -t pls)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/pls.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
   cat > "$d/docker" <<EOF2
 #!/bin/sh

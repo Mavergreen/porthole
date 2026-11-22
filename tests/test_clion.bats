@@ -37,7 +37,7 @@ load test_helper
 }
 
 @test "bin/clion launches the viewer (port 10004) + supports a launch-time project mount" {
-  tmp="$(mktemp -d -t cliontest)"
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/cliontest.XXXXXX")"
   cat > "$tmp/docker" <<'EOF'
 #!/bin/sh
 case "$1 $2" in

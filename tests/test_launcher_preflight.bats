@@ -6,7 +6,7 @@
 load test_helper
 
 run_launcher() {  # $1 = ctl status word; empty DOCKER_HOST so preflight runs
-  d="$(mktemp -d -t plf)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plf.XXXXXX")"
   cat > "$d/docker-machine-ctl" <<EOF
 #!/bin/sh
 [ "\$1" = status ] && echo "$1"
@@ -38,7 +38,7 @@ EOF
 }
 
 @test "launcher: Container Tools missing -> install hint" {
-  d="$(mktemp -d -t plf)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plf.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
   cat > "$d/docker" <<'EOF'
 #!/bin/sh
@@ -63,7 +63,7 @@ EOF
 # A Finder double-click gets launchd's PATH (/usr/bin:/bin:/usr/sbin:/sbin), which lacks the dir
 # Container Tools and the docker CLI install into; the launcher must look there itself.
 @test "launcher: finds Container Tools from a Finder launch's bare PATH" {
-  d="$(mktemp -d -t plf)"; tools="$d/tools"; mkdir -p "$tools"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plf.XXXXXX")"; tools="$d/tools"; mkdir -p "$tools"
   printf '#!/bin/sh\nexit 0\n' > "$d/osascript"
   printf '#!/bin/sh\n[ "$1" = status ] && echo no-fusion\nexit 0\n' > "$tools/docker-machine-ctl"
   chmod +x "$d"/osascript "$tools"/*
@@ -76,7 +76,7 @@ EOF
 }
 
 @test "launcher: explicit DOCKER_HOST bypasses preflight" {
-  d="$(mktemp -d -t plf)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plf.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
   cat > "$d/docker" <<'EOF'
 #!/bin/sh
@@ -105,7 +105,7 @@ EOF
 # launcher starts or waits for it rather than telling you to. The ctl stub's status comes from a file
 # that its start verb (or a set number of polls) moves on.
 vm_stubs() {  # $1 = first status word, $2 = status after `start`
-  d="$(mktemp -d -t plf)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plf.XXXXXX")"
   echo "$1" > "$d/state"
   cat > "$d/docker-machine-ctl" <<EOF
 #!/bin/sh
@@ -154,7 +154,7 @@ launch_vm() {
 # Container Tools readiness v1 (2026-11-22): a running VM isn't a usable Docker. When the ctl offers
 # `readiness`, the launcher waits for "ready" (the managed context answers), not for "running".
 ready_stubs() {  # $@ = readiness answers, one per poll; the last repeats
-  d="$(mktemp -d -t plf)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plf.XXXXXX")"
   printf '%s\n' "$@" > "$d/answers"
   cat > "$d/docker-machine-ctl" <<EOF
 #!/bin/sh

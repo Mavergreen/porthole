@@ -4,12 +4,12 @@
 load test_helper
 
 @test "launcher: uses the s6-ipcserver bundled beside the porthole engine binary" {
-  e="$(mktemp -d -t plte)"                 # fake engine bin dir: porthole + s6-ipcserver
+  e="$(mktemp -d "${TMPDIR:-/tmp}/plte.XXXXXX")"                 # fake engine bin dir: porthole + s6-ipcserver
   printf '#!/bin/sh\nexit 0\n' > "$e/porthole"
   printf '#!/bin/sh\necho "ENGINE-IPC $*" >> "%s"\nsleep 2\n' "$STUB_LOG" > "$e/s6-ipcserver"
   chmod +x "$e/porthole" "$e/s6-ipcserver"
 
-  d="$(mktemp -d -t plt)"                   # host prereqs: running VM + docker
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plt.XXXXXX")"                   # host prereqs: running VM + docker
   cat > "$d/docker-machine-ctl" <<'EOF'
 #!/bin/sh
 [ "$1" = status ] && echo running
@@ -47,10 +47,10 @@ EOF
 # The real /bin/ps (the suite's ps stub reports every pid dead) and no recovery watcher (the stub
 # viewer exits at once, and an ondemand watcher would then stop the bridges itself).
 run_launcher_in() {
-  e="$(mktemp -d -t plte)"
+  e="$(mktemp -d "${TMPDIR:-/tmp}/plte.XXXXXX")"
   printf '#!/bin/sh\nexit 0\n' > "$e/porthole"
   printf '#!/bin/sh\necho "ENGINE-IPC $*" >> "%s"\nsleep 2\n' "$STUB_LOG" > "$e/s6-ipcserver"
-  d="$(mktemp -d -t plt)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plt.XXXXXX")"
   printf '#!/bin/sh\n[ "$1" = status ] && echo running\n' > "$d/docker-machine-ctl"
   printf '#!/bin/sh\nexit 0\n' > "$d/docker-machine"
   printf '#!/bin/sh\ncase "$*" in *"inspect -f"*) echo true ;; %s esac\nexit 0\n' "${2:-}" > "$d/docker"
@@ -67,7 +67,7 @@ run_launcher_in() {
 # still be alive (bridges outlive the launcher, and Quit for stayup apps). Reusing it means every
 # connection fails; it must be replaced.
 @test "launcher: a live bridge from before s6 is replaced, not reused" {
-  t="$(mktemp -d -t pltt)"
+  t="$(mktemp -d "${TMPDIR:-/tmp}/pltt.XXXXXX")"
   sleep 30 & stale=$!
   echo "$stale" > "$t/thunderbird-xpra-tunnel.4999.pid"
   run_launcher_in "$t"
@@ -77,7 +77,7 @@ run_launcher_in() {
 }
 
 @test "launcher: a live s6 bridge is reused" {
-  t="$(mktemp -d -t pltt)"
+  t="$(mktemp -d "${TMPDIR:-/tmp}/pltt.XXXXXX")"
   sh -c 'sleep 30; :' s6-ipcclient & cur=$!   # two commands, so sh keeps its argv
   echo "$cur" > "$t/thunderbird-xpra-tunnel.4999.pid"
   run_launcher_in "$t"
@@ -91,7 +91,7 @@ run_launcher_in() {
 # didn't change) can't be relayed into at all. Say so, and how to fix it, instead of opening a
 # viewer that never connects.
 @test "launcher: a container without the s6 relay stops the launch and says to rebuild" {
-  t="$(mktemp -d -t pltt)"
+  t="$(mktemp -d "${TMPDIR:-/tmp}/pltt.XXXXXX")"
   run_launcher_in "$t" '*"command -v s6-ipcclient"*) exit 1 ;;'
   out="$(cat "$t/out")"; rm -rf "$t"
   [[ "$out" == *"--rebuild"* ]] || { echo "no rebuild advice: $out"; return 1; }
@@ -99,12 +99,12 @@ run_launcher_in() {
 }
 
 @test "launcher: starts the engine's porthole-follow for this app, naming its spec and the viewer's pid" {
-  e="$(mktemp -d -t plfe)"
+  e="$(mktemp -d "${TMPDIR:-/tmp}/plfe.XXXXXX")"
   printf '#!/bin/sh\nexit 0\n' > "$e/porthole"
   printf '#!/bin/sh\nsleep 2\n' > "$e/s6-ipcserver"
   printf '#!/bin/sh\necho "FOLLOW $*" >> "%s"\n' "$STUB_LOG" > "$e/porthole-follow"
   chmod +x "$e"/*
-  d="$(mktemp -d -t plf)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plf.XXXXXX")"
   printf '#!/bin/sh\n[ "$1" = status ] && echo running\nexit 0\n' > "$d/docker-machine-ctl"
   printf '#!/bin/sh\nexit 0\n' > "$d/docker-machine"
   printf '#!/bin/sh\ncase "$*" in *"inspect -f"*) echo true ;; esac\nexit 0\n' > "$d/docker"

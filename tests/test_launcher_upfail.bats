@@ -4,7 +4,7 @@
 load test_helper
 
 @test "launcher: up failure includes stderr tail in the error" {
-  d="$(mktemp -d -t plu)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plu.XXXXXX")"
   cat > "$d/docker-machine-ctl" <<'EOF'
 #!/bin/sh
 [ "$1" = status ] && echo running

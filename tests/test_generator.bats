@@ -14,7 +14,7 @@
 @test "generate-viewer emits a resolved container spec (name/container/image/build-context)" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  d="$(mktemp -d -t spec)"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=ondemand\nDATADIR=/home/demo/.config/Demo\nUSER=demo\n' > "$d/demo.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/spec.XXXXXX")"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=ondemand\nDATADIR=/home/demo/.config/Demo\nUSER=demo\n' > "$d/demo.conf"
   ./bin/generate-viewer "$d/demo.conf" --out "$d" >/dev/null
   spec="$d/demo.container"
   [ -f "$spec" ] || { rm -rf "$d"; return 1; }
@@ -27,7 +27,7 @@
 @test "PTRACE=yes becomes CAPS SYS_PTRACE and EXTRA_VOLUMES flow into the spec" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  d="$(mktemp -d -t caps)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/caps.XXXXXX")"
   printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=stayup\nUSER=demo\nDATADIR=/home/demo/.config/Demo\nPTRACE=yes\nEXTRA_VOLUMES=demo-cli:/root/.config/demo\n' > "$d/demo.conf"
   ./bin/generate-viewer "$d/demo.conf" --out "$d" >/dev/null
   spec="$d/demo.container"
@@ -57,7 +57,7 @@
 @test "generate-viewer rejects UPDATE=pin when a package is unpinned" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  d="$(mktemp -d -t porthole)"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=pin\n' > "$d/demo.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/porthole.XXXXXX")"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=pin\n' > "$d/demo.conf"
   run ./bin/generate-viewer "$d/demo.conf" --out "$d"
   rm -rf "$d"
   [ "$status" -ne 0 ] || return 1
@@ -67,7 +67,7 @@
 @test "generate-viewer rejects UPDATE=float when a package pins a =version" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  d="$(mktemp -d -t porthole)"; printf 'APP=Demo\nAPT_PKGS=demo-pkg=1.2.3\nUPDATE=float\n' > "$d/demo.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/porthole.XXXXXX")"; printf 'APP=Demo\nAPT_PKGS=demo-pkg=1.2.3\nUPDATE=float\n' > "$d/demo.conf"
   run ./bin/generate-viewer "$d/demo.conf" --out "$d"
   rm -rf "$d"
   [ "$status" -ne 0 ] || return 1
@@ -77,7 +77,7 @@
 @test "generate-viewer accepts UPDATE=pin when every package is pinned" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  d="$(mktemp -d -t porthole)"; printf 'APP=Demo\nAPT_PKGS=%s\nUPDATE=pin\nLIFECYCLE=ondemand\n' 'a=1 b=2' > "$d/demo.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/porthole.XXXXXX")"; printf 'APP=Demo\nAPT_PKGS=%s\nUPDATE=pin\nLIFECYCLE=ondemand\n' 'a=1 b=2' > "$d/demo.conf"
   run ./bin/generate-viewer "$d/demo.conf" --out "$d"
   rm -rf "$d"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
@@ -86,7 +86,7 @@
 @test "generate-viewer rejects an unsupported PACKAGING backend" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  d="$(mktemp -d -t porthole)"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nPACKAGING=nix\n' > "$d/demo.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/porthole.XXXXXX")"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nPACKAGING=nix\n' > "$d/demo.conf"
   run ./bin/generate-viewer "$d/demo.conf" --out "$d"
   rm -rf "$d"
   [ "$status" -ne 0 ] || return 1
@@ -101,7 +101,7 @@
 @test "generate-viewer requires an explicit UPDATE (no default)" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  d="$(mktemp -d -t upd)"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nLIFECYCLE=ondemand\n' > "$d/demo.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/upd.XXXXXX")"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nLIFECYCLE=ondemand\n' > "$d/demo.conf"
   run ./bin/generate-viewer "$d/demo.conf" --out "$d"
   rm -rf "$d"
   [ "$status" -ne 0 ] || return 1
@@ -111,7 +111,7 @@
 @test "generate-viewer requires an explicit LIFECYCLE (no default)" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  d="$(mktemp -d -t lc)"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\n' > "$d/demo.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/lc.XXXXXX")"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\n' > "$d/demo.conf"
   run ./bin/generate-viewer "$d/demo.conf" --out "$d"
   rm -rf "$d"
   [ "$status" -ne 0 ] || return 1
@@ -121,7 +121,7 @@
 @test "generate-viewer rejects an invalid LIFECYCLE" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  d="$(mktemp -d -t lci)"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=forever\n' > "$d/demo.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/lci.XXXXXX")"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=forever\n' > "$d/demo.conf"
   run ./bin/generate-viewer "$d/demo.conf" --out "$d"
   rm -rf "$d"
   [ "$status" -ne 0 ] || return 1
@@ -131,7 +131,7 @@
 @test "generate-viewer accepts a conf that declares both UPDATE and LIFECYCLE" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  d="$(mktemp -d -t okc)"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=ondemand\n' > "$d/demo.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/okc.XXXXXX")"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=ondemand\n' > "$d/demo.conf"
   run ./bin/generate-viewer "$d/demo.conf" --out "$d"
   rm -rf "$d"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
@@ -142,7 +142,7 @@
   [ -x bin/generate-viewer ] || skip "generator not built yet"
   # slug "1password" -> ENVPREFIX "1PASSWORD" -> ${1PASSWORD_*} is a shell "bad substitution" that
   # kills the launcher at line 1. It must be guarded to a valid name (_1PASSWORD).
-  d="$(mktemp -d -t onep)"; printf 'APP=1Test\nAPT_PKGS=x\nUPDATE=float\nLIFECYCLE=ondemand\n' > "$d/1test.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/onep.XXXXXX")"; printf 'APP=1Test\nAPT_PKGS=x\nUPDATE=float\nLIFECYCLE=ondemand\n' > "$d/1test.conf"
   ./bin/generate-viewer "$d/1test.conf" --out "$d" >/dev/null
   sh -n "$d/bin/1test" || { echo "launcher is not valid sh"; rm -rf "$d"; return 1; }
   grep -q '${_1TEST_IMAGE' "$d/bin/1test" || { rm -rf "$d"; return 1; }
@@ -168,7 +168,7 @@
 # signal-desktop-desktop-keyring.gpg, apt read signal-desktop-keyring.gpg, and the build failed.)
 @test "generate-viewer writes the apt key to APT_REPO's signed-by path" {
   cd "${BATS_TEST_DIRNAME}/.."
-  d="$(mktemp -d -t porthole)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/porthole.XXXXXX")"
   cat > "$d/vendor-app.conf" <<'CONF'
 APP=Demo
 APT_KEY_URL=https://example.com/key.asc
@@ -187,7 +187,7 @@ CONF
 
 @test "generate-viewer rejects a vendor APT_REPO that names no signed-by keyring" {
   cd "${BATS_TEST_DIRNAME}/.."
-  d="$(mktemp -d -t porthole)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/porthole.XXXXXX")"
   printf "APP=Demo\nAPT_KEY_URL=https://example.com/key.asc\nAPT_REPO='deb https://example.com/apt stable main'\nAPT_PKGS=demo\nUPDATE=float\nLIFECYCLE=ondemand\n" > "$d/demo.conf"
   run ./bin/generate-viewer "$d/demo.conf" --out "$d"
   rm -rf "$d"
@@ -196,7 +196,7 @@ CONF
 }
 
 conf_with() {  # a minimal valid conf plus LINE; sets $d and $C
-  d="$(mktemp -d -t porthole)"; C="$d/demo.conf"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/porthole.XXXXXX")"; C="$d/demo.conf"
   printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=ondemand\nDATADIR=/home/demo/.config/Demo\nUSER=demo\n%s\n' "$1" > "$C"
 }
 
@@ -231,7 +231,7 @@ version_conf() {  # $1 = dir, $2 = APP_VERSION line or empty
 
 @test "APP_VERSION becomes a label right after FROM, before the packages are installed" {
   cd "${BATS_TEST_DIRNAME}/.."
-  d="$(mktemp -d -t ver)"; version_conf "$d" 'APP_VERSION=1.2.3-mavericks.4
+  d="$(mktemp -d "${TMPDIR:-/tmp}/ver.XXXXXX")"; version_conf "$d" 'APP_VERSION=1.2.3-mavericks.4
 '
   df="$d/demo/Dockerfile"
   after_from=$(awk 'f { print; exit } /^FROM / { f = 1 }' "$df")
@@ -242,7 +242,7 @@ version_conf() {  # $1 = dir, $2 = APP_VERSION line or empty
 
 @test "a conf without APP_VERSION renders no version label" {
   cd "${BATS_TEST_DIRNAME}/.."
-  d="$(mktemp -d -t ver)"; version_conf "$d" ''
+  d="$(mktemp -d "${TMPDIR:-/tmp}/ver.XXXXXX")"; version_conf "$d" ''
   ! grep -q 'app-version' "$d/demo/Dockerfile" || { rm -rf "$d"; return 1; }
   rm -rf "$d"
 }
@@ -250,7 +250,7 @@ version_conf() {  # $1 = dir, $2 = APP_VERSION line or empty
 @test "a new APP_VERSION is a new recipe" {
   cd "${BATS_TEST_DIRNAME}/.."
   fp() { sh -c 'PORTHOLE_LIB=1 PORTHOLE_SELF="$1"; . "$1"; recipe_fingerprint "$2"' _ "$PWD/bin/porthole" "$1"; }
-  a="$(mktemp -d -t ver)"; b="$(mktemp -d -t ver)"
+  a="$(mktemp -d "${TMPDIR:-/tmp}/ver.XXXXXX")"; b="$(mktemp -d "${TMPDIR:-/tmp}/ver.XXXXXX")"
   version_conf "$a" 'APP_VERSION=1.0-mavericks.1
 '; version_conf "$b" 'APP_VERSION=1.0-mavericks.2
 '
@@ -271,11 +271,11 @@ version_conf() {  # $1 = dir, $2 = APP_VERSION line or empty
 # The launcher's bridges run s6 inside the container, which only the base of the SAME Porthole
 # version is sure to carry; an installed engine must never render FROM …:latest.
 @test "an installed engine (with a VERSION) renders FROM the base of exactly that version" {
-  e="$(mktemp -d -t phver)"
+  e="$(mktemp -d "${TMPDIR:-/tmp}/phver.XXXXXX")"
   ( cd "${BATS_TEST_DIRNAME}/.." && cp -R bin templates build viewer XPRA_VERSION menu-daemon.py "$e/" ) 2>/dev/null || true
   [ -x "$e/bin/generate-viewer" ] || skip "generator not built yet"
   printf '20991231.1\n' > "$e/VERSION"
-  out="$(mktemp -d -t phout)"
+  out="$(mktemp -d "${TMPDIR:-/tmp}/phout.XXXXXX")"
   env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" \
     "$e/bin/generate-viewer" "${BATS_TEST_DIRNAME}/../examples/thunderbird.conf" --out "$out" >/dev/null
   df="$(find "$out" -name Dockerfile | head -1)"

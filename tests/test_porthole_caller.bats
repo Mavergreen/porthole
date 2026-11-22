@@ -44,7 +44,9 @@ setup() { OUT="$BATS_FILE_TMPDIR"; }
 
 @test "peer names the client on the other end of fd 0 as pid does" {
   sock="$OUT/p.sock"; rm -f "$sock"
-  run python3 - "$OUT/porthole-caller" "$sock" <<'PY'
+  # Python 3 where there is one, else 10.9's own 2.7 (the 10.9 VM job): Popen works in both.
+  py=$(command -v python3 || command -v python)
+  run "$py" - "$OUT/porthole-caller" "$sock" <<'PY'
 import os, socket, subprocess, sys, time
 tool, path = sys.argv[1], sys.argv[2]
 s = socket.socket(socket.AF_UNIX); s.bind(path); s.listen(1)
@@ -52,10 +54,14 @@ pid = os.fork()
 if pid == 0:
     c = socket.socket(socket.AF_UNIX); c.connect(path); time.sleep(3); os._exit(0)
 conn, _ = s.accept()
-peer = subprocess.run([tool, "peer"], stdin=conn.fileno(), capture_output=True, text=True)
-byp = subprocess.run([tool, "pid", str(pid)], capture_output=True, text=True)
-print(repr(peer.stdout), repr(byp.stdout), peer.stderr)
-sys.exit(0 if peer.returncode == 0 and peer.stdout and peer.stdout == byp.stdout else 1)
+def run(args, stdin=None):
+    p = subprocess.Popen(args, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = p.communicate()
+    return p.returncode, out.decode(), err.decode()
+rc, peer, err = run([tool, "peer"], stdin=conn.fileno())
+_, byp, _ = run([tool, "pid", str(pid)])
+print(repr(peer), repr(byp), err)
+sys.exit(0 if rc == 0 and peer and peer == byp else 1)
 PY
   echo "$output"
   [ "$status" -eq 0 ]

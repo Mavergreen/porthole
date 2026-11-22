@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# platform: host-agnostic
+# platform: macOS-only -- drives shipyard-cmake, which shipyard installs only on macOS
 # Guard: porthole builds as its OWN top-level project. `shipyard-cmake -S <root> -B <tmp>`
 # must configure with no product repo and no container -- the regression guard against
 # re-coupling this root to a parent's project()/find_package(MavericksShipyard).

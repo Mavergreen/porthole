@@ -29,7 +29,7 @@ load test_helper
 }
 
 @test "bin/helium launches the viewer pointed at the xpra tunnel (port 10003)" {
-  tmp="$(mktemp -d -t heliumtest)"
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/heliumtest.XXXXXX")"
   cat > "$tmp/docker" <<'EOF'
 #!/bin/sh
 case "$1 $2" in

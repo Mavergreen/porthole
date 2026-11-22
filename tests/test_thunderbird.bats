@@ -25,7 +25,7 @@
 }
 
 @test "bin/thunderbird launches the viewer pointed at the xpra tunnel (port 10002)" {
-  tmp="$(mktemp -d -t tbtest)"
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/tbtest.XXXXXX")"
   cat > "$tmp/docker" <<'EOF'
 #!/bin/sh
 case "$1 $2" in

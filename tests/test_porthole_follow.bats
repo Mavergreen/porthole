@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# platform: host-agnostic
+# platform: macOS-only -- drives bin/porthole-follow, a macOS-only script (BSD stat, its Mac sockets)
 # porthole-follow SPEC VIEWER_PID: while the app's viewer runs, each declared socket is served on the
 # Mac exactly while the app serves it in its container (1Password's SSH agent exists while "Use the
 # SSH agent" is ticked), and is gone when the viewer is.

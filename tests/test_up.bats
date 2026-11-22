@@ -379,7 +379,9 @@ holder() { sh -c 'sleep "$1"; :' porthole-up "$1" >/dev/null 2>&1 & echo $!; }  
 # What a waiting launch reads: whether this build has a window, and where it has got to.
 @test "a build under a window marks its lock so, and records its progress there" {
   fake_docker; make_spec
-  sed -i '' 's|^      build)$|      build) cp -R "$PORTHOLE_CACHE_DIR/demo.lock" "$FAKE/seen-lock" 2>/dev/null|' "$WORK/bin/docker"
+  # Not sed -i: BSD and GNU sed spell it differently. cat > keeps the stub's mode.
+  sed 's|^      build)$|      build) cp -R "$PORTHOLE_CACHE_DIR/demo.lock" "$FAKE/seen-lock" 2>/dev/null|' "$WORK/bin/docker" > "$WORK/docker.new"
+  cat "$WORK/docker.new" > "$WORK/bin/docker"
   PORTHOLE_PROTOCOL=1 "$REPO/bin/porthole" up "$SPEC" >/dev/null 2>&1
   [ -f "$FAKE/seen-lock/shown" ] || { ls -la "$FAKE/seen-lock"; return 1; }
   grep -q '"t":"step","text":"Downloading the Linux runtime"' "$FAKE/seen-lock/progress" || { cat "$FAKE/seen-lock/progress"; return 1; }
@@ -511,7 +513,7 @@ up: cleaned up'
 }
 
 # Stand-ins rely on these: porthole-standin-at makes a user namespace, which Docker's default seccomp
-# refuses (tests/standin_ns_test.sh shows both sides), and mounts in it, which the docker-default
+# refuses (tests/base/standin_ns_test.sh shows both sides), and mounts in it, which the docker-default
 # AppArmor profile of an AppArmor host (Ubuntu's, GitHub's runner) refuses.
 @test "up runs the container with seccomp and AppArmor unconfined, so stand-ins can make their namespace" {
   fake_docker; make_spec
