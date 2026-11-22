@@ -46,6 +46,19 @@
     },
     {
       "customType": "regex",
+      "description": "Longboat, CI only: vm-test installs it in the 10.9 guest, whose clang22 pkg needs its sdk109. Nothing of it ships, so a bump re-runs CI and releases nothing.",
+      "managerFilePatterns": [
+        "/^components/longboat/version$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>\\S+)\\s*$"
+      ],
+      "depNameTemplate": "Mavergreen/longboat",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<minor>\\d+)$"
+    },
+    {
+      "customType": "regex",
       "description": "clang22, the family compiler every Porthole Mac binary is built with (cmake/MavericksClang22Toolchain.cmake, build/fetch-s6.sh); one bare release tag.",
       "managerFilePatterns": [
         "/^components/clang22/version$/"

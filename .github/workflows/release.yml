@@ -171,8 +171,8 @@ jobs:
 
   # On Mac OS X 10.9: install the pkg, run the transport it installed for real, and run every
   # macOS-only test (the ones the Linux build can't). bats comes from the runner's apt (Debian's
-  # bats-core, unpacked, not installed; it runs on 10.9's bash 3.2); clang22, cmake and shipyard are the
-  # family's own pkgs, for the tests that compile or configure.
+  # bats-core, unpacked, not installed; it runs on 10.9's bash 3.2); Longboat (for clang22's SDK), clang22,
+  # cmake and shipyard are the family's own pkgs, for the tests that compile or configure.
   vm-test:
     needs: build
     runs-on: ubuntu-latest
@@ -192,11 +192,13 @@ jobs:
 
       # On Linux, install@v1 installs nothing and leaves SHIPYARD_SCRIPTS in its own checkout, whose
       # components/cmake/version is the cmake its shipyard pkg requires.
-      - name: Stage bats, clang22, cmake, shipyard and the 10.9 SDK
+      - name: Stage bats, Longboat, clang22, cmake, shipyard and the 10.9 SDK
         run: |
           set -eu
           mkdir -p deps
           fetch() { sh "$SHIPYARD_SCRIPTS/fetch-release-pkg.sh" "$@" deps; }
+          lb="$(tr -d '[:space:]' < components/longboat/version)"
+          fetch longboat "$lb" "longboat-$lb.pkg"
           c="$(tr -d '[:space:]' < components/clang22/version)"
           fetch clang-22 "$c" "mavericks-clang-22-native-$c.pkg"
           cm="$(tr -d '[:space:]' < "$SHIPYARD_SCRIPTS/../components/cmake/version")"
@@ -216,6 +218,9 @@ jobs:
             set -eu
             sw_vers
             sudo -n true || { echo "the guest's user cannot sudo without a password, and installer needs root"; exit 1; }
+            # clang22's pkg requires the 10.9 SDK that Longboat installs (its --requires sdk109).
+            for p in deps/longboat-*.pkg; do sudo installer -pkg "$p" -target /; done
+            sudo /usr/local/mavergreen/longboat/bin/longboat sdk install 10.9
             for p in deps/mavericks-clang-22-native-*.pkg deps/cmake-*.pkg deps/mavericks-shipyard-*.pkg; do
               sudo installer -pkg "$p" -target /
             done
@@ -224,6 +229,9 @@ jobs:
             sh build/check-transport.sh --run-only /Applications/Porthole.app/Contents/Resources/engine/bin
 
             export PATH="/usr/local/mavergreen/bin:$PATH" MAVERICKS_SDK_CACHE="$PWD/deps/mavericks-sdk"
+            # 10.9 has no Command Line Tools, so no plain clang: the tests that compile use clang22.
+            export CC=/usr/local/mavergreen/clang22/bin/clang
+            [ -x "$CC" ] || { echo "no clang22 at $CC"; exit 1; }
             TMPDIR="${TMPDIR:-$(getconf DARWIN_USER_TEMP_DIR)}"; export TMPDIR
             # Every macOS-only test, and none may skip: here is where it runs.
             n=0 bad=
