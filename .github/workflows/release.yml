@@ -192,13 +192,15 @@ jobs:
 
       # On Linux, install@v1 installs nothing and leaves SHIPYARD_SCRIPTS in its own checkout, whose
       # components/cmake/version is the cmake its shipyard pkg requires.
-      - name: Stage bats, Longboat, clang22, cmake, shipyard and the 10.9 SDK
+      - name: Stage bats, Longboat, Container Tools, clang22, cmake, shipyard and the 10.9 SDK
         run: |
           set -eu
           mkdir -p deps
           fetch() { sh "$SHIPYARD_SCRIPTS/fetch-release-pkg.sh" "$@" deps; }
           lb="$(tr -d '[:space:]' < components/longboat/version)"
           fetch longboat "$lb" "longboat-$lb.pkg"
+          ct="$(tr -d '[:space:]' < components/container-tools/version)"
+          fetch container-tools "$ct" "container-tools-$ct.pkg"
           c="$(tr -d '[:space:]' < components/clang22/version)"
           fetch clang-22 "$c" "mavericks-clang-22-native-$c.pkg"
           cm="$(tr -d '[:space:]' < "$SHIPYARD_SCRIPTS/../components/cmake/version")"
@@ -224,6 +226,8 @@ jobs:
             for p in deps/mavericks-clang-22-native-*.pkg deps/cmake-*.pkg deps/mavericks-shipyard-*.pkg; do
               sudo installer -pkg "$p" -target /
             done
+            # Porthole's pkg requires Container Tools (--requires container-tools), as a user's Mac has it.
+            for p in deps/container-tools-*.pkg; do sudo installer -pkg "$p" -target /; done
             V='${{ needs.build.outputs.ver }}'
             sudo installer -pkg "dist/porthole-$V.pkg" -target /
             sh build/check-transport.sh --run-only /Applications/Porthole.app/Contents/Resources/engine/bin

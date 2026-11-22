@@ -46,6 +46,19 @@
     },
     {
       "customType": "regex",
+      "description": "Container Tools, CI only: vm-test installs it in the 10.9 guest, because Porthole's pkg requires it (--requires container-tools). Nothing of it ships, so a bump re-runs CI and releases nothing.",
+      "managerFilePatterns": [
+        "/^components/container-tools/version$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>\\S+)\\s*$"
+      ],
+      "depNameTemplate": "Mavergreen/container-tools",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<minor>\\d+)$"
+    },
+    {
+      "customType": "regex",
       "description": "Longboat, CI only: vm-test installs it in the 10.9 guest, whose clang22 pkg needs its sdk109. Nothing of it ships, so a bump re-runs CI and releases nothing.",
       "managerFilePatterns": [
         "/^components/longboat/version$/"
