@@ -30,8 +30,8 @@ if(DEFINED ENV{SHIPYARD_SCRIPTS} AND EXISTS "$ENV{SHIPYARD_SCRIPTS}/fetch_clang2
 else()
   set(_mc22_shipyard "/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard")
 endif()
-include("${_mc22_shipyard}/MavericksToolchain.cmake")
-
+# The compiler is named BEFORE shipyard's toolchain is included: shipyard leaves a named compiler alone,
+# and otherwise picks its own pinned clang22, which may not be this product's pin.
 execute_process(COMMAND sh "${_mc22_shipyard}/scripts/fetch_clang22.sh" "${MAVERICKS_CLANG22_PIN}"
   OUTPUT_VARIABLE _mc22_root OUTPUT_STRIP_TRAILING_WHITESPACE
   ERROR_VARIABLE _mc22_err RESULT_VARIABLE _mc22_rc)
@@ -50,6 +50,13 @@ foreach(_mc22_lang C OBJC)
   endif()
   set(CMAKE_${_mc22_lang}_COMPILER "${_mc22_root}/bin/clang")
 endforeach()
+foreach(_mc22_lang CXX OBJCXX)
+  if(NOT CMAKE_${_mc22_lang}_COMPILER)
+    set(CMAKE_${_mc22_lang}_COMPILER "${_mc22_root}/bin/clang++")
+  endif()
+endforeach()
+include("${_mc22_shipyard}/MavericksToolchain.cmake")
+
 foreach(_mc22_pair AR=llvm-ar RANLIB=llvm-ranlib NM=llvm-nm STRIP=llvm-strip
                    INSTALL_NAME_TOOL=llvm-install-name-tool OTOOL=llvm-otool LIPO=llvm-lipo)
   string(REPLACE "=" ";" _mc22_pair "${_mc22_pair}")
