@@ -17,7 +17,7 @@ load test_helper
 # ---------------------------------------------------------------------------
 run_thunderbird_res() {
   _res_exit="${2:-0}"
-  d="$(mktemp -d -t res)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/res.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
   cat > "$d/docker" <<'EOF'
 #!/bin/sh
@@ -92,7 +92,7 @@ STUB
 # 5. Missing ctl (not on PATH, PORTHOLE_RESOURCE_CTL not set): launch succeeds.
 # ---------------------------------------------------------------------------
 @test "launcher: missing resource ctl launches successfully" {
-  d="$(mktemp -d -t res)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/res.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
   cat > "$d/docker" <<'EOF'
 #!/bin/sh
@@ -140,7 +140,7 @@ EOF
 # 8. Nudge fires only once per day (second run within the same day is silent).
 # ---------------------------------------------------------------------------
 @test "launcher: low-resource advice fires only once per day" {
-  d="$(mktemp -d -t res)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/res.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
   cat > "$d/docker" <<'EOF'
 #!/bin/sh
@@ -179,7 +179,7 @@ STUB
 # 9. No docker stop/rm/recreate/machine-resource edits during resource check.
 # ---------------------------------------------------------------------------
 @test "launcher: check_gui_resources does not invoke docker stop, rm, or recreate" {
-  d="$(mktemp -d -t res)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/res.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
   cat > "$d/docker" <<'EOF'
 #!/bin/sh
@@ -217,7 +217,7 @@ STUB
 # 11. osascript notification fires once/day for 1024/1; not again for the same day.
 # ---------------------------------------------------------------------------
 @test "launcher: 1024 MiB/1 vCPU posts an osascript notification once per day" {
-  d="$(mktemp -d -t res)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/res.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
   cat > "$d/docker" <<'EOF'
 #!/bin/sh
@@ -261,7 +261,7 @@ EOF
 # 12. osascript notification NOT posted at or above baseline (2048/2).
 # ---------------------------------------------------------------------------
 @test "launcher: 2048 MiB/2 vCPUs at baseline posts no osascript notification" {
-  d="$(mktemp -d -t res)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/res.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
   cat > "$d/docker" <<'EOF'
 #!/bin/sh
@@ -292,7 +292,7 @@ EOF
 # 13. osascript notification NOT posted for 'unknown' resource-status.
 # ---------------------------------------------------------------------------
 @test "launcher: 'unknown' resource-status posts no osascript notification" {
-  d="$(mktemp -d -t res)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/res.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
   cat > "$d/docker" <<'EOF'
 #!/bin/sh
@@ -323,7 +323,7 @@ EOF
 # 14. osascript notification NOT posted when resource ctl is missing.
 # ---------------------------------------------------------------------------
 @test "launcher: missing resource ctl posts no osascript notification" {
-  d="$(mktemp -d -t res)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/res.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; chmod +x "$d/$b"; done
   cat > "$d/docker" <<'EOF'
 #!/bin/sh

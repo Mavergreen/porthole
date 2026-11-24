@@ -138,7 +138,7 @@ NS_MSG='porthole-standin-at: caller identity is unavailable: this container cann
 }
 
 @test "launcher: a throttled standin-ns nudge on second launch does not abort the launcher" {
-  d="$(mktemp -d -t pls)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/pls.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
   cat > "$d/docker" <<EOF2
 #!/bin/sh
@@ -170,7 +170,7 @@ EOF2
 @test "launcher: a throttled xpra nudge on second launch does not abort the launcher" {
   _mm="$(xpra_pin_mm)"
   _bad_mm="${_mm%.*}.$(( ${_mm##*.} - 1 ))"
-  d="$(mktemp -d -t plx)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/plx.XXXXXX")"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
   cat > "$d/docker" <<EOF
 #!/bin/sh

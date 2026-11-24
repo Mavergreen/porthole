@@ -100,8 +100,8 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   sh "$ENGINE/packaging/macos/build_pkg.sh" 9.9.9 "$WORK/out.pkg" "$FAKEAPP" >/dev/null
   d="$WORK/expand"; pkgutil --expand "$WORK/out.pkg" "$d"
   T="$WORK/target"; mkdir -p "$T"
-  (cd "$T" && gzip -dc "$d/porthole-component.pkg/Payload" | cpio -id --quiet)
-  (cd "$T" && gzip -dc "$d/mavergreen-base.pkg/Payload" | cpio -id --quiet)
+  (cd "$T" && gzip -dc "$d/porthole-component.pkg/Payload" | cpio -id --quiet) || return 1
+  (cd "$T" && gzip -dc "$d/mavergreen-base.pkg/Payload" | cpio -id --quiet) || return 1
   P="$T/usr/local/mavergreen/thunderbird-preset/share/porthole/presets"; mkdir -p "$P"
   cp "$ENGINE/examples/thunderbird.conf" "$P/"
   mkdir -p "$T/Applications/Linux Thunderbird.app/Contents/MacOS"
@@ -118,8 +118,8 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   sh "$ENGINE/packaging/macos/build_pkg.sh" 9.9.9 "$WORK/out.pkg" "$FAKEAPP" >/dev/null
   d="$WORK/expand"; pkgutil --expand "$WORK/out.pkg" "$d"
   T="$WORK/target"; mkdir -p "$T"
-  (cd "$T" && gzip -dc "$d/porthole-component.pkg/Payload" | cpio -id --quiet)
-  (cd "$T" && gzip -dc "$d/mavergreen-base.pkg/Payload" | cpio -id --quiet)
+  (cd "$T" && gzip -dc "$d/porthole-component.pkg/Payload" | cpio -id --quiet) || return 1
+  (cd "$T" && gzip -dc "$d/mavergreen-base.pkg/Payload" | cpio -id --quiet) || return 1
   run sh "$d/porthole-component.pkg/Scripts/postinstall" "$WORK/out.pkg" "$T" "$T" "$T"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ -z "$(ls "$T/Applications" | grep -v '^Porthole.app$')" ]
@@ -129,7 +129,7 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   sh "$ENGINE/packaging/macos/build_pkg.sh" 9.9.9 "$WORK/out.pkg" "$FAKEAPP" >/dev/null
   d="$WORK/expand"; pkgutil --expand "$WORK/out.pkg" "$d"
   T="$WORK/target"; mkdir -p "$T"
-  (cd "$T" && gzip -dc "$d/porthole-component.pkg/Payload" | cpio -id --quiet)
+  (cd "$T" && gzip -dc "$d/porthole-component.pkg/Payload" | cpio -id --quiet) || return 1
   shim="$T/usr/local/mavergreen/porthole/bin/porthole"
   [ -x "$shim" ]
   [ ! -L "$shim" ]
