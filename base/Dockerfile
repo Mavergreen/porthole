@@ -16,7 +16,7 @@
 # the checkout hashes to it, so no separate checksum. Configured like the Mac build (build/fetch-s6.sh):
 # libskarnet is linked in statically; glibc stays dynamic, and both stages FROM the same pinned
 # Debian, so the copied binaries always meet the glibc they were built against.
-FROM debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS s6
+FROM debian:13-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0 AS s6
 ARG SKALIBS_REF
 ARG S6_REF
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential git ca-certificates \
@@ -38,7 +38,7 @@ COPY porthole-standin.c porthole-standin-at.c /src/
 RUN gcc -O2 -Wall -Werror -o /stage/bin/porthole-standin /src/porthole-standin.c \
     && gcc -O2 -Wall -Werror -o /stage/bin/porthole-standin-at /src/porthole-standin-at.c
 
-FROM debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
+FROM debian:13-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0
 
 # The xpra pin, passed from XPRA_VERSION by build/build-base-image.sh. Deliberately no default:
 # an unpinned xpra is not a base image we would ship, so the build must fail rather than float.
